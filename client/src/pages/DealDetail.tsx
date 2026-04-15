@@ -241,6 +241,7 @@ function ScopeStep({ deal }: { deal: any }) {
   const removeItem = useRemoveScopeItem();
   const estimation = useAIEffortEstimation();
   const [searchTerm, setSearchTerm] = useState("");
+  const [hasEstimated, setHasEstimated] = useState(false);
 
   const filteredCatalog = (catalog || []).filter((item: any) =>
     !searchTerm || item.name.toLowerCase().includes(searchTerm.toLowerCase()) || item.code.toLowerCase().includes(searchTerm.toLowerCase())
@@ -249,12 +250,30 @@ function ScopeStep({ deal }: { deal: any }) {
   const addedIds = new Set((scopeItems || []).map((si: any) => si.scopeItemId));
 
   const runEstimation = () => {
+    setHasEstimated(true);
     estimation.mutate({
       scopeItems: (scopeItems || []).map((si: any) => ({ ...si.scopeItem, defaultHours: si.adjustedHours || si.scopeItem?.defaultHours })),
       complexity: deal.complexity,
       prompts: deal.promptResponses || [],
     });
   };
+
+  const scopeItemCount = (scopeItems || []).length;
+  useEffect(() => {
+    if (hasEstimated && scopeItemCount > 0 && !estimation.isPending) {
+      const timer = setTimeout(() => {
+        estimation.mutate({
+          scopeItems: (scopeItems || []).map((si: any) => ({ ...si.scopeItem, defaultHours: si.adjustedHours || si.scopeItem?.defaultHours })),
+          complexity: deal.complexity,
+          prompts: deal.promptResponses || [],
+        });
+      }, 400);
+      return () => clearTimeout(timer);
+    }
+    if (hasEstimated && scopeItemCount === 0) {
+      estimation.reset();
+    }
+  }, [scopeItemCount]);
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
