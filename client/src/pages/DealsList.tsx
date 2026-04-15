@@ -3,6 +3,7 @@ import { formatCurrency, formatPercent, getStatusColor, getStatusLabel } from "@
 import { Link } from "wouter";
 import { useState } from "react";
 import { Search, FileText, Plus, LayoutGrid, List, Filter } from "lucide-react";
+import { useAuth } from "@/context/AuthContext";
 
 export function DealsList() {
   const { data: deals, isLoading } = useDeals();
@@ -18,6 +19,7 @@ export function DealsList() {
     return matchesSearch && matchesStatus;
   });
 
+  const { hasPermission } = useAuth();
   const statuses = ["all", "draft", "in_progress", "submitted", "approved", "rejected"];
 
   return (
@@ -27,9 +29,11 @@ export function DealsList() {
           <h1 className="text-2xl font-bold text-foreground tracking-tight">Deals</h1>
           <p className="text-muted-foreground text-sm mt-1">{filtered.length} deal{filtered.length !== 1 ? "s" : ""}</p>
         </div>
-        <Link href="/deals/new">
-          <button className="btn-primary"><Plus className="w-4 h-4" /> New Deal</button>
-        </Link>
+        {hasPermission("createDeals") && (
+          <Link href="/deals/new">
+            <button className="btn-primary"><Plus className="w-4 h-4" /> New Deal</button>
+          </Link>
+        )}
       </div>
 
       <div className="card mb-6">

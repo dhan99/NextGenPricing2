@@ -1,5 +1,7 @@
-import { Database, Server, Monitor, Brain, Layers, ArrowRight, Shield, GitBranch, Cpu, Cloud } from "lucide-react";
+import { Database, Server, Monitor, Brain, Layers, ArrowRight, Shield, GitBranch, Cpu, Cloud, Lock, Unlock, Check, X } from "lucide-react";
 import { useState } from "react";
+import { PERSONAS, type PersonaRole } from "@/context/AuthContext";
+import { useAuth } from "@/context/AuthContext";
 
 function SystemDiagram() {
   const [hoveredNode, setHoveredNode] = useState<string | null>(null);
@@ -361,25 +363,244 @@ export function Architecture() {
         </div>
       </div>
 
-      <div className="card p-5">
-        <h2 className="text-lg font-semibold text-foreground mb-3">Personas</h2>
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-          {[
-            { role: "Project Delivery Lead", abbr: "PDL" },
-            { role: "Service Line Leadership", abbr: "SLL" },
-            { role: "Pricing Operations", abbr: "PO" },
-            { role: "Finance / FP&A", abbr: "FIN" },
-            { role: "Risk / QRM", abbr: "QRM" },
-            { role: "IT / Data Consumers", abbr: "IT" },
-          ].map((p) => (
-            <div key={p.abbr} className="text-center border border-border rounded-lg p-3">
-              <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-1.5">
-                <span className="text-primary text-xs font-bold">{p.abbr}</span>
+      <PersonasSection />
+    </div>
+  );
+}
+
+const personaUseCases: Record<PersonaRole, { useCases: string[]; keyActions: string[] }> = {
+  pdl: {
+    useCases: [
+      "UC-1: Deal Similarity - benchmark new deals against historical data",
+      "UC-2: Effort Estimation - AI-driven hours from scope & complexity prompts",
+      "UC-3: Margin Advisor - optimize pricing with real-time margin guidance",
+      "UC-4: Scenario Recommendation - compare pricing alternatives with AI ranking",
+      "UC-5: Risk Summary - review AI risk assessment before submission",
+    ],
+    keyActions: [
+      "Create and manage deals end-to-end",
+      "Build scope using catalog items",
+      "Set pricing grid hours and rates",
+      "Generate and compare scenarios",
+      "Submit deals for approval",
+    ],
+  },
+  sll: {
+    useCases: [
+      "UC-3: Margin Advisor - validate margin meets practice targets",
+      "UC-5: Risk Summary - review risk before approving deals",
+    ],
+    keyActions: [
+      "Review pipeline and KPI dashboard",
+      "Approve or reject submitted deals",
+      "View pricing and margin details (read-only)",
+      "Review AI risk assessments",
+    ],
+  },
+  po: {
+    useCases: [
+      "UC-3: Margin Advisor - validate pricing standards compliance",
+    ],
+    keyActions: [
+      "Manage rate cards and rate entries",
+      "Maintain scope catalog items",
+      "Review deal pricing for governance",
+      "Enforce pricing templates and standards",
+    ],
+  },
+  fin: {
+    useCases: [
+      "UC-3: Margin Advisor - validate financial viability of deals",
+      "UC-4: Scenario Recommendation - review scenario financial impact",
+    ],
+    keyActions: [
+      "Review deal margins and financial metrics",
+      "Analyze scenario comparisons",
+      "Monitor pipeline financial health",
+      "Validate pricing against budgets",
+    ],
+  },
+  qrm: {
+    useCases: [
+      "UC-5: Risk Summary - primary consumer of AI risk assessments",
+    ],
+    keyActions: [
+      "Review AI-generated risk summaries",
+      "Audit deal activity logs",
+      "Monitor compliance across deals",
+      "Flag high-risk engagements",
+    ],
+  },
+  it: {
+    useCases: [],
+    keyActions: [
+      "View system architecture and design",
+      "Monitor integration health",
+      "Review technical documentation",
+      "Access dashboard for system metrics",
+    ],
+  },
+};
+
+const personaColors: Record<PersonaRole, { border: string; bg: string; badge: string }> = {
+  pdl: { border: "border-orange-300", bg: "bg-orange-50", badge: "bg-orange-500" },
+  sll: { border: "border-blue-300", bg: "bg-blue-50", badge: "bg-blue-500" },
+  po: { border: "border-emerald-300", bg: "bg-emerald-50", badge: "bg-emerald-500" },
+  fin: { border: "border-violet-300", bg: "bg-violet-50", badge: "bg-violet-500" },
+  qrm: { border: "border-red-300", bg: "bg-red-50", badge: "bg-red-500" },
+  it: { border: "border-stone-300", bg: "bg-stone-50", badge: "bg-stone-500" },
+};
+
+const permissionGroups = [
+  { label: "Create Deals", key: "createDeals" as const },
+  { label: "Edit Deals", key: "editDeals" as const },
+  { label: "View Deals", key: "viewDeals" as const },
+  { label: "Approve Deals", key: "approveDeals" as const },
+  { label: "Edit Pricing", key: "editPricing" as const },
+  { label: "Manage Rate Cards", key: "manageRateCards" as const },
+  { label: "Manage Scope Catalog", key: "manageScopeCatalog" as const },
+  { label: "View Margins", key: "viewMargins" as const },
+  { label: "View Risk Summary", key: "viewRiskSummary" as const },
+  { label: "Run AI Tools", key: "runAI" as const },
+];
+
+function PersonasSection() {
+  const { persona: currentPersona } = useAuth();
+  const [expandedRole, setExpandedRole] = useState<PersonaRole | null>(null);
+  const roles = Object.keys(PERSONAS) as PersonaRole[];
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-xl font-semibold text-foreground">Personas & Role-Based Access</h2>
+        <p className="text-sm text-muted-foreground mt-1">Each persona has specific permissions and AI use case access reflecting their responsibilities in the deal lifecycle.</p>
+      </div>
+
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-border">
+              <th className="text-left py-3 px-4 font-semibold text-foreground">Permission</th>
+              {roles.map((role) => (
+                <th key={role} className="text-center py-3 px-2 font-semibold text-foreground">
+                  <div className={`w-7 h-7 rounded-full ${personaColors[role].badge} flex items-center justify-center mx-auto mb-1`}>
+                    <span className="text-white text-[10px] font-bold">{PERSONAS[role].initials}</span>
+                  </div>
+                  <span className="text-[10px] uppercase tracking-wider">{role}</span>
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {permissionGroups.map(({ label, key }) => (
+              <tr key={key} className="border-b border-border/50 hover:bg-muted/30">
+                <td className="py-2.5 px-4 text-muted-foreground">{label}</td>
+                {roles.map((role) => (
+                  <td key={role} className="text-center py-2.5 px-2">
+                    {PERSONAS[role].permissions[key] ? (
+                      <Check className="w-4 h-4 text-green-600 mx-auto" />
+                    ) : (
+                      <X className="w-4 h-4 text-stone-300 mx-auto" />
+                    )}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {roles.map((role) => {
+          const p = PERSONAS[role];
+          const uc = personaUseCases[role];
+          const colors = personaColors[role];
+          const isCurrentUser = currentPersona?.role === role;
+          const isExpanded = expandedRole === role;
+
+          return (
+            <div
+              key={role}
+              className={`card border-2 ${isCurrentUser ? "border-primary ring-2 ring-primary/20" : colors.border} overflow-hidden cursor-pointer transition-all hover:shadow-md`}
+              onClick={() => setExpandedRole(isExpanded ? null : role)}
+            >
+              <div className={`${colors.bg} p-4`}>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-10 h-10 rounded-full ${colors.badge} flex items-center justify-center`}>
+                      <span className="text-white text-sm font-bold">{p.initials}</span>
+                    </div>
+                    <div>
+                      <p className="font-semibold text-foreground">{p.name}</p>
+                      <p className="text-xs text-muted-foreground">{p.fullTitle}</p>
+                    </div>
+                  </div>
+                  {isCurrentUser && (
+                    <span className="text-[10px] bg-primary text-white px-2 py-0.5 rounded-full font-medium">You</span>
+                  )}
+                </div>
               </div>
-              <p className="text-xs text-foreground font-medium">{p.role}</p>
+
+              <div className="p-4 space-y-3">
+                <p className="text-xs text-muted-foreground leading-relaxed">{p.description}</p>
+
+                <div>
+                  <p className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground mb-1.5">Key Actions</p>
+                  <div className="space-y-1">
+                    {uc.keyActions.slice(0, isExpanded ? undefined : 3).map((action) => (
+                      <div key={action} className="flex items-start gap-1.5 text-xs text-foreground">
+                        <ArrowRight className="w-3 h-3 mt-0.5 shrink-0 text-primary" />
+                        <span>{action}</span>
+                      </div>
+                    ))}
+                    {!isExpanded && uc.keyActions.length > 3 && (
+                      <p className="text-[10px] text-primary font-medium">+{uc.keyActions.length - 3} more...</p>
+                    )}
+                  </div>
+                </div>
+
+                {isExpanded && uc.useCases.length > 0 && (
+                  <div>
+                    <p className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground mb-1.5">AI Use Cases</p>
+                    <div className="space-y-1">
+                      {uc.useCases.map((useCase) => (
+                        <div key={useCase} className="flex items-start gap-1.5 text-xs text-foreground">
+                          <Brain className="w-3 h-3 mt-0.5 shrink-0 text-amber-600" />
+                          <span>{useCase}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {isExpanded && uc.useCases.length === 0 && (
+                  <div className="text-xs text-muted-foreground italic">No direct AI use case access in this role.</div>
+                )}
+
+                {isExpanded && (
+                  <div>
+                    <p className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground mb-1.5">Permissions</p>
+                    <div className="flex flex-wrap gap-1">
+                      {permissionGroups.map(({ label, key }) => (
+                        <span
+                          key={key}
+                          className={`inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full ${
+                            p.permissions[key]
+                              ? "bg-green-100 text-green-800"
+                              : "bg-stone-100 text-stone-400 line-through"
+                          }`}
+                        >
+                          {p.permissions[key] ? <Unlock className="w-2.5 h-2.5" /> : <Lock className="w-2.5 h-2.5" />}
+                          {label}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
-          ))}
-        </div>
+          );
+        })}
       </div>
     </div>
   );

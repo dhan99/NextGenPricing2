@@ -2,11 +2,13 @@ import { useDashboardSummary, useDeals, useActivity } from "@/hooks/use-api";
 import { formatCurrency, formatPercent, getStatusColor, getStatusLabel } from "@/lib/utils";
 import { Link } from "wouter";
 import { TrendingUp, DollarSign, Clock, AlertCircle, ArrowRight, FileText, Activity } from "lucide-react";
+import { useAuth } from "@/context/AuthContext";
 
 export function Dashboard() {
   const { data: summary, isLoading: summaryLoading } = useDashboardSummary();
   const { data: deals } = useDeals();
   const { data: activity } = useActivity();
+  const { hasPermission } = useAuth();
 
   const kpis = [
     { label: "Total Pipeline", value: summary ? formatCurrency(summary.totalPipeline) : "--", icon: DollarSign, color: "text-primary" },
@@ -22,12 +24,14 @@ export function Dashboard() {
           <h1 className="text-2xl font-bold text-foreground tracking-tight">Dashboard</h1>
           <p className="text-muted-foreground text-sm mt-1">Overview of your pricing pipeline</p>
         </div>
-        <Link href="/deals/new">
-          <button className="btn-primary">
-            <FileText className="w-4 h-4" />
-            New Deal
-          </button>
-        </Link>
+        {hasPermission("createDeals") && (
+          <Link href="/deals/new">
+            <button className="btn-primary">
+              <FileText className="w-4 h-4" />
+              New Deal
+            </button>
+          </Link>
+        )}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">

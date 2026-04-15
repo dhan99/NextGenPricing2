@@ -1,22 +1,36 @@
 import { useLocation, Link } from "wouter";
-import { LayoutDashboard, FileText, Settings, ChevronDown, BookOpen, DollarSign, BarChart3, Shield, Layers } from "lucide-react";
+import { LayoutDashboard, FileText, Settings, ChevronDown, BookOpen, DollarSign, Layers, LogOut, Shield } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
-
-const navigation = [
-  { name: "Dashboard", href: "/", icon: LayoutDashboard },
-  { name: "Deals", href: "/deals", icon: FileText },
-  { name: "Architecture", href: "/architecture", icon: Layers },
-];
-
-const adminNavigation = [
-  { name: "Rate Cards", href: "/admin/rate-cards", icon: DollarSign },
-  { name: "Scope Catalog", href: "/admin/scope-catalog", icon: BookOpen },
-];
+import { useAuth } from "@/context/AuthContext";
 
 export function Sidebar() {
   const [location] = useLocation();
+  const { persona, hasPermission, logout } = useAuth();
   const [adminOpen, setAdminOpen] = useState(location.startsWith("/admin"));
+
+  const showDeals = hasPermission("viewDeals");
+  const showAdmin = hasPermission("manageRateCards") || hasPermission("manageScopeCatalog");
+
+  const navigation = [
+    { name: "Dashboard", href: "/", icon: LayoutDashboard, show: true },
+    { name: "Deals", href: "/deals", icon: FileText, show: showDeals },
+    { name: "Architecture", href: "/architecture", icon: Layers, show: true },
+  ];
+
+  const adminNavigation = [
+    { name: "Rate Cards", href: "/admin/rate-cards", icon: DollarSign, show: hasPermission("manageRateCards") },
+    { name: "Scope Catalog", href: "/admin/scope-catalog", icon: BookOpen, show: hasPermission("manageScopeCatalog") },
+  ];
+
+  const roleColor: Record<string, string> = {
+    pdl: "bg-orange-500",
+    sll: "bg-blue-500",
+    po: "bg-emerald-500",
+    fin: "bg-violet-500",
+    qrm: "bg-red-500",
+    it: "bg-stone-500",
+  };
 
   return (
     <aside className="w-64 bg-sidebar-bg min-h-screen flex flex-col border-r border-sidebar-accent">
@@ -35,7 +49,7 @@ export function Sidebar() {
       </Link>
 
       <nav className="flex-1 px-3 py-4 space-y-1">
-        {navigation.map((item) => {
+        {navigation.filter(n => n.show).map((item) => {
           const isActive = item.href === "/" ? location === "/" : location.startsWith(item.href);
           return (
             <Link key={item.href} href={item.href}>
@@ -52,51 +66,66 @@ export function Sidebar() {
           );
         })}
 
-        <div className="pt-4">
-          <button
-            onClick={() => setAdminOpen(!adminOpen)}
-            className="flex items-center justify-between w-full px-3 py-2.5 rounded-lg text-sm font-medium text-sidebar-muted hover:text-sidebar-fg hover:bg-sidebar-accent transition-all"
-          >
-            <div className="flex items-center gap-3">
-              <Settings className="w-4.5 h-4.5" />
-              Admin
-            </div>
-            <ChevronDown className={cn("w-4 h-4 transition-transform", adminOpen && "rotate-180")} />
-          </button>
-          {adminOpen && (
-            <div className="ml-4 mt-1 space-y-1">
-              {adminNavigation.map((item) => {
-                const isActive = location.startsWith(item.href);
-                return (
-                  <Link key={item.href} href={item.href}>
-                    <div className={cn(
-                      "flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all cursor-pointer",
-                      isActive
-                        ? "bg-primary/15 text-primary"
-                        : "text-sidebar-muted hover:text-sidebar-fg hover:bg-sidebar-accent"
-                    )}>
-                      <item.icon className="w-4 h-4" />
-                      {item.name}
-                    </div>
-                  </Link>
-                );
-              })}
-            </div>
-          )}
-        </div>
+        {showAdmin && (
+          <div className="pt-4">
+            <button
+              onClick={() => setAdminOpen(!adminOpen)}
+              className="flex items-center justify-between w-full px-3 py-2.5 rounded-lg text-sm font-medium text-sidebar-muted hover:text-sidebar-fg hover:bg-sidebar-accent transition-all"
+            >
+              <div className="flex items-center gap-3">
+                <Settings className="w-4.5 h-4.5" />
+                Admin
+              </div>
+              <ChevronDown className={cn("w-4 h-4 transition-transform", adminOpen && "rotate-180")} />
+            </button>
+            {adminOpen && (
+              <div className="ml-4 mt-1 space-y-1">
+                {adminNavigation.filter(n => n.show).map((item) => {
+                  const isActive = location.startsWith(item.href);
+                  return (
+                    <Link key={item.href} href={item.href}>
+                      <div className={cn(
+                        "flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all cursor-pointer",
+                        isActive
+                          ? "bg-primary/15 text-primary"
+                          : "text-sidebar-muted hover:text-sidebar-fg hover:bg-sidebar-accent"
+                      )}>
+                        <item.icon className="w-4 h-4" />
+                        {item.name}
+                      </div>
+                    </Link>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
       </nav>
 
-      <div className="px-4 py-4 border-t border-sidebar-accent">
-        <div className="flex items-center gap-3 px-2">
-          <div className="w-8 h-8 rounded-full bg-sidebar-accent flex items-center justify-center">
-            <span className="text-sidebar-fg text-xs font-medium">MT</span>
+      {persona && (
+        <div className="px-3 py-3 border-t border-sidebar-accent">
+          <div className="flex items-center gap-2 mb-2 px-2">
+            <Shield className="w-3.5 h-3.5 text-sidebar-muted" />
+            <span className="text-[10px] uppercase tracking-wider text-sidebar-muted font-semibold">Active Role</span>
           </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sidebar-fg text-sm font-medium truncate">Michael Torres</p>
-            <p className="text-sidebar-muted text-xs truncate">Practice Dev Leader</p>
+          <div className="flex items-center gap-3 px-2 mb-3">
+            <div className={`w-9 h-9 rounded-full ${roleColor[persona.role] || "bg-stone-500"} flex items-center justify-center`}>
+              <span className="text-white text-xs font-bold">{persona.initials}</span>
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sidebar-fg text-sm font-medium truncate">{persona.name}</p>
+              <p className="text-sidebar-muted text-xs truncate">{persona.fullTitle}</p>
+            </div>
           </div>
+          <button
+            onClick={logout}
+            className="flex items-center gap-2 w-full px-3 py-2 rounded-lg text-xs font-medium text-sidebar-muted hover:text-red-400 hover:bg-sidebar-accent transition-all"
+          >
+            <LogOut className="w-3.5 h-3.5" />
+            Switch Persona
+          </button>
         </div>
-      </div>
+      )}
     </aside>
   );
 }

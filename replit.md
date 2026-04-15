@@ -4,9 +4,10 @@
 DealPad is a full-stack web application replacing Excel-based pricing and scoping workbooks for professional services firm Armanino LLP's Quote-to-Cash workflow. It demonstrates 5 AI-powered use cases across the entire vertical stack with a modern UX inspired by Ramp.com and Gusto.com.
 
 ## Current State
-- **Phase**: Working PoC with 5 AI use cases
-- **Active Features**: Dashboard, Deal List, 8-step Deal Wizard, Rate Card Admin, Scope Catalog Admin
+- **Phase**: Working PoC with 5 AI use cases + RBAC
+- **Active Features**: Login/Persona Selection, Dashboard, Deal List, 8-step Deal Wizard, Rate Card Admin, Scope Catalog Admin, Architecture (with system diagram)
 - **AI Features**: Deal Similarity, Effort Estimation, Margin Advisor, Scenario Recommendation, Risk Summary
+- **Auth**: Role-based persona selection (PDL, SLL, PO, FIN, QRM, IT) with per-feature permissions
 
 ## Architecture
 - **Frontend**: React 19 + Vite + TypeScript + Tailwind CSS (client/src/)
@@ -17,8 +18,9 @@ DealPad is a full-stack web application replacing Excel-based pricing and scopin
 ## Project Structure
 ```
 client/src/          - React frontend
+  context/           - AuthContext (persona/RBAC state)
   components/layout/ - AppLayout, Sidebar
-  pages/             - Dashboard, DealsList, DealDetail, NewDeal, RateCards, ScopeCatalogAdmin
+  pages/             - Login, Dashboard, DealsList, DealDetail, NewDeal, RateCards, ScopeCatalogAdmin, Architecture
   hooks/use-api.ts   - All API hooks (React Query)
   lib/utils.ts       - Utility functions
   index.css          - Tailwind + design tokens
