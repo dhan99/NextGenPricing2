@@ -1,9 +1,10 @@
 import { useState, useEffect } from "react";
 import { useRoute } from "wouter";
-import { useDeal, useUpdateDeal, useScopeCatalog, useDealScopeItems, useAddScopeItem, useRemoveScopeItem, useRoles, useDealPricing, useUpdatePricingLine, useDealScenarios, useDealApprovals, useSubmitApproval, useDealPrompts, useAIDealSimilarity, useAIEffortEstimation, useAIMarginAdvisor, useAIScenarioRecommendation, useAIRiskSummary } from "@/hooks/use-api";
+import { useDeal, useUpdateDeal, useScopeCatalog, useDealScopeItems, useAddScopeItem, useRemoveScopeItem, useRoles, useDealPricing, useUpdatePricingLine, useDealScenarios, useDealApprovals, useSubmitApproval, useDealPrompts, useCloneDeal, useAIDealSimilarity, useAIEffortEstimation, useAIMarginAdvisor, useAIScenarioRecommendation, useAIRiskSummary } from "@/hooks/use-api";
 import { formatCurrency, formatPercent, formatNumber, getStatusColor, getStatusLabel, cn } from "@/lib/utils";
-import { ArrowLeft, Check, ChevronRight, Sparkles, AlertTriangle, TrendingUp, Target, FileText, Shield, CheckCircle, XCircle, Clock, Loader2, Plus, Trash2, Lightbulb } from "lucide-react";
-import { Link } from "wouter";
+import { ArrowLeft, Check, ChevronRight, Sparkles, AlertTriangle, TrendingUp, Target, FileText, Shield, CheckCircle, XCircle, Clock, Loader2, Plus, Trash2, Lightbulb, Copy, RefreshCw } from "lucide-react";
+import { Link, useLocation } from "wouter";
+import { useAuth } from "@/context/AuthContext";
 
 const STEPS = [
   { num: 1, label: "Setup" },
@@ -21,6 +22,9 @@ export function DealDetail() {
   const dealId = parseInt(params?.id || "0");
   const { data: deal, isLoading } = useDeal(dealId);
   const [currentStep, setCurrentStep] = useState(1);
+  const { hasPermission, persona } = useAuth();
+  const cloneDeal = useCloneDeal();
+  const [, navigate] = useLocation();
 
   useEffect(() => {
     if (deal?.currentStep) setCurrentStep(deal.currentStep);
@@ -45,10 +49,32 @@ export function DealDetail() {
               <span className="text-sm text-muted-foreground">{deal.serviceLine}</span>
             </div>
           </div>
-          <div className="flex items-center gap-6 text-right">
-            <div><p className="text-xs text-muted-foreground">Total Fee</p><p className="text-lg font-bold text-foreground">{formatCurrency(deal.totalFee || 0)}</p></div>
-            <div><p className="text-xs text-muted-foreground">Margin</p><p className="text-lg font-bold text-foreground">{formatPercent(deal.marginPercent || 0)}</p></div>
-            <div><p className="text-xs text-muted-foreground">Hours</p><p className="text-lg font-bold text-foreground">{formatNumber(deal.totalHours || 0)}</p></div>
+          <div className="flex items-center gap-4">
+            {hasPermission("createDeals") && (
+              <div className="flex items-center gap-2 mr-2">
+                <button
+                  onClick={() => cloneDeal.mutate({ dealId: deal.id, mode: "clone", pdlName: persona?.name }, { onSuccess: (d: any) => navigate(`/deals/${d.id}`) })}
+                  disabled={cloneDeal.isPending}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-all"
+                >
+                  <Copy className="w-3.5 h-3.5" />
+                  Clone
+                </button>
+                <button
+                  onClick={() => cloneDeal.mutate({ dealId: deal.id, mode: "renewal", pdlName: persona?.name }, { onSuccess: (d: any) => navigate(`/deals/${d.id}`) })}
+                  disabled={cloneDeal.isPending}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-all"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  Renew
+                </button>
+              </div>
+            )}
+            <div className="flex items-center gap-6 text-right">
+              <div><p className="text-xs text-muted-foreground">Total Fee</p><p className="text-lg font-bold text-foreground">{formatCurrency(deal.totalFee || 0)}</p></div>
+              <div><p className="text-xs text-muted-foreground">Margin</p><p className="text-lg font-bold text-foreground">{formatPercent(deal.marginPercent || 0)}</p></div>
+              <div><p className="text-xs text-muted-foreground">Hours</p><p className="text-lg font-bold text-foreground">{formatNumber(deal.totalHours || 0)}</p></div>
+            </div>
           </div>
         </div>
 

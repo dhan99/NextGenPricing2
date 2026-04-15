@@ -99,6 +99,90 @@ export function registerRoutes(app: Express) {
     res.json(updated);
   });
 
+  app.post("/api/deals/:id/clone", async (req: Request, res: Response) => {
+    const source = await db.query.deals.findFirst({
+      where: eq(deals.id, parseInt(req.params.id)),
+      with: { client: true, scopeItems: true, pricingLines: true, promptResponses: true },
+    });
+    if (!source) return res.status(404).json({ error: "Source deal not found" });
+
+    const isRenewal = req.body.mode === "renewal";
+    const dealCount = await db.select({ count: count() }).from(deals);
+    const dealNumber = `DL-2026-${String(dealCount[0].count + 1).padStart(3, "0")}`;
+
+    const title = isRenewal
+      ? `${source.title} (Renewal)`
+      : req.body.title || `${source.title} (Copy)`;
+
+    const [newDeal] = await db.insert(deals).values({
+      title,
+      dealNumber,
+      clientId: source.clientId,
+      dealType: isRenewal ? "renewal" : source.dealType,
+      status: "draft",
+      complexity: source.complexity,
+      serviceLine: source.serviceLine,
+      businessUnit: source.businessUnit,
+      region: source.region,
+      pdlName: req.body.pdlName || source.pdlName,
+      pdlEmail: source.pdlEmail,
+      currentStep: 1,
+      parentDealId: source.id,
+    }).returning();
+
+    if (source.scopeItems?.length) {
+      await db.insert(dealScopeItems).values(
+        source.scopeItems.map((si: any) => ({
+          dealId: newDeal.id,
+          scopeItemId: si.scopeItemId,
+          adjustedHours: si.adjustedHours,
+          notes: si.notes,
+          included: si.included,
+        }))
+      );
+    }
+
+    if (source.pricingLines?.length) {
+      await db.insert(pricingLines).values(
+        source.pricingLines.map((pl: any) => ({
+          dealId: newDeal.id,
+          roleId: pl.roleId,
+          roleName: pl.roleName,
+          level: pl.level,
+          hours: pl.hours,
+          rate: pl.rate,
+          costRate: pl.costRate,
+          fee: pl.fee,
+          cost: pl.cost,
+          margin: pl.margin,
+        }))
+      );
+    }
+
+    const totalFee = source.pricingLines?.reduce((s: number, p: any) => s + parseFloat(p.fee || "0"), 0) || 0;
+    const totalCost = source.pricingLines?.reduce((s: number, p: any) => s + parseFloat(p.cost || "0"), 0) || 0;
+    const totalHours = source.pricingLines?.reduce((s: number, p: any) => s + parseFloat(p.hours || "0"), 0) || 0;
+    await db.update(deals).set({
+      totalFee: String(totalFee),
+      totalCost: String(totalCost),
+      totalHours: String(totalHours),
+      marginPercent: totalFee > 0 ? String(((totalFee - totalCost) / totalFee * 100).toFixed(1)) : "0",
+    }).where(eq(deals.id, newDeal.id));
+
+    await db.insert(activityLog).values({
+      dealId: newDeal.id,
+      action: isRenewal ? "deal_renewed" : "deal_cloned",
+      description: `${isRenewal ? "Renewed" : "Cloned"} from "${source.title}" (${source.dealNumber})`,
+      userName: req.body.pdlName || source.pdlName || "System",
+    });
+
+    const result = await db.query.deals.findFirst({
+      where: eq(deals.id, newDeal.id),
+      with: { client: true },
+    });
+    res.status(201).json(result);
+  });
+
   // ========== SCOPE CATALOG ==========
   app.get("/api/scope-catalog", async (_req: Request, res: Response) => {
     const result = await db.select().from(scopeCatalog).orderBy(scopeCatalog.sortOrder);

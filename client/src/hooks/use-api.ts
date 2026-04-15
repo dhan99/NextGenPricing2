@@ -121,6 +121,15 @@ export function useActivity() {
   return useQuery({ queryKey: ["activity"], queryFn: () => fetchApi("/api/activity") });
 }
 
+export function useCloneDeal() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ dealId, mode, pdlName }: { dealId: number; mode: "clone" | "renewal"; pdlName?: string }) =>
+      fetchApi(`/api/deals/${dealId}/clone`, { method: "POST", body: JSON.stringify({ mode, pdlName }) }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["deals"] }),
+  });
+}
+
 export function useAIDealSimilarity() {
   return useMutation({ mutationFn: (data: any) => fetchApi("/api/ai/deal-similarity", { method: "POST", body: JSON.stringify(data) }) });
 }

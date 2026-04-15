@@ -68,6 +68,7 @@ async function pushSchema() {
       current_step INTEGER DEFAULT 1,
       pdl_name TEXT,
       pdl_email TEXT,
+      parent_deal_id INTEGER,
       notes TEXT,
       ai_summary TEXT,
       risk_score DECIMAL(3,1),

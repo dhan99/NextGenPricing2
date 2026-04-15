@@ -2,8 +2,10 @@ import { useDeals } from "@/hooks/use-api";
 import { formatCurrency, formatPercent, getStatusColor, getStatusLabel } from "@/lib/utils";
 import { Link } from "wouter";
 import { useState } from "react";
-import { Search, FileText, Plus, LayoutGrid, List, Filter } from "lucide-react";
+import { Search, FileText, Plus, LayoutGrid, List, Filter, Copy, RefreshCw, MoreVertical, Loader2 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
+import { useCloneDeal } from "@/hooks/use-api";
+import { useLocation } from "wouter";
 
 export function DealsList() {
   const { data: deals, isLoading } = useDeals();
@@ -19,8 +21,18 @@ export function DealsList() {
     return matchesSearch && matchesStatus;
   });
 
-  const { hasPermission } = useAuth();
+  const { hasPermission, persona } = useAuth();
+  const cloneDeal = useCloneDeal();
+  const [, navigate] = useLocation();
+  const [actionMenuId, setActionMenuId] = useState<number | null>(null);
   const statuses = ["all", "draft", "in_progress", "submitted", "approved", "rejected"];
+
+  const handleClone = (dealId: number, mode: "clone" | "renewal") => {
+    setActionMenuId(null);
+    cloneDeal.mutate({ dealId, mode, pdlName: persona?.name }, {
+      onSuccess: (newDeal: any) => navigate(`/deals/${newDeal.id}`),
+    });
+  };
 
   return (
     <div className="p-8 max-w-7xl mx-auto">
@@ -90,6 +102,9 @@ export function DealsList() {
                 <th className="text-right px-6 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Fee</th>
                 <th className="text-right px-6 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Margin</th>
                 <th className="text-right px-6 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Hours</th>
+                {hasPermission("createDeals") && (
+                  <th className="text-right px-6 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Actions</th>
+                )}
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
@@ -99,7 +114,7 @@ export function DealsList() {
                     <Link href={`/deals/${deal.id}`}>
                       <div>
                         <p className="font-medium text-sm text-foreground">{deal.title}</p>
-                        <p className="text-xs text-muted-foreground mt-0.5">{deal.dealNumber}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">{deal.dealNumber}{deal.parentDealId ? " (cloned)" : ""}</p>
                       </div>
                     </Link>
                   </td>
@@ -109,6 +124,38 @@ export function DealsList() {
                   <td className="px-6 py-4 text-right text-sm font-semibold text-foreground">{formatCurrency(deal.totalFee || 0)}</td>
                   <td className="px-6 py-4 text-right text-sm text-foreground">{formatPercent(deal.marginPercent || 0)}</td>
                   <td className="px-6 py-4 text-right text-sm text-muted-foreground">{parseFloat(deal.totalHours || 0).toLocaleString()}</td>
+                  {hasPermission("createDeals") && (
+                    <td className="px-6 py-4 text-right" onClick={(e) => e.stopPropagation()}>
+                      <div className="relative inline-block">
+                        <button
+                          onClick={() => setActionMenuId(actionMenuId === deal.id ? null : deal.id)}
+                          className="p-1.5 rounded-lg hover:bg-muted transition-colors"
+                        >
+                          <MoreVertical className="w-4 h-4 text-muted-foreground" />
+                        </button>
+                        {actionMenuId === deal.id && (
+                          <div className="absolute right-0 top-8 z-20 bg-card border border-border rounded-xl shadow-lg py-1 w-44">
+                            <button
+                              onClick={() => handleClone(deal.id, "clone")}
+                              disabled={cloneDeal.isPending}
+                              className="flex items-center gap-2 w-full px-4 py-2 text-sm text-foreground hover:bg-muted transition-colors"
+                            >
+                              <Copy className="w-3.5 h-3.5" />
+                              Clone Deal
+                            </button>
+                            <button
+                              onClick={() => handleClone(deal.id, "renewal")}
+                              disabled={cloneDeal.isPending}
+                              className="flex items-center gap-2 w-full px-4 py-2 text-sm text-foreground hover:bg-muted transition-colors"
+                            >
+                              <RefreshCw className="w-3.5 h-3.5" />
+                              Renew Deal
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>

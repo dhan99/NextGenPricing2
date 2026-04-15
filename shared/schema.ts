@@ -35,6 +35,7 @@ export const deals = pgTable("deals", {
   currentStep: integer("current_step").default(1),
   pdlName: text("pdl_name"),
   pdlEmail: text("pdl_email"),
+  parentDealId: integer("parent_deal_id"),
   notes: text("notes"),
   aiSummary: text("ai_summary"),
   riskScore: decimal("risk_score", { precision: 3, scale: 1 }),
