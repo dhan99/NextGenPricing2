@@ -1,4 +1,4 @@
-import { Database, Server, Monitor, Brain, Layers, ArrowRight, Shield, GitBranch, Cpu, Cloud, Lock, Unlock, Check, X } from "lucide-react";
+import { Database, Server, Monitor, Brain, Layers, ArrowRight, Shield, GitBranch, Cpu, Cloud, Lock, Unlock, Check, X, Search, Clock, TrendingUp, BarChart3, AlertTriangle } from "lucide-react";
 import { useState } from "react";
 import { PERSONAS, type PersonaRole } from "@/context/AuthContext";
 import { useAuth } from "@/context/AuthContext";
@@ -308,6 +308,8 @@ export function Architecture() {
         </div>
       </div>
 
+      <AIAgentsSection />
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         <div className="space-y-4">
           <h2 className="text-xl font-semibold text-foreground">Domain-Driven Design Contexts</h2>
@@ -364,6 +366,194 @@ export function Architecture() {
       </div>
 
       <PersonasSection />
+    </div>
+  );
+}
+
+const aiAgents = [
+  {
+    id: "UC-1",
+    name: "Deal Similarity",
+    icon: Search,
+    color: "bg-blue-600",
+    lightBg: "bg-blue-50",
+    lightText: "text-blue-700",
+    endpoint: "/api/ai/deal-similarity",
+    description: "Finds historically similar deals based on service line, complexity, deal size, and industry. Helps the PDL benchmark new engagements against past performance.",
+    inputs: ["Deal title, service line, complexity level", "Client industry and segment", "Estimated deal value range"],
+    outputs: ["Top 3-5 matched deals with similarity scores", "Key metrics comparison (fee, margin, hours)", "Outcome indicators (won/lost, actual vs. estimated)"],
+    consumers: ["pdl"] as PersonaRole[],
+    status: "Simulation" as const,
+  },
+  {
+    id: "UC-2",
+    name: "Effort Estimation",
+    icon: Clock,
+    color: "bg-amber-600",
+    lightBg: "bg-amber-50",
+    lightText: "text-amber-700",
+    endpoint: "/api/ai/effort-estimation",
+    description: "Analyzes scope items and generates recommended hours by role, using patterns from comparable deals and complexity-adjusted baselines.",
+    inputs: ["Selected scope items and quantities", "Deal complexity rating", "Service line and business unit"],
+    outputs: ["Estimated hours per role (Partner, Manager, Senior, Staff)", "Confidence level for each estimate", "Baseline comparison against similar scopes"],
+    consumers: ["pdl"] as PersonaRole[],
+    status: "Simulation" as const,
+  },
+  {
+    id: "UC-3",
+    name: "Margin Advisor",
+    icon: TrendingUp,
+    color: "bg-emerald-600",
+    lightBg: "bg-emerald-50",
+    lightText: "text-emerald-700",
+    endpoint: "/api/ai/margin-advisor",
+    description: "Reviews the current pricing and cost structure, then flags margin risks and suggests adjustments to hit target profitability thresholds.",
+    inputs: ["Current pricing grid (hours x rates)", "Cost structure and blended rates", "Target margin thresholds by service line"],
+    outputs: ["Current vs. target margin analysis", "Specific adjustment recommendations", "Impact simulation of suggested changes"],
+    consumers: ["pdl", "sll", "po", "fin"] as PersonaRole[],
+    status: "Simulation" as const,
+  },
+  {
+    id: "UC-4",
+    name: "Scenario Recommendation",
+    icon: BarChart3,
+    color: "bg-violet-600",
+    lightBg: "bg-violet-50",
+    lightText: "text-violet-700",
+    endpoint: "/api/ai/scenario-recommendation",
+    description: "Generates multiple pricing scenarios (conservative, standard, aggressive) so teams can compare trade-offs in fee, margin, and win probability side by side.",
+    inputs: ["Base pricing configuration", "Deal parameters and constraints", "Historical win-rate data by price point"],
+    outputs: ["3 ranked pricing scenarios with trade-off analysis", "Win probability estimate per scenario", "Margin and revenue impact comparison"],
+    consumers: ["pdl", "fin"] as PersonaRole[],
+    status: "Simulation" as const,
+  },
+  {
+    id: "UC-5",
+    name: "Risk Summary",
+    icon: AlertTriangle,
+    color: "bg-red-600",
+    lightBg: "bg-red-50",
+    lightText: "text-red-700",
+    endpoint: "/api/ai/risk-summary",
+    description: "Produces an overall risk assessment covering pricing risk, scope creep potential, client history, and compliance flags. Used as a pre-approval checkpoint.",
+    inputs: ["Complete deal configuration", "Client relationship history", "Scope complexity and assumptions"],
+    outputs: ["Overall risk score (1-10 scale)", "Risk breakdown by category (pricing, scope, client, compliance)", "Specific risk flags with mitigation recommendations"],
+    consumers: ["pdl", "sll", "qrm"] as PersonaRole[],
+    status: "Simulation" as const,
+  },
+];
+
+function AIAgentsSection() {
+  const [expandedAgent, setExpandedAgent] = useState<string | null>(null);
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <h2 className="text-xl font-semibold text-foreground">AI Agents</h2>
+        <p className="text-sm text-muted-foreground mt-1">
+          5 AI-powered agents that augment decision-making across the deal lifecycle. Currently running as simulation endpoints; target production uses Azure OpenAI + Semantic Kernel.
+        </p>
+      </div>
+
+      <div className="space-y-3">
+        {aiAgents.map((agent) => {
+          const isExpanded = expandedAgent === agent.id;
+          return (
+            <div
+              key={agent.id}
+              className={`card overflow-hidden border transition-all ${isExpanded ? "border-stone-300 shadow-md" : "border-border hover:border-stone-300"}`}
+            >
+              <button
+                onClick={() => setExpandedAgent(isExpanded ? null : agent.id)}
+                className="w-full flex items-center gap-4 p-5 text-left focus-visible:ring-2 focus-visible:ring-orange-400 focus-visible:ring-offset-2"
+              >
+                <div className={`w-11 h-11 rounded-xl ${agent.color} flex items-center justify-center shrink-0`}>
+                  <agent.icon className="w-5 h-5 text-white" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-muted-foreground">{agent.id}</span>
+                    <h3 className="font-semibold text-foreground">{agent.name}</h3>
+                    <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${agent.lightBg} ${agent.lightText}`}>
+                      {agent.status}
+                    </span>
+                  </div>
+                  <p className="text-sm text-muted-foreground mt-0.5 line-clamp-1">{agent.description}</p>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <div className="flex -space-x-1.5">
+                    {agent.consumers.map((role) => (
+                      <div
+                        key={role}
+                        className="w-6 h-6 rounded-full bg-stone-200 flex items-center justify-center border-2 border-white"
+                        title={PERSONAS[role].name}
+                      >
+                        <span className="text-[8px] font-bold text-stone-600">{PERSONAS[role].initials}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <svg className={`w-4 h-4 text-stone-400 transition-transform duration-200 ${isExpanded ? "rotate-180" : ""}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 9l6 6 6-6" /></svg>
+                </div>
+              </button>
+
+              <div className={`grid transition-all duration-200 ease-in-out ${isExpanded ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"}`}>
+                <div className="overflow-hidden">
+                  <div className="px-5 pb-5 pt-0 border-t border-border">
+                    <p className="text-sm text-muted-foreground leading-relaxed mt-4 mb-5">{agent.description}</p>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div>
+                        <p className="text-[11px] uppercase tracking-wider font-semibold text-muted-foreground mb-2">Inputs</p>
+                        <div className="space-y-1.5">
+                          {agent.inputs.map((input) => (
+                            <div key={input} className="flex items-start gap-2 text-sm text-foreground">
+                              <ArrowRight className="w-3 h-3 mt-1 shrink-0 text-primary" />
+                              <span>{input}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div>
+                        <p className="text-[11px] uppercase tracking-wider font-semibold text-muted-foreground mb-2">Outputs</p>
+                        <div className="space-y-1.5">
+                          {agent.outputs.map((output) => (
+                            <div key={output} className="flex items-start gap-2 text-sm text-foreground">
+                              <ArrowRight className="w-3 h-3 mt-1 shrink-0 text-emerald-600" />
+                              <span>{output}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div>
+                        <p className="text-[11px] uppercase tracking-wider font-semibold text-muted-foreground mb-2">Consumers</p>
+                        <div className="space-y-2">
+                          {agent.consumers.map((role) => (
+                            <div key={role} className="flex items-center gap-2">
+                              <div className="w-7 h-7 rounded-full bg-stone-100 flex items-center justify-center">
+                                <span className="text-[10px] font-bold text-stone-600">{PERSONAS[role].initials}</span>
+                              </div>
+                              <div>
+                                <p className="text-sm font-medium text-foreground">{PERSONAS[role].name}</p>
+                                <p className="text-[11px] text-muted-foreground">{PERSONAS[role].fullTitle}</p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                        <div className="mt-3 pt-3 border-t border-border">
+                          <p className="text-[11px] uppercase tracking-wider font-semibold text-muted-foreground mb-1">Endpoint</p>
+                          <code className="text-xs font-mono bg-stone-100 text-stone-700 px-2 py-1 rounded">{agent.endpoint}</code>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
