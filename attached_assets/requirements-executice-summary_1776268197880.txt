@@ -1,0 +1,48 @@
+Pricing & Scoping 2.0 – Requirements Executive Summary
+Application Overview & Vendor Requirements Narrative
+Document Overview
+This document provides a functional and behavioral requirements narrative for the Pricing
+& Scoping 2.0 initiative. It is intended to be used together with the NextGenApp DealPad
+operating model document, the product backlog, and the traceability matrix (User Stories).
+The recommended solution is not intended to replace any current pricing methodologies.
+Instead, it refactors the existing Excel-based pricing workbooks into a web-based workflow
+while preserving all underlying calculation structures and logic.
+This document is not intended to represent the final product design.
+Objectives
+• Digitize existing Business Unit pricing and scoping workbooks into a governed,
+workflow-enabled platform
+• Preserve pricing methodologies and calculation fidelity across all Business Units
+• Support both new projects and renewal projects within a single pricing and scoping
+workflow
+• Enable clean downstream integration into Quote-to-Cash systems
+Personas & Responsibilities
+• Project Delivery Lead (PDL): creates pricing models and performs initial pricing for new
+and renewal projects
+• Practice Area / Service Line Leadership: reviews and approves project pricing decisions
+• Pricing Operations: governs catalogs, rate tables, templates, and configuration across
+Business Units
+• Finance / FP&A: validates margin logic and consumes pricing outputs
+• Risk / QRM: provides oversight and audit defensibility
+• IT / Data Consumers: platform governance, retention, and downstream integrations
+End-to-End Workflow (DealPad-Aligned)
+• Initiate pricing from an existing project context, identified as either a new project or a
+renewal project
+• For renewal projects, load prior-year pricing data where available
+• Configure scope using governed scope items, assemblies, and prompts
+• Calculate pricing, costs, and margin using existing Excel workbook logic
+• Route pricing through Practice Area / Service Line Leadership approvals
+• Produce approved outputs for downstream systems and reporting
+New Projects vs. Renewal Projects
+Projects may be classified as either new projects or renewal projects, consistent with the
+definitions and usage described in the DealPad operating model. Renewal projects may
+reference prior-year pricing and historical data, while new projects are scoped and priced
+without prior-year baselines.
+The application must support both project types within a consistent workflow while
+allowing for differences in inputs, comparisons, and approvals where applicable.
+Key Assumptions and Constraints
+• Pricing methodologies are preserved, not redesigned
+• Differences between new projects and renewal projects are handled through
+configuration and workflow, not custom logic
+• The system must reproduce calculation results consistent with existing Excel pricing
+workbooks
+• Acceptance is based on parity with current workbook outcomes for equivalent inputs

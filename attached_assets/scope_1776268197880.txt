@@ -1,0 +1,97 @@
+SCOPE OF SOLUTION AND REQUIREMENTS OVERVIEW
+Scope of Solution:
+The recommended solution is not intended to replace any current pricing methodologies.
+Instead, it refactors the existing Excel-based pricing workbooks into a web-based workflow
+while preserving all underlying calculation structures and logic. This document is not
+intended to represent the final product design.
+Requirements Overview:
+This is intended as an executive summary overview. This proposal also includes an
+attachment of specific User Stories and techincal requirements considerations to which we
+are asking that you respond thoughtfully and thoroughly.
+Objectives:
+• Digitize existing Business Unit pricing and scoping workbooks into a governed,
+workflow-enabled platform
+
+Request for Quote
+• Preserve pricing methodologies and calculation fidelity across all Business Units
+• Support both new projects and renewal projects within a single pricing and
+scoping workflow
+• Enable clean multidirectional integration into Quote-to-Cash systems
+Personas & Responsibilities:
+• Project Delivery Lead (PDL): creates pricing models and performs initial pricing
+for new and renewal projects
+• Practice Area / Service Line Leadership: reviews and approves project pricing
+decisions
+• Pricing Operations: governs catalogs, rate tables, templates, and configuration
+across Business Units
+• Finance / FP&A: Sets targets, benchmarks, and guidance and validates margin
+logic and consumes pricing outputs
+• Risk / QRM: provides oversight and audit defensibility
+• IT / Data Consumers: platform governance, retention, and downstream
+integrations
+End-to-End Workflow (DealPad-Aligned):
+• Ability to manage and govern rate tables, hierarchies and standards within the
+tool, or the ability to bring in external data tables to populate those tables (e.g,
+Standard Costs rates feeding this tool via Datawarehouse; leveraging product
+service mapping from CRM/Data Warehouse in place of manually adding to
+pricing tool).
+• Initiate pricing from an existing project context, identified as either a new project
+or a renewal project.
+o For renewal projects, load prior-year pricing data where available.
+• Configure scope using governed scope items, assemblies, and prompts.
+• Calculate pricing, costs, and margin using existing Excel workbook logic.
+• Route pricing through Practice Area / Service Line Leadership approvals.
+• Produce approved outputs for downstream systems and reporting.
+• Examine opportunities to evolve scoping from current Excel models (i.e., client
+complexity, client information, difficulty).
+New Projects vs. Renewal Projects:
+• Projects may be classified as either new projects or renewal projects, consistent
+with the definitions and usage described in the DealPad operating model. Renewal
+projects may reference prior-year pricing and historical data, while new projects
+are scoped and priced without prior-year baselines.
+6
+Commented [CR1]: Do we need another bullet (or modify last
+bullet) to indicate upstream integrations from other systems too ?
+(eg, leadsheet/renewals and pulling in existing customer/project
+data)?
+Commented [EF2R1]: Replaced as ‘multidirectional’
+Commented [JC3]: Sets targets/benchmarks/guidance
+Commented [EF4R3]: Incorporated.
+Commented [CR5]: I would like to add:
+Ability to manage and govern rate tables, hiearchies and standards
+within the tool, or the ability to bring in external data tables to
+populate those tables (eg, Standard Costs rates feeding this tool via
+Datawarehouse; leveraging product service mapping from CRM/DW
+in place of manually adding to pricing tool).
+Commented [EF6R5]: Incorporated.
+Commented [JC7]: Scoping is underdeveloped in existing excel
+models except for some Consulting net new and Audit renewals -
+e.g. risk assessment, industry familiarity, client complexity, client
+information/difficulty. Look for enhancement opportunities.
+Commented [EF8R7]: Incorporated.
+Commented [CR9]: Do we need to differentiate the scope of
+new project pricing vs leadsheet (renewal) pricing further? Blanket
+statement in 2nd bullet technically covers but want to be clear that In
+our current state there is more robust-pricing considerations for new
+deals compared with lead sheets. Due to the volume of renewals, a
+more consolidated pricing workflow is needed (and sacrifices some
+lower level of detail vs new pricing).
+Commented [EF10R9]: Incorporated.
+
+Request for Quote
+• The application must support both project types within a consistent workflow
+while allowing for differences in inputs, comparisons, and approvals where
+applicable.
+• Scope of new project pricing vs. lead sheet (renewal) pricing have differing
+considerations. Currently, there are more robust pricing considerations for new
+deals compared with renewals. Due to the volume of renewals, a more
+consolidated pricing workflow is needed (and sacrifices some lower level of detail
+vs new pricing).
+Key Assumptions and Constraints:
+• Pricing methodologies are preserved, not redesigned
+• Differences between new projects and renewal projects are handled through
+configuration and workflow, not custom logic
+• The system must reproduce calculation results consistent with existing Excel
+pricing workbooks
+• Acceptance is based on parity with current workbook outcomes for equivalent
+inputs
