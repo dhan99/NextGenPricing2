@@ -6,6 +6,7 @@ import { NewDeal } from "./pages/NewDeal";
 import { DealDetail } from "./pages/DealDetail";
 import { RateCards } from "./pages/RateCards";
 import { ScopeCatalogAdmin } from "./pages/ScopeCatalogAdmin";
+import { Architecture } from "./pages/Architecture";
 
 function App() {
   return (
@@ -17,6 +18,7 @@ function App() {
         <Route path="/deals/:id" component={DealDetail} />
         <Route path="/admin/rate-cards" component={RateCards} />
         <Route path="/admin/scope-catalog" component={ScopeCatalogAdmin} />
+        <Route path="/architecture" component={Architecture} />
         <Route>
           <div className="flex items-center justify-center min-h-screen">
             <p className="text-xl text-muted-foreground">Page not found</p>

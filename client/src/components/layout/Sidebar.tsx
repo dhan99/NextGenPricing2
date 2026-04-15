@@ -1,11 +1,12 @@
 import { useLocation, Link } from "wouter";
-import { LayoutDashboard, FileText, Settings, ChevronDown, BookOpen, DollarSign, BarChart3, Shield } from "lucide-react";
+import { LayoutDashboard, FileText, Settings, ChevronDown, BookOpen, DollarSign, BarChart3, Shield, Layers } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
 
 const navigation = [
   { name: "Dashboard", href: "/", icon: LayoutDashboard },
   { name: "Deals", href: "/deals", icon: FileText },
+  { name: "Architecture", href: "/architecture", icon: Layers },
 ];
 
 const adminNavigation = [
