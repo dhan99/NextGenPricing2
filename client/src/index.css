@@ -1,0 +1,78 @@
+@import "tailwindcss";
+
+@theme {
+  --color-background: #fafaf9;
+  --color-foreground: #1c1917;
+  --color-card: #ffffff;
+  --color-card-foreground: #1c1917;
+  --color-popover: #ffffff;
+  --color-popover-foreground: #1c1917;
+  --color-primary: #DA720F;
+  --color-primary-foreground: #ffffff;
+  --color-secondary: #f5f0eb;
+  --color-secondary-foreground: #44403c;
+  --color-muted: #f5f5f4;
+  --color-muted-foreground: #78716c;
+  --color-accent: #fef3c7;
+  --color-accent-foreground: #92400e;
+  --color-destructive: #dc2626;
+  --color-destructive-foreground: #ffffff;
+  --color-border: #e7e5e4;
+  --color-input: #e7e5e4;
+  --color-ring: #DA720F;
+  --color-success: #16a34a;
+  --color-success-foreground: #ffffff;
+  --color-warning: #d97706;
+  --color-warning-foreground: #ffffff;
+  --color-info: #2563eb;
+  --color-info-foreground: #ffffff;
+  --color-sidebar-bg: #1c1917;
+  --color-sidebar-fg: #e7e5e4;
+  --color-sidebar-accent: #292524;
+  --color-sidebar-muted: #78716c;
+  --radius-sm: 0.375rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-heading: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: var(--font-sans);
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-primary text-primary-foreground px-4 py-2 rounded-lg font-medium
+      hover:bg-primary/90 transition-colors inline-flex items-center gap-2;
+  }
+  .btn-secondary {
+    @apply bg-secondary text-secondary-foreground px-4 py-2 rounded-lg font-medium
+      hover:bg-secondary/80 transition-colors inline-flex items-center gap-2;
+  }
+  .btn-ghost {
+    @apply text-muted-foreground px-4 py-2 rounded-lg font-medium
+      hover:bg-muted transition-colors inline-flex items-center gap-2;
+  }
+  .card {
+    @apply bg-card rounded-xl border border-border shadow-sm;
+  }
+  .input-field {
+    @apply w-full px-3 py-2 bg-background border border-input rounded-lg text-sm
+      focus:outline-none focus:ring-2 focus:ring-ring/20 focus:border-primary
+      transition-colors placeholder:text-muted-foreground;
+  }
+  .label {
+    @apply text-sm font-medium text-foreground;
+  }
+  .badge {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+  }
+}

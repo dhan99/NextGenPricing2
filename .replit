@@ -26,10 +26,26 @@ author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "workflow.run"
-args = "DealPad Architecture"
+args = "Backend Server"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "DealPad Frontend"
 
 [[workflows.workflow]]
-name = "DealPad Architecture"
+name = "Backend Server"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "npx tsx server/index.ts"
+waitForPort = 3001
+
+[workflows.workflow.metadata]
+outputType = "console"
+
+[[workflows.workflow]]
+name = "DealPad Frontend"
 author = "agent"
 
 [[workflows.workflow.tasks]]
@@ -41,9 +57,9 @@ waitForPort = 5000
 outputType = "webview"
 
 [[ports]]
-localPort = 5000
-externalPort = 5000
+localPort = 3001
+externalPort = 80
 
 [[ports]]
-localPort = 5173
-externalPort = 5173
+localPort = 5000
+externalPort = 80
