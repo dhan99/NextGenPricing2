@@ -83,6 +83,43 @@ export function DealDetail() {
         {currentStep === 6 && <ReviewStep deal={deal} />}
         {currentStep === 7 && <ApprovalStep deal={deal} />}
         {currentStep === 8 && <SummaryStep deal={deal} />}
+
+        <div className="flex items-center justify-between mt-8 pt-6 border-t border-border">
+          <button
+            onClick={() => setCurrentStep(Math.max(1, currentStep - 1))}
+            disabled={currentStep === 1}
+            className={cn(
+              "flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-medium transition-all",
+              currentStep === 1
+                ? "text-muted-foreground/40 cursor-not-allowed"
+                : "text-foreground border border-border hover:bg-muted"
+            )}
+          >
+            <ArrowLeft className="w-4 h-4" />
+            {currentStep > 1 ? STEPS[currentStep - 2].label : "Previous"}
+          </button>
+
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            Step {currentStep} of {STEPS.length}
+          </div>
+
+          {currentStep < STEPS.length ? (
+            <button
+              onClick={() => setCurrentStep(Math.min(STEPS.length, currentStep + 1))}
+              className="flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-all"
+            >
+              {STEPS[currentStep].label}
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          ) : (
+            <Link href="/deals">
+              <span className="flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-all cursor-pointer">
+                Back to Deals
+                <ChevronRight className="w-4 h-4" />
+              </span>
+            </Link>
+          )}
+        </div>
       </div>
     </div>
   );
