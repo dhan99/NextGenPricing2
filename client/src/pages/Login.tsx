@@ -1,15 +1,28 @@
 import { useAuth, PERSONAS, type PersonaRole } from "@/context/AuthContext";
-import { ArrowRight, Brain, ShieldCheck, Zap, TrendingUp } from "lucide-react";
+import { ArrowRight, Brain, ShieldCheck, Zap, TrendingUp, ChevronDown } from "lucide-react";
 import { useState } from "react";
 
-const personaList: { role: PersonaRole; avatarBg: string }[] = [
-  { role: "pdl", avatarBg: "bg-orange-100 text-orange-700" },
-  { role: "sll", avatarBg: "bg-blue-100 text-blue-700" },
-  { role: "po", avatarBg: "bg-emerald-100 text-emerald-700" },
-  { role: "fin", avatarBg: "bg-violet-100 text-violet-700" },
-  { role: "qrm", avatarBg: "bg-red-100 text-red-700" },
-  { role: "it", avatarBg: "bg-stone-100 text-stone-700" },
+const personaList: { role: PersonaRole; avatarBg: string; ringColor: string }[] = [
+  { role: "pdl", avatarBg: "bg-orange-100 text-orange-700", ringColor: "ring-orange-400" },
+  { role: "sll", avatarBg: "bg-blue-100 text-blue-700", ringColor: "ring-blue-400" },
+  { role: "po", avatarBg: "bg-emerald-100 text-emerald-700", ringColor: "ring-emerald-400" },
+  { role: "fin", avatarBg: "bg-violet-100 text-violet-700", ringColor: "ring-violet-400" },
+  { role: "qrm", avatarBg: "bg-red-100 text-red-700", ringColor: "ring-red-400" },
+  { role: "it", avatarBg: "bg-stone-100 text-stone-700", ringColor: "ring-stone-400" },
 ];
+
+const permissionLabels: Record<string, string> = {
+  createDeals: "Create Deals",
+  editDeals: "Edit Deals",
+  viewDeals: "View Deals",
+  approveDeals: "Approve Deals",
+  editPricing: "Edit Pricing",
+  manageRateCards: "Rate Cards",
+  manageScopeCatalog: "Scope Catalog",
+  viewMargins: "View Margins",
+  viewRiskSummary: "Risk Summary",
+  runAI: "AI Tools",
+};
 
 const features = [
   { icon: Brain, label: "AI-powered effort estimation" },
@@ -26,11 +39,11 @@ const stats = [
 
 export function Login() {
   const { login } = useAuth();
-  const [selectedPreview, setSelectedPreview] = useState<PersonaRole | null>(null);
+  const [expandedRole, setExpandedRole] = useState<PersonaRole | null>(null);
 
   return (
     <div className="min-h-screen flex">
-      <div className="hidden lg:flex lg:w-[55%] relative overflow-hidden" style={{ background: "linear-gradient(135deg, #fdf8f3 0%, #fef3e7 40%, #fde8d0 100%)" }}>
+      <div className="hidden lg:flex lg:w-[50%] relative overflow-hidden" style={{ background: "linear-gradient(135deg, #fdf8f3 0%, #fef3e7 40%, #fde8d0 100%)" }}>
         <div className="absolute inset-0 opacity-[0.03]" style={{ backgroundImage: "radial-gradient(circle at 1px 1px, #DA720F 1px, transparent 0)", backgroundSize: "32px 32px" }} />
 
         <div className="relative z-10 flex flex-col justify-between p-12 lg:p-16 w-full">
@@ -50,7 +63,7 @@ export function Login() {
               <span style={{ color: "#DA720F" }}>simplified.</span>
             </h2>
             <p className="mt-5 text-stone-500 text-base leading-relaxed">
-              AI-powered pricing, scoping, and margin analytics for professional services --
+              AI-powered pricing, scoping, and margin analytics for professional services —
               replacing spreadsheets with intelligent workflows.
             </p>
 
@@ -94,70 +107,87 @@ export function Login() {
           </div>
         </div>
 
-        <div className="flex-1 flex flex-col justify-center px-6 sm:px-10 lg:px-16 py-10 overflow-y-auto">
-          <div className="max-w-md mx-auto w-full">
-            <div className="bg-white rounded-2xl border border-stone-200 shadow-sm p-8 mb-5">
+        <div className="flex-1 flex flex-col justify-center px-6 sm:px-10 lg:px-14 py-10 overflow-y-auto">
+          <div className="max-w-lg mx-auto w-full">
+            <div className="bg-white rounded-2xl border border-stone-200 shadow-sm p-7">
               <h3 className="text-xl font-semibold text-stone-900">Welcome to DealPad</h3>
               <p className="text-sm text-stone-500 mt-1 mb-6">Select a persona to access the platform</p>
 
               <div className="space-y-2">
-                {personaList.map(({ role, avatarBg }) => {
+                {personaList.map(({ role, avatarBg, ringColor }) => {
                   const persona = PERSONAS[role];
+                  const isExpanded = expandedRole === role;
+                  const enabledPerms = Object.entries(persona.permissions)
+                    .filter(([, v]) => v)
+                    .map(([k]) => k);
+
                   return (
-                    <div key={role} className="flex items-center gap-2">
+                    <div
+                      key={role}
+                      className={`rounded-xl border transition-all ${isExpanded ? "border-stone-300 bg-stone-50/50 shadow-sm" : "border-stone-200 hover:border-stone-300"}`}
+                    >
                       <button
-                        onClick={() => setSelectedPreview(selectedPreview === role ? null : role)}
-                        onFocus={() => setSelectedPreview(role)}
-                        aria-label={`Preview permissions for ${persona.name}`}
-                        className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-semibold shrink-0 transition-all focus-visible:ring-2 focus-visible:ring-orange-400 focus-visible:ring-offset-2 ${avatarBg} ${selectedPreview === role ? "ring-2 ring-orange-400 ring-offset-1" : ""}`}
+                        onClick={() => setExpandedRole(isExpanded ? null : role)}
+                        onFocus={() => setExpandedRole(role)}
+                        aria-expanded={isExpanded}
+                        className="w-full flex items-center gap-3.5 px-4 py-3.5 text-left focus-visible:ring-2 focus-visible:ring-orange-400 focus-visible:ring-offset-2 rounded-xl"
                       >
-                        {persona.initials}
-                      </button>
-                      <button
-                        onClick={() => login(role)}
-                        onMouseEnter={() => setSelectedPreview(role)}
-                        onFocus={() => setSelectedPreview(role)}
-                        className="flex-1 flex items-center gap-3.5 px-4 py-3.5 rounded-xl border border-stone-200 hover:border-stone-300 hover:bg-stone-50 transition-all text-left group focus-visible:ring-2 focus-visible:ring-orange-400 focus-visible:ring-offset-2"
-                      >
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-semibold shrink-0 ${avatarBg} ${isExpanded ? `ring-2 ${ringColor} ring-offset-1` : ""}`}>
+                          {persona.initials}
+                        </div>
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium text-stone-900">{persona.name}</p>
-                          <p className="text-xs text-stone-500 truncate">{persona.fullTitle}</p>
+                          <p className="text-xs text-stone-500">{persona.fullTitle}</p>
                         </div>
-                        <ArrowRight className={`w-4 h-4 text-stone-400 shrink-0 transition-all ${selectedPreview === role ? "translate-x-0.5 text-stone-600" : ""}`} />
+                        <ChevronDown className={`w-4 h-4 text-stone-400 shrink-0 transition-transform duration-200 ${isExpanded ? "rotate-180" : ""}`} />
                       </button>
+
+                      <div
+                        className={`grid transition-all duration-200 ease-in-out ${isExpanded ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"}`}
+                      >
+                        <div className="overflow-hidden">
+                          <div className="px-4 pb-4 pt-0.5">
+                            <p className="text-sm text-stone-600 leading-relaxed mb-3">
+                              {persona.description}
+                            </p>
+
+                            <div className="flex flex-wrap gap-1.5 mb-4">
+                              {Object.entries(permissionLabels).map(([key, label]) => {
+                                const has = enabledPerms.includes(key);
+                                return (
+                                  <span
+                                    key={key}
+                                    className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${
+                                      has
+                                        ? "bg-stone-800 text-white"
+                                        : "bg-stone-100 text-stone-400 line-through"
+                                    }`}
+                                  >
+                                    {label}
+                                  </span>
+                                );
+                              })}
+                            </div>
+
+                            <button
+                              onClick={(e) => { e.stopPropagation(); login(role); }}
+                              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-white text-sm font-medium transition-all hover:opacity-90 focus-visible:ring-2 focus-visible:ring-orange-400 focus-visible:ring-offset-2"
+                              style={{ backgroundColor: "#DA720F" }}
+                            >
+                              Sign in as {persona.name.split(" ")[0]}
+                              <ArrowRight className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   );
                 })}
               </div>
             </div>
 
-            <div className="bg-white rounded-2xl border border-stone-200 shadow-sm p-6">
-              <p className="text-[11px] font-medium text-stone-400 uppercase tracking-wider mb-3">About Personas</p>
-              {selectedPreview ? (
-                <div className="animate-in fade-in duration-200">
-                  <p className="text-sm font-medium text-stone-900">{PERSONAS[selectedPreview].name}</p>
-                  <p className="text-xs text-stone-500 mt-0.5 mb-3">{PERSONAS[selectedPreview].fullTitle}</p>
-                  <p className="text-sm text-stone-600 leading-relaxed">{PERSONAS[selectedPreview].description}</p>
-                  <div className="flex flex-wrap gap-1.5 mt-3">
-                    {Object.entries(PERSONAS[selectedPreview].permissions)
-                      .filter(([, v]) => v)
-                      .map(([key]) => (
-                        <span key={key} className="text-xs font-medium px-2.5 py-1 rounded-full bg-stone-100 text-stone-600">
-                          {key.replace(/([A-Z])/g, " $1").replace(/^./, (s) => s.toUpperCase())}
-                        </span>
-                      ))}
-                  </div>
-                </div>
-              ) : (
-                <p className="text-sm text-stone-500 leading-relaxed">
-                  Each persona reflects a distinct role in the deal lifecycle with tailored permissions.
-                  Select a persona's avatar to preview their access level.
-                </p>
-              )}
-            </div>
-
-            <p className="text-center text-[11px] text-stone-400 mt-6">
-              PoC demonstration -- production auth via Azure Entra ID
+            <p className="text-center text-xs text-stone-400 mt-6">
+              PoC demonstration — production auth via Azure Entra ID
             </p>
           </div>
         </div>
