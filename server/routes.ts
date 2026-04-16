@@ -113,15 +113,15 @@ export function registerRoutes(app: Express) {
 
     const recentActivity = await db.select().from(activityLog).orderBy(desc(activityLog.createdAt)).limit(10);
 
-    const pendingApprovals = await db.select({
+    const submittedDeals = await db.select({
       count: count(),
-    }).from(approvals).where(eq(approvals.status, "pending"));
+    }).from(deals).where(eq(deals.status, "submitted"));
 
     res.json({
       totalDeals: dealStats.total,
       totalPipeline: parseFloat(dealStats.totalFee),
       averageMargin: parseFloat(dealStats.avgMargin).toFixed(1),
-      pendingApprovals: pendingApprovals[0]?.count || 0,
+      pendingApprovals: submittedDeals[0]?.count || 0,
       statusBreakdown,
       recentActivity,
     });
