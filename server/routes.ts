@@ -287,10 +287,54 @@ export function registerRoutes(app: Express) {
 
   // ========== PRICING LINES ==========
   app.get("/api/deals/:dealId/pricing", async (req: Request, res: Response) => {
-    const result = await db.query.pricingLines.findMany({
-      where: eq(pricingLines.dealId, parseInt(req.params.dealId)),
+    const dealId = parseInt(req.params.dealId);
+    let result = await db.query.pricingLines.findMany({
+      where: eq(pricingLines.dealId, dealId),
       with: { role: true },
     });
+    if (result.length === 0) {
+      const deal = await db.query.deals.findFirst({ where: eq(deals.id, dealId) });
+      if (deal) {
+        const allRoles = await db.select().from(roles).orderBy(roles.sortOrder);
+        if (allRoles.length > 0) {
+          const defaultHoursMap: Record<string, number> = {
+            "Partner": 40, "Managing Director": 60, "Senior Manager": 80,
+            "Manager": 120, "Senior Consultant": 160, "Consultant": 100, "Analyst": 60,
+          };
+          await db.insert(pricingLines).values(
+            allRoles.map((r) => {
+              const hours = defaultHoursMap[r.name] || 80;
+              const rate = parseFloat(r.defaultRate || "300");
+              const costRate = parseFloat(r.costRate || "150");
+              return {
+                dealId,
+                roleId: r.id,
+                hours: String(hours),
+                rate: String(rate),
+                costRate: String(costRate),
+                fee: String(hours * rate),
+                cost: String(hours * costRate),
+                margin: String(hours * (rate - costRate)),
+              };
+            })
+          );
+          result = await db.query.pricingLines.findMany({
+            where: eq(pricingLines.dealId, dealId),
+            with: { role: true },
+          });
+          const totalFee = result.reduce((s, l) => s + parseFloat(l.fee || "0"), 0);
+          const totalCost = result.reduce((s, l) => s + parseFloat(l.cost || "0"), 0);
+          const totalHours = result.reduce((s, l) => s + parseFloat(l.hours || "0"), 0);
+          await db.update(deals).set({
+            totalFee: String(totalFee),
+            totalCost: String(totalCost),
+            totalHours: String(totalHours),
+            marginPercent: totalFee > 0 ? String(((totalFee - totalCost) / totalFee * 100).toFixed(1)) : "0",
+            blendedRate: totalHours > 0 ? String((totalFee / totalHours).toFixed(2)) : "0",
+          }).where(eq(deals.id, dealId));
+        }
+      }
+    }
     res.json(result);
   });
 
