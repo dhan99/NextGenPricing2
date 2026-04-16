@@ -293,17 +293,39 @@ export function registerRoutes(app: Express) {
       with: { role: true },
     });
     if (result.length === 0) {
-      const deal = await db.query.deals.findFirst({ where: eq(deals.id, dealId) });
+      const deal = await db.query.deals.findFirst({
+        where: eq(deals.id, dealId),
+        with: { scopeItems: { with: { scopeItem: true } }, promptResponses: true },
+      });
       if (deal) {
         const allRoles = await db.select().from(roles).orderBy(roles.sortOrder);
         if (allRoles.length > 0) {
-          const defaultHoursMap: Record<string, number> = {
-            "Partner": 40, "Managing Director": 60, "Senior Manager": 80,
-            "Manager": 120, "Senior Consultant": 160, "Consultant": 100, "Analyst": 60,
+          const complexityMultipliers: Record<string, number> = { low: 0.8, medium: 1.0, high: 1.2, very_high: 1.5 };
+          const baseMultiplier = complexityMultipliers[deal.complexity || "medium"] || 1.0;
+          const promptMultiplier = (deal.promptResponses || []).reduce(
+            (m: number, p: any) => m * (parseFloat(p.impactMultiplier) || 1.0), 1.0
+          );
+          const totalMultiplier = baseMultiplier * promptMultiplier;
+
+          let totalHours: number;
+          if (deal.scopeItems && deal.scopeItems.length > 0) {
+            totalHours = deal.scopeItems.reduce((sum: number, si: any) => {
+              const baseHrs = parseFloat(si.adjustedHours || si.scopeItem?.defaultHours || "40");
+              return sum + Math.round(baseHrs * totalMultiplier);
+            }, 0);
+          } else {
+            totalHours = Math.round(200 * totalMultiplier);
+          }
+
+          const roleDistribution: Record<string, number> = {
+            "Partner": 0.07, "Managing Director": 0.10, "Senior Manager": 0.17,
+            "Manager": 0.20, "Senior Consultant": 0.26, "Consultant": 0.13, "Analyst": 0.07,
           };
+
           await db.insert(pricingLines).values(
             allRoles.map((r) => {
-              const hours = defaultHoursMap[r.name] || 80;
+              const pct = roleDistribution[r.name] || (1 / allRoles.length);
+              const hours = Math.max(Math.round(totalHours * pct), 1);
               const rate = parseFloat(r.defaultRate || "300");
               const costRate = parseFloat(r.costRate || "150");
               return {
@@ -322,15 +344,15 @@ export function registerRoutes(app: Express) {
             where: eq(pricingLines.dealId, dealId),
             with: { role: true },
           });
-          const totalFee = result.reduce((s, l) => s + parseFloat(l.fee || "0"), 0);
-          const totalCost = result.reduce((s, l) => s + parseFloat(l.cost || "0"), 0);
-          const totalHours = result.reduce((s, l) => s + parseFloat(l.hours || "0"), 0);
+          const calcTotalFee = result.reduce((s, l) => s + parseFloat(l.fee || "0"), 0);
+          const calcTotalCost = result.reduce((s, l) => s + parseFloat(l.cost || "0"), 0);
+          const calcTotalHours = result.reduce((s, l) => s + parseFloat(l.hours || "0"), 0);
           await db.update(deals).set({
-            totalFee: String(totalFee),
-            totalCost: String(totalCost),
-            totalHours: String(totalHours),
-            marginPercent: totalFee > 0 ? String(((totalFee - totalCost) / totalFee * 100).toFixed(1)) : "0",
-            blendedRate: totalHours > 0 ? String((totalFee / totalHours).toFixed(2)) : "0",
+            totalFee: String(calcTotalFee),
+            totalCost: String(calcTotalCost),
+            totalHours: String(calcTotalHours),
+            marginPercent: calcTotalFee > 0 ? String(((calcTotalFee - calcTotalCost) / calcTotalFee * 100).toFixed(1)) : "0",
+            blendedRate: calcTotalHours > 0 ? String((calcTotalFee / calcTotalHours).toFixed(2)) : "0",
           }).where(eq(deals.id, dealId));
         }
       }
@@ -347,6 +369,12 @@ export function registerRoutes(app: Express) {
       margin: String(parseFloat(req.body.hours) * (parseFloat(req.body.rate) - parseFloat(req.body.costRate))),
     }).returning();
     res.status(201).json(line);
+  });
+
+  app.delete("/api/deals/:dealId/pricing", async (req: Request, res: Response) => {
+    const dealId = parseInt(req.params.dealId);
+    await db.delete(pricingLines).where(eq(pricingLines.dealId, dealId));
+    res.json({ success: true });
   });
 
   app.patch("/api/deals/:dealId/pricing/:id", async (req: Request, res: Response) => {
