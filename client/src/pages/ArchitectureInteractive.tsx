@@ -160,24 +160,21 @@ const dataFlows = [
 
 export function ArchitectureInteractive() {
   const [selectedNode, setSelectedNode] = useState<string | null>(null);
-  const [hoveredNode, setHoveredNode] = useState<string | null>(null);
-
-  const activeNode = selectedNode || hoveredNode;
   const selectedData = selectedNode ? nodes.find((n) => n.id === selectedNode) : null;
 
   const isConnected = (nodeId: string) => {
-    if (!activeNode) return true;
-    if (nodeId === activeNode) return true;
-    const node = nodes.find((n) => n.id === activeNode);
+    if (!selectedNode) return true;
+    if (nodeId === selectedNode) return true;
+    const node = nodes.find((n) => n.id === selectedNode);
     if (node?.connections.includes(nodeId)) return true;
     const other = nodes.find((n) => n.id === nodeId);
-    if (other?.connections.includes(activeNode)) return true;
+    if (other?.connections.includes(selectedNode)) return true;
     return false;
   };
 
   const isFlowActive = (flow: typeof dataFlows[0]) => {
-    if (!activeNode) return true;
-    return flow.from === activeNode || flow.to === activeNode;
+    if (!selectedNode) return true;
+    return flow.from === selectedNode || flow.to === selectedNode;
   };
 
   return (
@@ -192,8 +189,8 @@ export function ArchitectureInteractive() {
           <div className="card p-6">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">System Components</h2>
-              {activeNode && (
-                <button onClick={() => { setSelectedNode(null); setHoveredNode(null); }} className="text-xs text-muted-foreground hover:text-foreground transition-colors">
+              {selectedNode && (
+                <button onClick={() => setSelectedNode(null)} className="text-xs text-muted-foreground hover:text-foreground transition-colors">
                   Clear selection
                 </button>
               )}
@@ -204,7 +201,7 @@ export function ArchitectureInteractive() {
               {renderNodeCard("browser")}
 
               <div className="flex justify-center">
-                <div className={`flex flex-col items-center transition-opacity duration-200 ${activeNode && !isFlowActive(dataFlows[0]) ? "opacity-20" : ""}`}>
+                <div className={`flex flex-col items-center transition-opacity duration-200 ${selectedNode && !isFlowActive(dataFlows[0]) ? "opacity-20" : ""}`}>
                   <div className="w-px h-4 bg-primary" />
                   <span className="text-[10px] font-medium text-primary px-2 py-0.5 rounded bg-primary/10">REST / JSON</span>
                   <div className="w-px h-4 bg-primary" />
@@ -217,14 +214,14 @@ export function ArchitectureInteractive() {
               <div className="grid grid-cols-2 gap-3 mt-3">
                 <div>
                   <div className="flex items-center gap-2 mb-2">
-                    <div className={`w-px h-4 bg-stone-300 ml-6 transition-opacity duration-200 ${activeNode && !isFlowActive(dataFlows[1]) ? "opacity-20" : ""}`} />
+                    <div className={`w-px h-4 bg-stone-300 ml-6 transition-opacity duration-200 ${selectedNode && !isFlowActive(dataFlows[1]) ? "opacity-20" : ""}`} />
                   </div>
                   <div className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground mb-2">AI Services</div>
                   {renderNodeCard("ai")}
                 </div>
                 <div>
                   <div className="flex items-center gap-2 mb-2">
-                    <div className={`w-px h-4 bg-stone-300 ml-6 transition-opacity duration-200 ${activeNode && !isFlowActive(dataFlows[2]) ? "opacity-20" : ""}`} />
+                    <div className={`w-px h-4 bg-stone-300 ml-6 transition-opacity duration-200 ${selectedNode && !isFlowActive(dataFlows[2]) ? "opacity-20" : ""}`} />
                   </div>
                   <div className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground mb-2">Data</div>
                   {renderNodeCard("db")}
@@ -233,7 +230,7 @@ export function ArchitectureInteractive() {
 
               <div className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground mt-4 mb-2">External Integrations</div>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                {["crm", "workday", "intapp", "powerbi"].map((id) => renderNodeCard(id, true))}
+                {["crm", "workday", "intapp", "powerbi"].map((id) => <div key={id}>{renderNodeCard(id, true)}</div>)}
               </div>
 
               <div className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground mt-4 mb-2">Infrastructure</div>
@@ -439,9 +436,7 @@ export function ArchitectureInteractive() {
     return (
       <button
         onClick={() => setSelectedNode(isSelected ? null : nodeId)}
-        onMouseEnter={() => setHoveredNode(nodeId)}
-        onMouseLeave={() => setHoveredNode(null)}
-        className={`w-full text-left rounded-xl border-2 transition-all duration-200 ${
+        className={`w-full text-left rounded-xl border-2 transition-[opacity,border-color,box-shadow] duration-200 ${
           isSelected
             ? "border-primary shadow-md ring-2 ring-primary/20"
             : connected
