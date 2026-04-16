@@ -92,7 +92,8 @@ export function NewDeal() {
             </div>
             <div>
               <label className="label">Deal Type</label>
-              <select value={form.dealType} onChange={e => setForm({...form, dealType: e.target.value, sourceDealId: ""})} className="input-field mt-1">
+              <select required value={form.dealType} onChange={e => setForm({...form, dealType: e.target.value, sourceDealId: ""})} className="input-field mt-1">
+                <option value="">Select...</option>
                 <option value="new">New Engagement</option>
                 <option value="renewal">Renewal</option>
               </select>
