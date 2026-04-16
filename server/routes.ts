@@ -92,6 +92,8 @@ async function recalcPricingFromScope(dealId: number) {
     marginPercent: calcFee > 0 ? String(((calcFee - calcCost) / calcFee * 100).toFixed(1)) : "0",
     blendedRate: calcHours > 0 ? String((calcFee / calcHours).toFixed(2)) : "0",
   }).where(eq(deals.id, dealId));
+
+  await db.delete(scenarios).where(eq(scenarios.dealId, dealId));
 }
 
 export function registerRoutes(app: Express) {
@@ -466,9 +468,64 @@ export function registerRoutes(app: Express) {
 
   // ========== SCENARIOS ==========
   app.get("/api/deals/:dealId/scenarios", async (req: Request, res: Response) => {
-    const result = await db.select().from(scenarios)
-      .where(eq(scenarios.dealId, parseInt(req.params.dealId)))
+    const dealId = parseInt(req.params.dealId);
+    let result = await db.select().from(scenarios)
+      .where(eq(scenarios.dealId, dealId))
       .orderBy(scenarios.createdAt);
+
+    if (result.length === 0) {
+      const deal = await db.query.deals.findFirst({ where: eq(deals.id, dealId) });
+      if (deal) {
+        const lines = await db.select().from(pricingLines).where(eq(pricingLines.dealId, dealId));
+        const baseFee = lines.reduce((s, l) => s + parseFloat(l.fee || "0"), 0);
+        const baseCost = lines.reduce((s, l) => s + parseFloat(l.cost || "0"), 0);
+        const baseHours = lines.reduce((s, l) => s + parseFloat(l.hours || "0"), 0);
+
+        const fee = baseFee || parseFloat(deal.totalFee || "0") || 100000;
+        const cost = baseCost || parseFloat(deal.totalCost || "0") || 70000;
+        const hours = baseHours || parseFloat(deal.totalHours || "0") || 400;
+
+        const stdMargin = fee > 0 ? ((fee - cost) / fee * 100) : 25;
+        const premFee = Math.round(fee * 1.15);
+        const premHours = Math.round(hours * 0.9);
+        const premCost = Math.round(cost * 1.05);
+        const premMargin = premFee > 0 ? ((premFee - premCost) / premFee * 100) : 30;
+        const valFee = Math.round(fee * 0.85);
+        const valHours = Math.round(hours * 1.15);
+        const valCost = Math.round(cost * 0.92);
+        const valMargin = valFee > 0 ? ((valFee - valCost) / valFee * 100) : 20;
+
+        await db.insert(scenarios).values([
+          {
+            dealId, name: "Standard", description: "Balanced team composition with standard timeline",
+            scenarioType: "standard", isRecommended: false,
+            totalFee: String(Math.round(fee)), totalCost: String(Math.round(cost)),
+            totalHours: String(Math.round(hours)), marginPercent: String(stdMargin.toFixed(1)),
+            blendedRate: hours > 0 ? String((fee / hours).toFixed(2)) : "0",
+            aiReasoning: `Standard delivery model maintaining ${stdMargin.toFixed(0)}% margin with balanced senior-to-junior ratio across ${Math.round(hours)} hours. Meets baseline requirements with predictable delivery timeline.`,
+          },
+          {
+            dealId, name: "Premium Service", description: "Senior-heavy team with accelerated timeline",
+            scenarioType: "premium", isRecommended: true,
+            totalFee: String(premFee), totalCost: String(premCost),
+            totalHours: String(premHours), marginPercent: String(premMargin.toFixed(1)),
+            blendedRate: premHours > 0 ? String((premFee / premHours).toFixed(2)) : "0",
+            aiReasoning: `Recommended option with ${premMargin.toFixed(0)}% margin. Senior-heavy staffing reduces total hours to ${premHours} while increasing fee to ${premFee.toLocaleString()}. Higher blended rate compensated by faster, more experienced delivery.`,
+          },
+          {
+            dealId, name: "Value Delivery", description: "Cost-optimized with extended timeline",
+            scenarioType: "value", isRecommended: false,
+            totalFee: String(valFee), totalCost: String(valCost),
+            totalHours: String(valHours), marginPercent: String(valMargin.toFixed(1)),
+            blendedRate: valHours > 0 ? String((valFee / valHours).toFixed(2)) : "0",
+            aiReasoning: `Budget-conscious option at ${valMargin.toFixed(0)}% margin leveraging more junior resources across ${valHours} hours. Lower blended rate with extended timeline provides cost savings while maintaining quality.`,
+          },
+        ]);
+        result = await db.select().from(scenarios)
+          .where(eq(scenarios.dealId, dealId))
+          .orderBy(scenarios.createdAt);
+      }
+    }
     res.json(result);
   });
 
