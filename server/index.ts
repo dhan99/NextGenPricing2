@@ -208,6 +208,14 @@ async function start() {
     res.sendFile(path.join(process.cwd(), "DealPad_Architecture_Document.html"));
   });
 
+  app.get("/architecture-doc/download-html", (_req, res) => {
+    res.download(path.join(process.cwd(), "DealPad_Architecture_Document.html"), "DealPad_Architecture_Document.html");
+  });
+
+  app.get("/architecture-doc/download-md", (_req, res) => {
+    res.download(path.join(process.cwd(), "DealPad_Architecture_Document.md"), "DealPad_Architecture_Document.md");
+  });
+
   const clientDistPath = path.join(process.cwd(), "dist", "public");
   app.use(express.static(clientDistPath));
   app.get("/{*path}", (_req, res) => {
