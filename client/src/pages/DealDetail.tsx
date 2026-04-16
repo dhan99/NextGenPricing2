@@ -1,8 +1,8 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRoute } from "wouter";
 import { useDeal, useUpdateDeal, useScopeCatalog, useDealScopeItems, useAddScopeItem, useRemoveScopeItem, useRoles, useDealPricing, useUpdatePricingLine, useDealScenarios, useDealApprovals, useSubmitApproval, useDealPrompts, useCloneDeal, useAIDealSimilarity, useAIEffortEstimation, useAIMarginAdvisor, useAIScenarioRecommendation, useAIRiskSummary } from "@/hooks/use-api";
 import { formatCurrency, formatPercent, formatNumber, getStatusColor, getStatusLabel, cn } from "@/lib/utils";
-import { ArrowLeft, Check, ChevronRight, Sparkles, AlertTriangle, TrendingUp, Target, FileText, Shield, CheckCircle, XCircle, Clock, Loader2, Plus, Trash2, Lightbulb, Copy, RefreshCw } from "lucide-react";
+import { ArrowLeft, Check, ChevronRight, Sparkles, AlertTriangle, TrendingUp, Target, FileText, Shield, CheckCircle, XCircle, Clock, Loader2, Plus, Trash2, Lightbulb, Copy, RefreshCw, Pencil, Save } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/context/AuthContext";
 
@@ -152,7 +152,36 @@ export function DealDetail() {
 }
 
 function SetupStep({ deal }: { deal: any }) {
+  const { persona } = useAuth();
+  const canEdit = persona?.permissions.editDeals ?? false;
   const similarity = useAIDealSimilarity();
+  const updateDeal = useUpdateDeal();
+  const [editing, setEditing] = useState(false);
+  const [form, setForm] = useState({
+    title: deal.title || "",
+    dealType: deal.dealType || "new",
+    complexity: deal.complexity || "medium",
+    businessUnit: deal.businessUnit || "",
+    serviceLine: deal.serviceLine || "",
+    startDate: deal.startDate || "",
+    endDate: deal.endDate || "",
+    pdlName: deal.pdlName || "",
+    region: deal.region || "",
+  });
+
+  useEffect(() => {
+    setForm({
+      title: deal.title || "",
+      dealType: deal.dealType || "new",
+      complexity: deal.complexity || "medium",
+      businessUnit: deal.businessUnit || "",
+      serviceLine: deal.serviceLine || "",
+      startDate: deal.startDate || "",
+      endDate: deal.endDate || "",
+      pdlName: deal.pdlName || "",
+      region: deal.region || "",
+    });
+  }, [deal]);
 
   useEffect(() => {
     if (deal.clientId) {
@@ -160,22 +189,132 @@ function SetupStep({ deal }: { deal: any }) {
     }
   }, [deal.clientId]);
 
+  const handleSave = () => {
+    updateDeal.mutate({ id: deal.id, data: form }, {
+      onSuccess: () => setEditing(false),
+    });
+  };
+
+  const handleCancel = () => {
+    setForm({
+      title: deal.title || "",
+      dealType: deal.dealType || "new",
+      complexity: deal.complexity || "medium",
+      businessUnit: deal.businessUnit || "",
+      serviceLine: deal.serviceLine || "",
+      startDate: deal.startDate || "",
+      endDate: deal.endDate || "",
+      pdlName: deal.pdlName || "",
+      region: deal.region || "",
+    });
+    setEditing(false);
+  };
+
+  const inputClass = "mt-1 w-full px-3 py-2 text-sm rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-colors";
+  const selectClass = "mt-1 w-full px-3 py-2 text-sm rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-colors";
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
       <div className="lg:col-span-2 space-y-6">
         <div className="card p-6">
-          <h2 className="text-lg font-semibold text-foreground mb-4">Deal Information</h2>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold text-foreground">Deal Information</h2>
+            {canEdit && !editing && (
+              <button
+                onClick={() => setEditing(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+              >
+                <Pencil className="w-3.5 h-3.5" />
+                Edit
+              </button>
+            )}
+            {editing && (
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleCancel}
+                  className="px-3 py-1.5 text-xs font-medium rounded-lg border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSave}
+                  disabled={updateDeal.isPending}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
+                >
+                  {updateDeal.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                  Save
+                </button>
+              </div>
+            )}
+          </div>
           <div className="grid grid-cols-2 gap-4">
-            <div><label className="label">Deal Title</label><p className="mt-1 text-sm text-foreground">{deal.title}</p></div>
-            <div><label className="label">Deal Number</label><p className="mt-1 text-sm text-foreground">{deal.dealNumber}</p></div>
-            <div><label className="label">Deal Type</label><p className="mt-1 text-sm text-foreground capitalize">{deal.dealType}</p></div>
-            <div><label className="label">Complexity</label><p className="mt-1 text-sm text-foreground capitalize">{deal.complexity}</p></div>
-            <div><label className="label">Business Unit</label><p className="mt-1 text-sm text-foreground">{deal.businessUnit || "--"}</p></div>
-            <div><label className="label">Service Line</label><p className="mt-1 text-sm text-foreground">{deal.serviceLine || "--"}</p></div>
-            <div><label className="label">Start Date</label><p className="mt-1 text-sm text-foreground">{deal.startDate || "--"}</p></div>
-            <div><label className="label">End Date</label><p className="mt-1 text-sm text-foreground">{deal.endDate || "--"}</p></div>
-            <div><label className="label">PDL</label><p className="mt-1 text-sm text-foreground">{deal.pdlName || "--"}</p></div>
-            <div><label className="label">Region</label><p className="mt-1 text-sm text-foreground">{deal.region || "--"}</p></div>
+            {editing ? (
+              <>
+                <div className="col-span-2">
+                  <label className="label">Deal Title</label>
+                  <input className={inputClass} value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
+                </div>
+                <div>
+                  <label className="label">Deal Number</label>
+                  <p className="mt-1 text-sm text-muted-foreground">{deal.dealNumber}</p>
+                </div>
+                <div>
+                  <label className="label">Deal Type</label>
+                  <select className={selectClass} value={form.dealType} onChange={(e) => setForm({ ...form, dealType: e.target.value })}>
+                    <option value="new">New</option>
+                    <option value="renewal">Renewal</option>
+                    <option value="extension">Extension</option>
+                    <option value="change_order">Change Order</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="label">Complexity</label>
+                  <select className={selectClass} value={form.complexity} onChange={(e) => setForm({ ...form, complexity: e.target.value })}>
+                    <option value="low">Low</option>
+                    <option value="medium">Medium</option>
+                    <option value="high">High</option>
+                    <option value="critical">Critical</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="label">Business Unit</label>
+                  <input className={inputClass} value={form.businessUnit} onChange={(e) => setForm({ ...form, businessUnit: e.target.value })} />
+                </div>
+                <div>
+                  <label className="label">Service Line</label>
+                  <input className={inputClass} value={form.serviceLine} onChange={(e) => setForm({ ...form, serviceLine: e.target.value })} />
+                </div>
+                <div>
+                  <label className="label">Start Date</label>
+                  <input type="date" className={inputClass} value={form.startDate} onChange={(e) => setForm({ ...form, startDate: e.target.value })} />
+                </div>
+                <div>
+                  <label className="label">End Date</label>
+                  <input type="date" className={inputClass} value={form.endDate} onChange={(e) => setForm({ ...form, endDate: e.target.value })} />
+                </div>
+                <div>
+                  <label className="label">PDL</label>
+                  <input className={inputClass} value={form.pdlName} onChange={(e) => setForm({ ...form, pdlName: e.target.value })} />
+                </div>
+                <div>
+                  <label className="label">Region</label>
+                  <input className={inputClass} value={form.region} onChange={(e) => setForm({ ...form, region: e.target.value })} />
+                </div>
+              </>
+            ) : (
+              <>
+                <div><label className="label">Deal Title</label><p className="mt-1 text-sm text-foreground">{deal.title}</p></div>
+                <div><label className="label">Deal Number</label><p className="mt-1 text-sm text-foreground">{deal.dealNumber}</p></div>
+                <div><label className="label">Deal Type</label><p className="mt-1 text-sm text-foreground capitalize">{deal.dealType}</p></div>
+                <div><label className="label">Complexity</label><p className="mt-1 text-sm text-foreground capitalize">{deal.complexity}</p></div>
+                <div><label className="label">Business Unit</label><p className="mt-1 text-sm text-foreground">{deal.businessUnit || "--"}</p></div>
+                <div><label className="label">Service Line</label><p className="mt-1 text-sm text-foreground">{deal.serviceLine || "--"}</p></div>
+                <div><label className="label">Start Date</label><p className="mt-1 text-sm text-foreground">{deal.startDate || "--"}</p></div>
+                <div><label className="label">End Date</label><p className="mt-1 text-sm text-foreground">{deal.endDate || "--"}</p></div>
+                <div><label className="label">PDL</label><p className="mt-1 text-sm text-foreground">{deal.pdlName || "--"}</p></div>
+                <div><label className="label">Region</label><p className="mt-1 text-sm text-foreground">{deal.region || "--"}</p></div>
+              </>
+            )}
           </div>
         </div>
 
