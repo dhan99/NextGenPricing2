@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Monitor, Server, Brain, Database, Cloud, BarChart3, Users, Shield, Zap, ArrowRight, X } from "lucide-react";
+import { Monitor, Server, Brain, Database, Cloud, BarChart3, Users, Shield, Zap, ArrowRight, X, Cpu, GitBranch, Layers } from "lucide-react";
 
 interface NodeData {
   id: string;
@@ -156,6 +156,23 @@ const dataFlows = [
   { from: "api", to: "powerbi", label: "Analytics", type: "dashed" as const },
   { from: "ai", to: "azure", label: "Compute", type: "dashed" as const },
   { from: "db", to: "azure", label: "Hosting", type: "dashed" as const },
+];
+
+const dddContexts = [
+  { name: "Deal Context", description: "Deal lifecycle, versioning, project classification", stories: "US-01 to US-07", color: "bg-amber-500" },
+  { name: "Scope Context", description: "Scope items, assemblies, prompts, validation", stories: "US-08 to US-17", color: "bg-blue-500" },
+  { name: "Pricing Context", description: "Pricing grid, rates, margin, pricing models", stories: "US-18 to US-31", color: "bg-emerald-500" },
+  { name: "Approval Context", description: "Tiered routing, delegation, fast-track", stories: "US-39 to US-45", color: "bg-violet-500" },
+  { name: "Catalog & Config", description: "Rate tables, templates, admin governance", stories: "US-54 to US-57", color: "bg-stone-500" },
+  { name: "Analytics Context", description: "Dashboards, benchmarks, reporting", stories: "US-32 to US-38", color: "bg-red-500" },
+];
+
+const targetArchitecture = [
+  { icon: Cloud, label: "Azure Cloud-Native", detail: "APIM, Service Bus, Event Grid, Container Apps" },
+  { icon: Cpu, label: "Azure OpenAI", detail: "Semantic Kernel + LangGraph orchestration" },
+  { icon: GitBranch, label: "CI/CD Pipeline", detail: "GitHub Actions + Azure DevOps" },
+  { icon: Shield, label: "Security & Compliance", detail: "Entra ID, RBAC, SOC 2 compliance" },
+  { icon: Layers, label: "Domain-Driven Design", detail: "6 bounded contexts, CQRS-ready, event-driven" },
 ];
 
 export function ArchitectureInteractive() {
@@ -420,6 +437,57 @@ export function ArchitectureInteractive() {
               </div>
             </div>
           )}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="card p-6">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center">
+              <Layers className="w-5 h-5 text-primary" />
+            </div>
+            <div>
+              <h2 className="font-semibold text-foreground">Domain-Driven Design Contexts</h2>
+              <p className="text-xs text-muted-foreground">Bounded contexts mapped to user stories</p>
+            </div>
+          </div>
+          <div className="space-y-2">
+            {dddContexts.map((ctx) => (
+              <div key={ctx.name} className="flex items-center gap-3 px-3 py-2.5 rounded-lg border border-border">
+                <div className={`w-2 h-2 rounded-full ${ctx.color} shrink-0`} />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-foreground">{ctx.name}</p>
+                  <p className="text-xs text-muted-foreground">{ctx.description}</p>
+                </div>
+                <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-primary/10 text-primary shrink-0">{ctx.stories}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="card p-6">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-9 h-9 rounded-lg bg-blue-50 flex items-center justify-center">
+              <Cloud className="w-5 h-5 text-blue-600" />
+            </div>
+            <div>
+              <h2 className="font-semibold text-foreground">Target Production Architecture</h2>
+              <p className="text-xs text-muted-foreground">Planned Azure cloud-native deployment</p>
+            </div>
+          </div>
+          <div className="space-y-2">
+            {targetArchitecture.map((item) => (
+              <div key={item.label} className="flex items-center gap-3 px-3 py-2.5 rounded-lg border border-border">
+                <div className="w-8 h-8 rounded-lg bg-stone-100 flex items-center justify-center shrink-0">
+                  <item.icon className="w-4 h-4 text-stone-600" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-foreground">{item.label}</p>
+                  <p className="text-xs text-muted-foreground">{item.detail}</p>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     </div>
