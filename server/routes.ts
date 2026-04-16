@@ -875,4 +875,139 @@ export function registerRoutes(app: Express) {
     const result = await db.select().from(activityLog).orderBy(desc(activityLog.createdAt)).limit(20);
     res.json(result);
   });
+
+  // ========== ARCHITECTURE CONVERSATIONAL AI ==========
+  app.post("/api/ai/architecture-chat", async (req: Request, res: Response) => {
+    const { message, history } = req.body;
+    if (!message) return res.status(400).json({ error: "message is required" });
+
+    const msg = message.toLowerCase();
+
+    const allDeals = await db.select().from(deals);
+    const allClients = await db.select().from(clients);
+    const allRoles = await db.select().from(roles);
+    const catalog = await db.select().from(scopeCatalog);
+    const allScenarios = await db.select().from(scenarios);
+
+    const totalDeals = allDeals.length;
+    const draftDeals = allDeals.filter(d => d.status === "draft").length;
+    const submittedDeals = allDeals.filter(d => d.status === "submitted").length;
+    const approvedDeals = allDeals.filter(d => d.status === "approved").length;
+
+    const knowledgeBase: Record<string, { answer: string; sources: string[]; relatedTopics: string[] }> = {
+      stack: {
+        answer: `DealPad uses a modern TypeScript-first stack:\n\n**Frontend:** React 19, Vite 8.x, Tailwind CSS 4.x, TanStack React Query 5.x, Wouter 3.9, Radix UI, Framer Motion 12.x, Recharts 3.8, Lucide React\n\n**Backend:** Express.js 5.x, Node.js with tsx runtime, Drizzle ORM 0.45, pg (node-postgres)\n\n**Database:** PostgreSQL with 12 normalized tables\n\n**Design:** Armanino amber (#DA720F) brand identity, inspired by Ramp.com and Gusto.com`,
+        sources: ["package.json", "shared/schema.ts", "client/src/index.css"],
+        relatedTopics: ["database schema", "frontend components", "API design"]
+      },
+      database: {
+        answer: `The database has **12 normalized tables** managed by Drizzle ORM:\n\n1. **clients** - Client profiles (${allClients.length} records)\n2. **deals** - Deal records with status lifecycle (${totalDeals} total: ${draftDeals} draft, ${submittedDeals} submitted, ${approvedDeals} approved)\n3. **scope_catalog** - Standardized scope items (${catalog.length} items)\n4. **deal_scope_items** - Scope items attached to deals\n5. **roles** - Professional billing roles (${allRoles.length} levels)\n6. **rate_cards** - Rate card definitions with effective dates\n7. **rate_card_entries** - Per-role rates within rate cards\n8. **pricing_lines** - Deal-level pricing by role\n9. **scenarios** - Generated pricing scenarios (${allScenarios.length} total)\n10. **approvals** - Approval workflow records\n11. **prompt_responses** - Contextual discovery answers\n12. **activity_log** - Audit trail\n\nAll financial fields use DECIMAL(12,2) to avoid floating-point errors. Schema is defined in \`shared/schema.ts\` as the single source of truth.`,
+        sources: ["shared/schema.ts", "server/db.ts", "server/seed.ts"],
+        relatedTopics: ["pricing engine", "deal lifecycle", "data model"]
+      },
+      ai: {
+        answer: `DealPad implements **5 AI use cases** as deterministic heuristic engines (simulating LLM behavior for the PoC):\n\n**UC-1: Deal Similarity** - Benchmarks against historical approved deals. Queries by client/service line, computes average margins.\n\n**UC-2: Effort Estimation** - Predicts hours using complexity multipliers (0.8x-1.5x) and prompt impact factors. Distributes across 7 roles: Partner 7%, MD 10%, SM 17%, Mgr 20%, SC 26%, Con 13%, An 7%.\n\n**UC-3: Margin Advisor** - Analyzes pricing structure vs 25% target. Suggests role shifts and rate uplifts.\n\n**UC-4: Scenario Recommendation** - Compares Standard/Premium/Value scenarios with 0.87 confidence score.\n\n**UC-5: Risk Summary** - Generates executive narrative with approval likelihood (Low=89%, Medium=72%, High=45%).\n\n**Production target:** Azure OpenAI GPT-4o with Semantic Kernel orchestration.`,
+        sources: ["server/routes.ts (AI endpoints)", "POST /api/ai/*"],
+        relatedTopics: ["pricing engine", "scenarios", "risk assessment"]
+      },
+      rbac: {
+        answer: `**6 personas** with distinct permission sets:\n\n1. **PDL** (Michael Torres) - Project Delivery Lead. Creates/edits deals, runs AI tools, manages pricing. Primary user.\n2. **SLL** (Sarah Chen) - Service Line Leader. Approves/rejects deals, pipeline oversight.\n3. **PO** (James Wright) - Pricing Operations. Manages rate cards and scope catalog.\n4. **FIN** (Lisa Park) - Finance/FP&A. Views margins and financial metrics.\n5. **QRM** (David Kim) - Risk/QRM. Views risk summaries and compliance.\n6. **IT** (Alex Rivera) - IT/Data Consumer. Architecture and infrastructure views only.\n\n**PoC enforcement:** Client-side via AuthContext + localStorage persona switching.\n**Production target:** Azure Entra ID with OIDC + JWT middleware + row-level security.`,
+        sources: ["client/src/context/AuthContext.tsx", "client/src/App.tsx"],
+        relatedTopics: ["security", "personas", "permissions"]
+      },
+      pricing: {
+        answer: `The **Pricing Engine** (recalcPricingFromScope) calculates deal economics:\n\n**Inputs:** Scope items (default hours) x Complexity multiplier (0.8x-1.5x) x Prompt multipliers (compounded)\n\n**Role Distribution:** Partner 7% ($550/hr), MD 10% ($475/hr), SM 17% ($395/hr), Mgr 20% ($345/hr), SC 26% ($285/hr), Con 13% ($225/hr), An 7% ($175/hr)\n\n**Per Line:** fee = hours x rate, cost = hours x costRate, margin = fee - cost\n\n**Scenarios:** Standard (1.0x baseline), Premium (1.15x fee/1.05x cost/-10% hrs), Value (0.85x fee/0.92x cost/+15% hrs)\n\n**Pricing lines are created lazily** on first GET /api/deals/:dealId/pricing, not at deal creation time.`,
+        sources: ["server/routes.ts (recalcPricingFromScope)", "shared/schema.ts"],
+        relatedTopics: ["scenarios", "rate cards", "deal wizard"]
+      },
+      lifecycle: {
+        answer: `Deal lifecycle follows a **state machine**: draft -> submitted -> approved/rejected (rejected -> draft for revision)\n\n**8-step wizard:** Setup, Scope, Assumptions, Pricing, Scenarios, Review, Approval, Summary\n\n**Deal numbers:** Format DL-2026-### (auto-incremented)\n\n**Key behaviors:**\n- Default prompts (7 questions) created on deal creation\n- Pricing lines created lazily on first pricing step visit\n- Scope changes trigger automatic pricing recalculation\n- Scenario generation on first scenarios step visit\n- Activity logged for all major events\n\n**Current state:** ${draftDeals} draft, ${submittedDeals} pending approval, ${approvedDeals} approved\n\n**PoC note:** State machine enforced at UI layer only. Server accepts any status update.`,
+        sources: ["client/src/pages/DealDetail.tsx", "server/routes.ts"],
+        relatedTopics: ["pricing engine", "approval workflow", "AI services"]
+      },
+      azure: {
+        answer: `**Target production architecture on Azure:**\n\n- **Identity:** Azure Entra ID (SSO + OIDC + MFA + Conditional Access)\n- **API Gateway:** Azure APIM (rate limiting, auth, routing)\n- **Compute:** Azure Container Apps (microservices: Deal, Pricing, Approval, Analytics services)\n- **AI:** Azure OpenAI GPT-4o + Semantic Kernel + LangGraph agent workflows\n- **Database:** Azure Database for PostgreSQL Flexible Server\n- **Cache:** Azure Cache for Redis (sessions, rate cards)\n- **Storage:** Azure Blob Storage (documents, exports)\n- **Messaging:** Azure Service Bus (async commands) + Event Grid (domain events)\n- **Security:** Key Vault, WAF, TLS 1.3, row-level security\n- **Observability:** Application Insights + Log Analytics + Azure Monitor\n- **CI/CD:** GitHub Actions + Azure DevOps + Container Registry\n\nThe PoC monolith is designed with bounded context separation for clean microservice decomposition.`,
+        sources: ["DealPad_Architecture_Document.md (Section 13)"],
+        relatedTopics: ["deployment", "security", "CQRS readiness"]
+      },
+      security: {
+        answer: `**PoC security posture:**\n- Authentication: localStorage persona switcher (demo only)\n- Authorization: Client-side hasPermission() checks\n- Data protection: HTTPS via Replit mTLS proxy\n- SQL injection: Drizzle ORM parameterized queries\n- CORS: Open policy (needs tightening)\n- Secrets: DATABASE_URL via environment variable\n\n**Production security roadmap:**\n- Azure Entra ID + OIDC + MFA\n- Server-side JWT middleware\n- Azure WAF + APIM rate limiting\n- Transparent Data Encryption at-rest\n- TLS 1.3 end-to-end\n- Azure Key Vault for secrets\n- Row-level security for multi-tenancy\n- SOC 2 Type II alignment\n- Automated SAST/DAST in CI/CD`,
+        sources: ["DealPad_Architecture_Document.md (Section 16)"],
+        relatedTopics: ["RBAC", "Azure architecture", "deployment"]
+      },
+      api: {
+        answer: `**25+ REST endpoints** organized by domain:\n\n**Dashboard:** GET /dashboard/summary\n**Clients:** GET /clients, GET /clients/:id\n**Deals:** GET/POST /deals, GET/PATCH /deals/:id, POST /deals/:id/clone\n**Scope:** GET /scope-catalog, GET/POST /deals/:dealId/scope-items, DELETE scope-items/:id\n**Roles & Rates:** GET /roles, GET /rate-cards, GET /rate-cards/:id/entries\n**Pricing:** GET/POST /deals/:dealId/pricing, PATCH/DELETE pricing\n**Scenarios:** GET /deals/:dealId/scenarios, POST scenarios/:id/select\n**Approvals:** GET/POST /deals/:dealId/approvals, PATCH /approvals/:id\n**Prompts:** GET/POST/PATCH /deals/:dealId/prompts\n**AI:** POST /ai/deal-similarity, effort-estimation, margin-advisor, scenario-recommendation, risk-summary\n**Activity:** GET /activity\n\nAll responses are JSON. List endpoints return arrays. Detail endpoints use Drizzle's relational with clause for eager loading.`,
+        sources: ["server/routes.ts"],
+        relatedTopics: ["backend architecture", "database", "deal lifecycle"]
+      },
+      frontend: {
+        answer: `**Frontend architecture:**\n\n**Pages:** Login (6-persona grid), Dashboard (role-aware KPIs), Deals List (filterable), New Deal (creation form), Deal Detail (8-step wizard), Rate Cards (admin CRUD), Scope Catalog (admin), Architecture (system diagrams)\n\n**State management:** AuthContext (persona/permissions via React Context), TanStack React Query (server state + cache), custom hooks in use-api.ts\n\n**Design system:** Armanino amber #DA720F primary, warm stone #fafaf9 background, dark sidebar #1c1917. Inter font. No emojis. Inspired by Ramp.com/Gusto.com.\n\n**UI library:** Radix UI primitives (Button, Card, Dialog, Select, Tabs, Accordion, Popover, Tooltip) styled with Tailwind CSS v4.\n\n**Animations:** Framer Motion for page transitions and micro-interactions.`,
+        sources: ["client/src/App.tsx", "client/src/pages/*", "client/src/index.css"],
+        relatedTopics: ["design system", "RBAC", "deal wizard"]
+      },
+      deployment: {
+        answer: `**PoC deployment (current):**\n- Build: Vite compiles React to dist/public/ via npm run build\n- Run: npx tsx server/index.ts (Express serves API + static)\n- Infrastructure: Replit Autoscale deployment\n- Database: Replit PostgreSQL (auto-provisioned)\n- Single process serves both /api/* routes and SPA fallback\n\n**Production target:**\n- CI: GitHub Actions (lint, test, build, Docker image)\n- Registry: Azure Container Registry\n- CD: Azure DevOps release pipeline\n- Staging: Slot-based deployment with smoke tests\n- Production: Blue/green on Azure Container Apps\n- Rollback: Automatic on health check failure`,
+        sources: ["server/index.ts", ".replit", "DealPad_Architecture_Document.md (Section 17)"],
+        relatedTopics: ["Azure architecture", "CI/CD", "infrastructure"]
+      }
+    };
+
+    let matched: { answer: string; sources: string[]; relatedTopics: string[] } | null = null;
+    const topicMap: [string[], string][] = [
+      [["security", "secure", "jwt", "encryption", "waf", "soc", "compliance", "gdpr", "vulnerability", "tls", "key vault"], "security"],
+      [["rbac", "persona", "permission", "pdl", "sll", "who can", "access control", "authorization"], "rbac"],
+      [["database", "schema", "table", "drizzle", "postgres", "data model", "erd", "entity", "migration"], "database"],
+      [["ai", "artificial intelligence", "machine learning", "heuristic", "use case", "uc-1", "uc-2", "uc-3", "uc-4", "uc-5", "llm", "openai", "gpt", "similarity", "effort estimation", "margin advisor", "scenario recommendation", "risk summary"], "ai"],
+      [["pricing", "price", "rate card", "cost", "margin", "fee", "blended rate", "recalc", "pricing engine", "pricing line"], "pricing"],
+      [["lifecycle", "wizard", "state machine", "deal flow", "deal status", "deal step", "approval workflow"], "lifecycle"],
+      [["azure", "entra", "container app", "apim", "service bus", "event grid", "cloud architecture", "azure openai"], "azure"],
+      [["api", "endpoint", "rest api", "route", "api design"], "api"],
+      [["frontend", "react", "component", "tailwind", "radix", "framer motion", "design system", "sidebar", "vite"], "frontend"],
+      [["deploy", "deployment", "hosting", "ci/cd", "pipeline", "docker", "container registry", "blue/green"], "deployment"],
+      [["stack", "tech stack", "technology", "framework", "library", "built with", "tools", "dependencies"], "stack"],
+    ];
+
+    let bestMatch: { topic: string; score: number } | null = null;
+    for (const [keywords, topic] of topicMap) {
+      const score = keywords.filter(k => msg.includes(k)).length;
+      if (score > 0 && (!bestMatch || score > bestMatch.score)) {
+        bestMatch = { topic, score };
+      }
+    }
+    if (bestMatch) {
+      matched = knowledgeBase[bestMatch.topic];
+    }
+
+    if (msg.includes("help") || msg.includes("what can") || msg.includes("how to use") || msg.includes("capabilities")) {
+      matched = {
+        answer: `I can answer questions about DealPad's architecture across these topics:\n\n1. **Technology Stack** - Frontend, backend, database technologies\n2. **Database Schema** - 12 tables, relationships, design decisions\n3. **AI Services** - 5 use cases, algorithms, production targets\n4. **RBAC & Personas** - 6 roles, permissions, enforcement\n5. **Pricing Engine** - Calculation model, role distribution, scenarios\n6. **Deal Lifecycle** - State machine, wizard steps, workflows\n7. **Azure Architecture** - Production infrastructure vision\n8. **Security** - Current posture and production roadmap\n9. **API Design** - 25+ endpoints, patterns, conventions\n10. **Frontend** - Components, design system, state management\n11. **Deployment** - Current and target CI/CD\n\nTry asking: "How does the pricing engine work?" or "What AI use cases are implemented?"`,
+        sources: ["DealPad_Architecture_Document.md"],
+        relatedTopics: ["All topics"]
+      };
+    }
+
+    if (!matched) {
+      matched = {
+        answer: `I'm not sure about that specific topic. Here's what I can help with:\n\n- **"What tech stack does DealPad use?"**\n- **"How does the database schema work?"**\n- **"Tell me about the AI services"**\n- **"What are the RBAC personas?"**\n- **"How does the pricing engine calculate fees?"**\n- **"Explain the deal lifecycle"**\n- **"What's the Azure production architecture?"**\n- **"What are the security measures?"**\n- **"List all API endpoints"**\n- **"Describe the frontend architecture"**\n- **"How is deployment configured?"**\n\nCurrently the system has **${totalDeals} deals** (${draftDeals} draft, ${submittedDeals} submitted, ${approvedDeals} approved), **${allClients.length} clients**, **${catalog.length} scope catalog items**, and **${allRoles.length} professional roles**.`,
+        sources: [],
+        relatedTopics: ["help"]
+      };
+    }
+
+    res.json({
+      response: matched.answer,
+      sources: matched.sources,
+      relatedTopics: matched.relatedTopics,
+      timestamp: new Date().toISOString(),
+      systemStats: {
+        totalDeals,
+        draftDeals,
+        submittedDeals,
+        approvedDeals,
+        totalClients: allClients.length,
+        totalRoles: allRoles.length,
+        catalogItems: catalog.length,
+      }
+    });
+  });
 }

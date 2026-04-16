@@ -5,7 +5,7 @@ DealPad is a full-stack web application replacing Excel-based pricing and scopin
 
 ## Current State
 - **Phase**: Working PoC with 5 AI use cases + RBAC
-- **Active Features**: Login/Persona Selection, Dashboard, Deal List, 8-step Deal Wizard, Rate Card Admin, Scope Catalog Admin, Architecture (with system diagram)
+- **Active Features**: Login/Persona Selection, Dashboard, Deal List, 8-step Deal Wizard, Rate Card Admin, Scope Catalog Admin, Architecture Hub (4-tab: System Overview, Interactive Explorer, AI Chat, Full Document)
 - **AI Features**: Deal Similarity, Effort Estimation, Margin Advisor, Scenario Recommendation, Risk Summary
 - **Auth**: Role-based persona selection (PDL, SLL, PO, FIN, QRM, IT) with per-feature permissions
 
@@ -20,7 +20,7 @@ DealPad is a full-stack web application replacing Excel-based pricing and scopin
 client/src/          - React frontend
   context/           - AuthContext (persona/RBAC state)
   components/layout/ - AppLayout, Sidebar
-  pages/             - Login, Dashboard, DealsList, DealDetail, NewDeal, RateCards, ScopeCatalogAdmin, Architecture
+  pages/             - Login, Dashboard, DealsList, DealDetail, NewDeal, RateCards, ScopeCatalogAdmin, ArchitectureHub, Architecture, ArchitectureInteractive
   hooks/use-api.ts   - All API hooks (React Query)
   lib/utils.ts       - Utility functions
   index.css          - Tailwind + design tokens
@@ -57,6 +57,7 @@ shared/              - Shared code
 - `POST /api/ai/margin-advisor` - AI margin optimization
 - `POST /api/ai/scenario-recommendation` - AI scenario recommendation
 - `POST /api/ai/risk-summary` - AI risk assessment
+- `POST /api/ai/architecture-chat` - Architecture conversational AI (11 topics with live DB stats)
 
 ## Database Tables
 clients, deals, scope_catalog, deal_scope_items, roles, rate_cards, rate_card_entries, pricing_lines, scenarios, approvals, prompt_responses, activity_log
