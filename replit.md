@@ -4,9 +4,9 @@
 DealPad is a full-stack web application replacing Excel-based pricing and scoping workbooks for professional services firm Armanino LLP's Quote-to-Cash workflow. It demonstrates 5 AI-powered use cases across the entire vertical stack with a modern UX inspired by Ramp.com and Gusto.com.
 
 ## Current State
-- **Phase**: Working PoC with 5 AI use cases + RBAC
-- **Active Features**: Login/Persona Selection, Dashboard, Deal List, 8-step Deal Wizard, Rate Card Admin, Scope Catalog Admin, Architecture Hub (4-tab: System Overview, Interactive Explorer, AI Chat, Full Document)
-- **AI Features**: Deal Similarity, Effort Estimation, Margin Advisor, Scenario Recommendation, Risk Summary
+- **Phase**: Working PoC with 5 AI use cases + RBAC + Analytics + Change Orders + Proposal Generation
+- **Active Features**: Login/Persona Selection, Dashboard, Deal List, 8-step Deal Wizard, Rate Card Admin, Scope Catalog Admin, Architecture Hub (4-tab), Analytics Dashboard, Change Order Management, PDF Proposal Generation
+- **AI Features**: Deal Similarity, Effort Estimation, Margin Advisor, Scenario Recommendation, Risk Summary, Architecture Chat
 - **Auth**: Role-based persona selection (PDL, SLL, PO, FIN, QRM, IT) with per-feature permissions
 
 ## Architecture
@@ -20,17 +20,17 @@ DealPad is a full-stack web application replacing Excel-based pricing and scopin
 client/src/          - React frontend
   context/           - AuthContext (persona/RBAC state)
   components/layout/ - AppLayout, Sidebar
-  pages/             - Login, Dashboard, DealsList, DealDetail, NewDeal, RateCards, ScopeCatalogAdmin, ArchitectureHub, Architecture, ArchitectureInteractive
+  pages/             - Login, Dashboard, DealsList, DealDetail, NewDeal, RateCards, ScopeCatalogAdmin, ArchitectureHub, Architecture, ArchitectureInteractive, Analytics, ChangeOrders
   hooks/use-api.ts   - All API hooks (React Query)
   lib/utils.ts       - Utility functions
   index.css          - Tailwind + design tokens
 server/              - Express backend
   index.ts           - Server entry, schema push, seeding
-  routes.ts          - All API routes (CRUD + AI endpoints)
+  routes.ts          - All API routes (CRUD + AI + Analytics + Change Orders + Proposal endpoints)
   db.ts              - Database connection
   seed.ts            - Sample data seeding
 shared/              - Shared code
-  schema.ts          - Drizzle ORM schema (all tables + relations)
+  schema.ts          - Drizzle ORM schema (all 13 tables + relations)
 ```
 
 ## Key Routes
@@ -38,8 +38,11 @@ shared/              - Shared code
 - `/deals` - Deal list with search, filter, table/card view
 - `/deals/new` - Create new deal form
 - `/deals/:id` - Deal detail with 8-step wizard (Setup, Scope, Assumptions, Pricing, Scenarios, Review, Approval, Summary)
+- `/deals/:id/change-orders` - Change order management for a deal
+- `/analytics` - Analytics dashboard with charts, trends, service line breakdown
 - `/admin/rate-cards` - Rate card management
 - `/admin/scope-catalog` - Scope catalog browser
+- `/architecture` - Architecture Hub (4-tab: Overview, Interactive, AI Chat, Document)
 
 ## API Endpoints
 - `GET /api/dashboard/summary` - KPI summary
@@ -52,6 +55,10 @@ shared/              - Shared code
 - `GET/PATCH /api/deals/:dealId/pricing` - Pricing grid
 - `GET /api/deals/:dealId/scenarios` - Pricing scenarios
 - `GET/POST /api/deals/:dealId/approvals` - Approval workflow
+- `GET/POST /api/deals/:dealId/change-orders` - Change order management
+- `PATCH /api/change-orders/:id` - Update change order status
+- `GET /api/analytics/overview` - Analytics with trends, win rates, margins, service line breakdown
+- `GET /api/deals/:dealId/proposal` - Generate branded HTML proposal (or ?format=json for data)
 - `POST /api/ai/deal-similarity` - AI deal matching
 - `POST /api/ai/effort-estimation` - AI effort estimation
 - `POST /api/ai/margin-advisor` - AI margin optimization
@@ -60,7 +67,7 @@ shared/              - Shared code
 - `POST /api/ai/architecture-chat` - Architecture conversational AI (11 topics with live DB stats)
 
 ## Database Tables
-clients, deals, scope_catalog, deal_scope_items, roles, rate_cards, rate_card_entries, pricing_lines, scenarios, approvals, prompt_responses, activity_log
+clients, deals, scope_catalog, deal_scope_items, roles, rate_cards, rate_card_entries, pricing_lines, scenarios, approvals, prompt_responses, activity_log, change_orders
 
 ## Workflows
 - Backend Server: `npx tsx server/index.ts` (port 3001)
@@ -76,3 +83,4 @@ clients, deals, scope_catalog, deal_scope_items, roles, rate_cards, rate_card_en
 - `attached_assets/scope_*.txt` - Scope of solution
 - `attached_assets/Dealpad-technical-outline_*.pdf` - Technical outline
 - `attached_assets/3._User_Stories_*.pdf` - 69 user stories across 8 epics
+- `DealPad_Architecture_Document.md` - 1,900-line architecture document with 17 Mermaid diagrams

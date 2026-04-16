@@ -1,7 +1,12 @@
 import { Express, Request, Response } from "express";
 import { db } from "./db";
-import { clients, deals, scopeCatalog, dealScopeItems, roles, rateCards, rateCardEntries, pricingLines, scenarios, approvals, promptResponses, activityLog } from "../shared/schema";
+import { clients, deals, scopeCatalog, dealScopeItems, roles, rateCards, rateCardEntries, pricingLines, scenarios, approvals, promptResponses, activityLog, changeOrders } from "../shared/schema";
 import { eq, desc, sql, and, count } from "drizzle-orm";
+
+function escapeHtml(str: string | null | undefined): string {
+  if (!str) return "";
+  return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
 
 const STANDARD_PROMPTS = [
   { question: "How many geographic regions are involved?", category: "Complexity", sortOrder: 1 },
@@ -1009,5 +1014,457 @@ export function registerRoutes(app: Express) {
         catalogItems: catalog.length,
       }
     });
+  });
+
+  // ========== CHANGE ORDERS ==========
+  app.get("/api/deals/:dealId/change-orders", async (req: Request, res: Response) => {
+    const dealId = parseInt(req.params.dealId);
+    const result = await db.select().from(changeOrders)
+      .where(eq(changeOrders.dealId, dealId))
+      .orderBy(desc(changeOrders.createdAt));
+    res.json(result);
+  });
+
+  app.post("/api/deals/:dealId/change-orders", async (req: Request, res: Response) => {
+    const dealId = parseInt(req.params.dealId);
+    const deal = await db.query.deals.findFirst({ where: eq(deals.id, dealId) });
+    if (!deal) return res.status(404).json({ error: "Deal not found" });
+
+    const existingOrders = await db.select().from(changeOrders)
+      .where(eq(changeOrders.dealId, dealId));
+    const nextVersion = existingOrders.length + 1;
+
+    const { title, description, changeType, newFee, newCost, newHours, scopeChanges, createdBy } = req.body;
+    if (!title || !title.trim()) return res.status(400).json({ error: "title is required" });
+
+    const originalFee = parseFloat(deal.totalFee || "0");
+    const originalCost = parseFloat(deal.totalCost || "0");
+    const originalHours = parseFloat(deal.totalHours || "0");
+    const nFee = newFee ? parseFloat(newFee) : originalFee;
+    const nCost = newCost ? parseFloat(newCost) : originalCost;
+    const nHours = newHours ? parseFloat(newHours) : originalHours;
+
+    if (isNaN(nFee) || isNaN(nCost) || isNaN(nHours)) {
+      return res.status(400).json({ error: "Fee, cost, and hours must be valid numbers" });
+    }
+
+    const [order] = await db.insert(changeOrders).values({
+      dealId,
+      version: nextVersion,
+      title: title || `Change Order #${nextVersion}`,
+      description,
+      changeType: changeType || "scope_change",
+      status: "draft",
+      originalFee: String(originalFee),
+      originalCost: String(originalCost),
+      originalHours: String(originalHours),
+      newFee: String(nFee),
+      newCost: String(nCost),
+      newHours: String(nHours),
+      deltaFee: String(nFee - originalFee),
+      deltaCost: String(nCost - originalCost),
+      deltaHours: String(nHours - originalHours),
+      scopeChanges: scopeChanges || null,
+      createdBy: createdBy || "System",
+    }).returning();
+
+    await db.insert(activityLog).values({
+      dealId,
+      action: "change_order_created",
+      description: `Change Order v${nextVersion}: ${title || "Scope Change"}`,
+      userName: createdBy || "System",
+    });
+
+    res.json(order);
+  });
+
+  app.patch("/api/change-orders/:id", async (req: Request, res: Response) => {
+    const id = parseInt(req.params.id);
+    const { status, approvedBy } = req.body;
+
+    const allowedStatuses = ["approved", "rejected"];
+    if (!status || !allowedStatuses.includes(status)) {
+      return res.status(400).json({ error: "status must be 'approved' or 'rejected'" });
+    }
+
+    const order = await db.select().from(changeOrders).where(eq(changeOrders.id, id)).limit(1);
+    if (!order.length) return res.status(404).json({ error: "Change order not found" });
+
+    if (order[0].status !== "draft") {
+      return res.status(400).json({ error: `Cannot update change order with status '${order[0].status}'` });
+    }
+
+    const updates: any = { status };
+    if (approvedBy) updates.approvedBy = approvedBy;
+    if (status === "approved") {
+      updates.approvedAt = new Date();
+      const co = order[0];
+      const nFee = parseFloat(co.newFee || "0");
+      const nCost = parseFloat(co.newCost || "0");
+      const nHours = parseFloat(co.newHours || "0");
+      const margin = nFee > 0 ? ((nFee - nCost) / nFee * 100) : 0;
+      const blended = nHours > 0 ? nFee / nHours : 0;
+
+      await db.update(deals).set({
+        totalFee: String(nFee),
+        totalCost: String(nCost),
+        totalHours: String(nHours),
+        marginPercent: String(margin.toFixed(2)),
+        blendedRate: String(blended.toFixed(2)),
+        updatedAt: new Date(),
+      }).where(eq(deals.id, co.dealId));
+    }
+
+    const [updated] = await db.update(changeOrders).set(updates).where(eq(changeOrders.id, id)).returning();
+
+    await db.insert(activityLog).values({
+      dealId: updated.dealId,
+      action: `change_order_${status}`,
+      description: `Change Order v${updated.version} ${status}`,
+      userName: approvedBy || "System",
+    });
+
+    res.json(updated);
+  });
+
+  // ========== ANALYTICS ==========
+  app.get("/api/analytics/overview", async (_req: Request, res: Response) => {
+    const allDeals = await db.query.deals.findMany({ with: { client: true, approvals: true } });
+    const allApprovals = await db.select().from(approvals);
+
+    const totalDeals = allDeals.length;
+    const approvedDeals = allDeals.filter(d => d.status === "approved");
+    const rejectedDeals = allDeals.filter(d => d.status === "rejected");
+    const submittedDeals = allDeals.filter(d => d.status === "submitted");
+    const draftDeals = allDeals.filter(d => d.status === "draft");
+
+    const winRate = totalDeals > 0 ? ((approvedDeals.length / Math.max(approvedDeals.length + rejectedDeals.length, 1)) * 100).toFixed(1) : "0";
+
+    const serviceLines = [...new Set(allDeals.map(d => d.serviceLine).filter(Boolean))];
+    const serviceLineBreakdown = serviceLines.map(sl => {
+      const slDeals = allDeals.filter(d => d.serviceLine === sl);
+      const slApproved = slDeals.filter(d => d.status === "approved");
+      const totalFee = slDeals.reduce((s, d) => s + parseFloat(d.totalFee || "0"), 0);
+      const avgMargin = slDeals.length > 0
+        ? (slDeals.reduce((s, d) => s + parseFloat(d.marginPercent || "0"), 0) / slDeals.length).toFixed(1)
+        : "0";
+      return {
+        serviceLine: sl,
+        totalDeals: slDeals.length,
+        approvedDeals: slApproved.length,
+        winRate: slDeals.length > 0 ? ((slApproved.length / Math.max(slApproved.length + slDeals.filter(d => d.status === "rejected").length, 1)) * 100).toFixed(1) : "0",
+        totalFee,
+        avgMargin,
+      };
+    });
+
+    const marginDistribution = [
+      { range: "< 15%", count: allDeals.filter(d => parseFloat(d.marginPercent || "0") < 15).length },
+      { range: "15-20%", count: allDeals.filter(d => { const m = parseFloat(d.marginPercent || "0"); return m >= 15 && m < 20; }).length },
+      { range: "20-25%", count: allDeals.filter(d => { const m = parseFloat(d.marginPercent || "0"); return m >= 20 && m < 25; }).length },
+      { range: "25-30%", count: allDeals.filter(d => { const m = parseFloat(d.marginPercent || "0"); return m >= 25 && m < 30; }).length },
+      { range: "30%+", count: allDeals.filter(d => parseFloat(d.marginPercent || "0") >= 30).length },
+    ];
+
+    const avgCycleTime = (() => {
+      const completedDeals = allDeals.filter(d => d.status === "approved" || d.status === "rejected");
+      if (completedDeals.length === 0) return 0;
+      const totalDays = completedDeals.reduce((sum, d) => {
+        const created = new Date(d.createdAt).getTime();
+        const updated = new Date(d.updatedAt).getTime();
+        return sum + Math.max(1, Math.round((updated - created) / (1000 * 60 * 60 * 24)));
+      }, 0);
+      return Math.round(totalDays / completedDeals.length);
+    })();
+
+    const complexityBreakdown = [
+      { complexity: "Low", count: allDeals.filter(d => d.complexity === "low").length },
+      { complexity: "Medium", count: allDeals.filter(d => d.complexity === "medium").length },
+      { complexity: "High", count: allDeals.filter(d => d.complexity === "high").length },
+      { complexity: "Very High", count: allDeals.filter(d => d.complexity === "very_high").length },
+    ];
+
+    const pipelineSummary = {
+      draft: { count: draftDeals.length, totalFee: draftDeals.reduce((s, d) => s + parseFloat(d.totalFee || "0"), 0) },
+      submitted: { count: submittedDeals.length, totalFee: submittedDeals.reduce((s, d) => s + parseFloat(d.totalFee || "0"), 0) },
+      approved: { count: approvedDeals.length, totalFee: approvedDeals.reduce((s, d) => s + parseFloat(d.totalFee || "0"), 0) },
+      rejected: { count: rejectedDeals.length, totalFee: rejectedDeals.reduce((s, d) => s + parseFloat(d.totalFee || "0"), 0) },
+    };
+
+    const totalPipeline = allDeals.reduce((s, d) => s + parseFloat(d.totalFee || "0"), 0);
+    const avgMargin = totalDeals > 0
+      ? (allDeals.reduce((s, d) => s + parseFloat(d.marginPercent || "0"), 0) / totalDeals).toFixed(1)
+      : "0";
+    const avgDealSize = totalDeals > 0 ? (totalPipeline / totalDeals) : 0;
+
+    const monthlyTrend = (() => {
+      const months: { month: string; deals: number; revenue: number; avgMargin: string }[] = [];
+      const now = new Date();
+      for (let i = 5; i >= 0; i--) {
+        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        const monthStr = d.toLocaleString("default", { month: "short", year: "2-digit" });
+        const monthDeals = allDeals.filter(deal => {
+          const created = new Date(deal.createdAt);
+          return created.getMonth() === d.getMonth() && created.getFullYear() === d.getFullYear();
+        });
+        months.push({
+          month: monthStr,
+          deals: monthDeals.length,
+          revenue: monthDeals.reduce((s, deal) => s + parseFloat(deal.totalFee || "0"), 0),
+          avgMargin: monthDeals.length > 0
+            ? (monthDeals.reduce((s, deal) => s + parseFloat(deal.marginPercent || "0"), 0) / monthDeals.length).toFixed(1)
+            : "0",
+        });
+      }
+      return months;
+    })();
+
+    res.json({
+      summary: {
+        totalDeals,
+        totalPipeline,
+        avgMargin,
+        avgDealSize,
+        winRate,
+        avgCycleTime,
+        approvedCount: approvedDeals.length,
+        rejectedCount: rejectedDeals.length,
+      },
+      pipelineSummary,
+      serviceLineBreakdown,
+      marginDistribution,
+      complexityBreakdown,
+      monthlyTrend,
+    });
+  });
+
+  // ========== PROPOSAL GENERATION ==========
+  app.get("/api/deals/:dealId/proposal", async (req: Request, res: Response) => {
+    const dealId = parseInt(req.params.dealId);
+    const deal = await db.query.deals.findFirst({
+      where: eq(deals.id, dealId),
+      with: {
+        client: true,
+        scopeItems: { with: { scopeItem: true } },
+        pricingLines: { with: { role: true } },
+        scenarios: true,
+        promptResponses: true,
+        approvals: true,
+      },
+    });
+
+    if (!deal) return res.status(404).json({ error: "Deal not found" });
+
+    const scopeRows = (deal.scopeItems || []).map((si: any) => `
+      <tr>
+        <td style="padding:10px 16px;border-bottom:1px solid #e7e5e4;font-size:14px;">${escapeHtml(si.scopeItem?.name) || "N/A"}</td>
+        <td style="padding:10px 16px;border-bottom:1px solid #e7e5e4;font-size:14px;">${escapeHtml(si.scopeItem?.category)}</td>
+        <td style="padding:10px 16px;border-bottom:1px solid #e7e5e4;font-size:14px;text-align:right;">${si.adjustedHours || si.scopeItem?.defaultHours || "0"} hrs</td>
+        <td style="padding:10px 16px;border-bottom:1px solid #e7e5e4;font-size:14px;text-align:center;">${si.complexityMultiplier || "1.0"}x</td>
+      </tr>
+    `).join("");
+
+    const pricingRows = (deal.pricingLines || [])
+      .filter((pl: any) => !pl.scenarioId)
+      .map((pl: any) => `
+      <tr>
+        <td style="padding:10px 16px;border-bottom:1px solid #e7e5e4;font-size:14px;">${pl.role?.name || "Role"}</td>
+        <td style="padding:10px 16px;border-bottom:1px solid #e7e5e4;font-size:14px;text-align:right;">${parseFloat(pl.hours || "0").toFixed(1)}</td>
+        <td style="padding:10px 16px;border-bottom:1px solid #e7e5e4;font-size:14px;text-align:right;">$${parseFloat(pl.rate || "0").toFixed(0)}</td>
+        <td style="padding:10px 16px;border-bottom:1px solid #e7e5e4;font-size:14px;text-align:right;font-weight:600;">$${parseFloat(pl.fee || "0").toLocaleString()}</td>
+      </tr>
+    `).join("");
+
+    const scenarioRows = (deal.scenarios || []).map((sc: any) => `
+      <tr style="${sc.isRecommended ? "background:#fef7ed;" : ""}">
+        <td style="padding:10px 16px;border-bottom:1px solid #e7e5e4;font-size:14px;font-weight:${sc.isRecommended ? "700" : "400"};">
+          ${sc.name}${sc.isRecommended ? " (Recommended)" : ""}
+        </td>
+        <td style="padding:10px 16px;border-bottom:1px solid #e7e5e4;font-size:14px;text-align:right;">$${parseFloat(sc.totalFee || "0").toLocaleString()}</td>
+        <td style="padding:10px 16px;border-bottom:1px solid #e7e5e4;font-size:14px;text-align:right;">${parseFloat(sc.totalHours || "0").toFixed(0)}</td>
+        <td style="padding:10px 16px;border-bottom:1px solid #e7e5e4;font-size:14px;text-align:right;">${parseFloat(sc.marginPercent || "0").toFixed(1)}%</td>
+      </tr>
+    `).join("");
+
+    const assumptions = (deal.promptResponses || [])
+      .filter((p: any) => p.answer)
+      .map((p: any) => `<li style="margin-bottom:8px;font-size:14px;"><strong>${escapeHtml(p.question)}</strong><br/><span style="color:#57534e;">${escapeHtml(p.answer)}</span></li>`)
+      .join("");
+
+    const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Proposal - ${escapeHtml(deal.title)}</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body { font-family:'Inter',sans-serif; color:#1c1917; background:#fff; }
+    @media print { body { -webkit-print-color-adjust:exact; print-color-adjust:exact; } }
+  </style>
+</head>
+<body>
+  <div style="max-width:800px;margin:0 auto;padding:40px;">
+    <!-- Header -->
+    <div style="border-bottom:4px solid #DA720F;padding-bottom:32px;margin-bottom:32px;">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+        <div>
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
+            <div style="width:48px;height:48px;background:#DA720F;border-radius:12px;display:flex;align-items:center;justify-content:center;">
+              <span style="color:#fff;font-weight:700;font-size:20px;">D</span>
+            </div>
+            <div>
+              <h3 style="font-size:18px;font-weight:700;color:#1c1917;">DealPad</h3>
+              <p style="font-size:12px;color:#78716c;">by Armanino LLP</p>
+            </div>
+          </div>
+          <h1 style="font-size:28px;font-weight:700;color:#1c1917;margin-bottom:4px;">Engagement Proposal</h1>
+          <p style="font-size:14px;color:#78716c;">Generated ${new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}</p>
+        </div>
+        <div style="text-align:right;">
+          <p style="font-size:12px;color:#78716c;margin-bottom:4px;">Deal Number</p>
+          <p style="font-size:16px;font-weight:700;color:#DA720F;">${escapeHtml(deal.dealNumber)}</p>
+          <p style="font-size:12px;color:#78716c;margin-top:12px;">Status</p>
+          <p style="font-size:14px;font-weight:600;text-transform:uppercase;">${escapeHtml(deal.status)}</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Deal Overview -->
+    <div style="margin-bottom:32px;">
+      <h2 style="font-size:18px;font-weight:700;color:#DA720F;margin-bottom:16px;text-transform:uppercase;letter-spacing:0.05em;">Engagement Overview</h2>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+        <div style="background:#fafaf9;padding:16px;border-radius:12px;">
+          <p style="font-size:12px;color:#78716c;margin-bottom:4px;">Engagement Title</p>
+          <p style="font-size:15px;font-weight:600;">${escapeHtml(deal.title)}</p>
+        </div>
+        <div style="background:#fafaf9;padding:16px;border-radius:12px;">
+          <p style="font-size:12px;color:#78716c;margin-bottom:4px;">Client</p>
+          <p style="font-size:15px;font-weight:600;">${escapeHtml(deal.client?.name) || "N/A"}</p>
+        </div>
+        <div style="background:#fafaf9;padding:16px;border-radius:12px;">
+          <p style="font-size:12px;color:#78716c;margin-bottom:4px;">Service Line</p>
+          <p style="font-size:15px;font-weight:600;">${escapeHtml(deal.serviceLine) || "N/A"}</p>
+        </div>
+        <div style="background:#fafaf9;padding:16px;border-radius:12px;">
+          <p style="font-size:12px;color:#78716c;margin-bottom:4px;">Engagement Period</p>
+          <p style="font-size:15px;font-weight:600;">${escapeHtml(deal.startDate) || "TBD"} - ${escapeHtml(deal.endDate) || "TBD"}</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Financial Summary -->
+    <div style="margin-bottom:32px;background:linear-gradient(135deg,#1c1917,#292524);border-radius:16px;padding:24px;color:#fff;">
+      <h2 style="font-size:14px;font-weight:600;text-transform:uppercase;letter-spacing:0.1em;color:#DA720F;margin-bottom:16px;">Financial Summary</h2>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;">
+        <div>
+          <p style="font-size:11px;color:#a8a29e;margin-bottom:4px;">Total Fee</p>
+          <p style="font-size:22px;font-weight:700;">$${parseFloat(deal.totalFee || "0").toLocaleString()}</p>
+        </div>
+        <div>
+          <p style="font-size:11px;color:#a8a29e;margin-bottom:4px;">Total Hours</p>
+          <p style="font-size:22px;font-weight:700;">${parseFloat(deal.totalHours || "0").toFixed(0)}</p>
+        </div>
+        <div>
+          <p style="font-size:11px;color:#a8a29e;margin-bottom:4px;">Blended Rate</p>
+          <p style="font-size:22px;font-weight:700;">$${parseFloat(deal.blendedRate || "0").toFixed(0)}</p>
+        </div>
+        <div>
+          <p style="font-size:11px;color:#a8a29e;margin-bottom:4px;">Margin</p>
+          <p style="font-size:22px;font-weight:700;color:${parseFloat(deal.marginPercent || "0") >= 25 ? "#4ade80" : parseFloat(deal.marginPercent || "0") >= 15 ? "#DA720F" : "#ef4444"};">${parseFloat(deal.marginPercent || "0").toFixed(1)}%</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Scope of Work -->
+    ${scopeRows ? `
+    <div style="margin-bottom:32px;">
+      <h2 style="font-size:18px;font-weight:700;color:#DA720F;margin-bottom:16px;text-transform:uppercase;letter-spacing:0.05em;">Scope of Work</h2>
+      <table style="width:100%;border-collapse:collapse;border:1px solid #e7e5e4;border-radius:12px;overflow:hidden;">
+        <thead>
+          <tr style="background:#f5f5f4;">
+            <th style="padding:10px 16px;text-align:left;font-size:12px;font-weight:600;color:#78716c;text-transform:uppercase;">Deliverable</th>
+            <th style="padding:10px 16px;text-align:left;font-size:12px;font-weight:600;color:#78716c;text-transform:uppercase;">Category</th>
+            <th style="padding:10px 16px;text-align:right;font-size:12px;font-weight:600;color:#78716c;text-transform:uppercase;">Hours</th>
+            <th style="padding:10px 16px;text-align:center;font-size:12px;font-weight:600;color:#78716c;text-transform:uppercase;">Complexity</th>
+          </tr>
+        </thead>
+        <tbody>${scopeRows}</tbody>
+      </table>
+    </div>` : ""}
+
+    <!-- Pricing Breakdown -->
+    ${pricingRows ? `
+    <div style="margin-bottom:32px;">
+      <h2 style="font-size:18px;font-weight:700;color:#DA720F;margin-bottom:16px;text-transform:uppercase;letter-spacing:0.05em;">Pricing Breakdown</h2>
+      <table style="width:100%;border-collapse:collapse;border:1px solid #e7e5e4;border-radius:12px;overflow:hidden;">
+        <thead>
+          <tr style="background:#f5f5f4;">
+            <th style="padding:10px 16px;text-align:left;font-size:12px;font-weight:600;color:#78716c;text-transform:uppercase;">Role</th>
+            <th style="padding:10px 16px;text-align:right;font-size:12px;font-weight:600;color:#78716c;text-transform:uppercase;">Hours</th>
+            <th style="padding:10px 16px;text-align:right;font-size:12px;font-weight:600;color:#78716c;text-transform:uppercase;">Rate</th>
+            <th style="padding:10px 16px;text-align:right;font-size:12px;font-weight:600;color:#78716c;text-transform:uppercase;">Fee</th>
+          </tr>
+        </thead>
+        <tbody>${pricingRows}</tbody>
+      </table>
+    </div>` : ""}
+
+    <!-- Scenarios -->
+    ${scenarioRows ? `
+    <div style="margin-bottom:32px;">
+      <h2 style="font-size:18px;font-weight:700;color:#DA720F;margin-bottom:16px;text-transform:uppercase;letter-spacing:0.05em;">Pricing Scenarios</h2>
+      <table style="width:100%;border-collapse:collapse;border:1px solid #e7e5e4;border-radius:12px;overflow:hidden;">
+        <thead>
+          <tr style="background:#f5f5f4;">
+            <th style="padding:10px 16px;text-align:left;font-size:12px;font-weight:600;color:#78716c;text-transform:uppercase;">Scenario</th>
+            <th style="padding:10px 16px;text-align:right;font-size:12px;font-weight:600;color:#78716c;text-transform:uppercase;">Total Fee</th>
+            <th style="padding:10px 16px;text-align:right;font-size:12px;font-weight:600;color:#78716c;text-transform:uppercase;">Hours</th>
+            <th style="padding:10px 16px;text-align:right;font-size:12px;font-weight:600;color:#78716c;text-transform:uppercase;">Margin</th>
+          </tr>
+        </thead>
+        <tbody>${scenarioRows}</tbody>
+      </table>
+    </div>` : ""}
+
+    <!-- Assumptions -->
+    ${assumptions ? `
+    <div style="margin-bottom:32px;">
+      <h2 style="font-size:18px;font-weight:700;color:#DA720F;margin-bottom:16px;text-transform:uppercase;letter-spacing:0.05em;">Key Assumptions</h2>
+      <ul style="list-style:none;padding:0;">${assumptions}</ul>
+    </div>` : ""}
+
+    <!-- Footer -->
+    <div style="border-top:2px solid #e7e5e4;padding-top:24px;margin-top:40px;text-align:center;">
+      <p style="font-size:12px;color:#78716c;">This proposal was generated by DealPad - NextGenApp Pricing & Scoping 2.0</p>
+      <p style="font-size:12px;color:#a8a29e;margin-top:4px;">Armanino LLP | Confidential</p>
+    </div>
+  </div>
+</body>
+</html>`;
+
+    if (req.query.format === "json") {
+      res.json({
+        deal: {
+          id: deal.id,
+          dealNumber: deal.dealNumber,
+          title: deal.title,
+          status: deal.status,
+          client: deal.client?.name,
+          serviceLine: deal.serviceLine,
+          totalFee: deal.totalFee,
+          totalCost: deal.totalCost,
+          totalHours: deal.totalHours,
+          marginPercent: deal.marginPercent,
+          blendedRate: deal.blendedRate,
+        },
+        scopeItems: deal.scopeItems?.length || 0,
+        pricingLines: deal.pricingLines?.filter((pl: any) => !pl.scenarioId).length || 0,
+        scenarios: deal.scenarios?.length || 0,
+      });
+    } else {
+      res.setHeader("Content-Type", "text/html");
+      res.send(html);
+    }
   });
 }

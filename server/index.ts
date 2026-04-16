@@ -188,6 +188,30 @@ async function pushSchema() {
       metadata JSONB,
       created_at TIMESTAMP DEFAULT NOW() NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS change_orders (
+      id SERIAL PRIMARY KEY,
+      deal_id INTEGER REFERENCES deals(id) NOT NULL,
+      version INTEGER NOT NULL DEFAULT 1,
+      change_type TEXT NOT NULL DEFAULT 'scope_change',
+      title TEXT NOT NULL,
+      description TEXT,
+      status TEXT NOT NULL DEFAULT 'draft',
+      original_fee DECIMAL(12,2) DEFAULT 0,
+      original_cost DECIMAL(12,2) DEFAULT 0,
+      original_hours DECIMAL(10,2) DEFAULT 0,
+      new_fee DECIMAL(12,2) DEFAULT 0,
+      new_cost DECIMAL(12,2) DEFAULT 0,
+      new_hours DECIMAL(10,2) DEFAULT 0,
+      delta_fee DECIMAL(12,2) DEFAULT 0,
+      delta_cost DECIMAL(12,2) DEFAULT 0,
+      delta_hours DECIMAL(10,2) DEFAULT 0,
+      scope_changes JSONB,
+      created_by TEXT,
+      approved_by TEXT,
+      approved_at TIMESTAMP,
+      created_at TIMESTAMP DEFAULT NOW() NOT NULL
+    );
   `);
 }
 

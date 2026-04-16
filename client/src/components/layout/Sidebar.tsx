@@ -1,5 +1,5 @@
 import { useLocation, Link } from "wouter";
-import { LayoutDashboard, FileText, Settings, ChevronDown, BookOpen, DollarSign, Layers, LogOut, Shield } from "lucide-react";
+import { LayoutDashboard, FileText, Settings, ChevronDown, BookOpen, DollarSign, Layers, LogOut, Shield, BarChart3 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
 import { useAuth } from "@/context/AuthContext";
@@ -14,6 +14,7 @@ export function Sidebar() {
   const navigation = [
     { name: "Dashboard", href: "/", icon: LayoutDashboard, show: true },
     { name: "Deals", href: "/deals", icon: FileText, show: true },
+    { name: "Analytics", href: "/analytics", icon: BarChart3, show: hasPermission("viewDeals") },
     { name: "Architecture", href: "/architecture", icon: Layers, show: true },
   ];
 

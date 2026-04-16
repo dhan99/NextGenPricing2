@@ -156,6 +156,30 @@ export const activityLog = pgTable("activity_log", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+export const changeOrders = pgTable("change_orders", {
+  id: serial("id").primaryKey(),
+  dealId: integer("deal_id").references(() => deals.id).notNull(),
+  version: integer("version").notNull().default(1),
+  changeType: text("change_type").notNull().default("scope_change"),
+  title: text("title").notNull(),
+  description: text("description"),
+  status: text("status").notNull().default("draft"),
+  originalFee: decimal("original_fee", { precision: 12, scale: 2 }).default("0"),
+  originalCost: decimal("original_cost", { precision: 12, scale: 2 }).default("0"),
+  originalHours: decimal("original_hours", { precision: 10, scale: 2 }).default("0"),
+  newFee: decimal("new_fee", { precision: 12, scale: 2 }).default("0"),
+  newCost: decimal("new_cost", { precision: 12, scale: 2 }).default("0"),
+  newHours: decimal("new_hours", { precision: 10, scale: 2 }).default("0"),
+  deltaFee: decimal("delta_fee", { precision: 12, scale: 2 }).default("0"),
+  deltaCost: decimal("delta_cost", { precision: 12, scale: 2 }).default("0"),
+  deltaHours: decimal("delta_hours", { precision: 10, scale: 2 }).default("0"),
+  scopeChanges: jsonb("scope_changes"),
+  createdBy: text("created_by"),
+  approvedBy: text("approved_by"),
+  approvedAt: timestamp("approved_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 export const dealsRelations = relations(deals, ({ one, many }) => ({
   client: one(clients, { fields: [deals.clientId], references: [clients.id] }),
   scopeItems: many(dealScopeItems),
@@ -164,6 +188,7 @@ export const dealsRelations = relations(deals, ({ one, many }) => ({
   approvals: many(approvals),
   promptResponses: many(promptResponses),
   activities: many(activityLog),
+  changeOrders: many(changeOrders),
 }));
 
 export const clientsRelations = relations(clients, ({ many }) => ({
@@ -194,4 +219,8 @@ export const promptResponsesRelations = relations(promptResponses, ({ one }) => 
 
 export const activityLogRelations = relations(activityLog, ({ one }) => ({
   deal: one(deals, { fields: [activityLog.dealId], references: [deals.id] }),
+}));
+
+export const changeOrdersRelations = relations(changeOrders, ({ one }) => ({
+  deal: one(deals, { fields: [changeOrders.dealId], references: [deals.id] }),
 }));

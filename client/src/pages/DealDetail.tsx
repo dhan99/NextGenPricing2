@@ -3,7 +3,7 @@ import { useRoute } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import { useDeal, useUpdateDeal, useScopeCatalog, useDealScopeItems, useAddScopeItem, useRemoveScopeItem, useRoles, useDealPricing, useUpdatePricingLine, useDealScenarios, useSelectScenario, useDealApprovals, useSubmitApproval, useUpdateApproval, useDealPrompts, useUpdatePrompt, useCloneDeal, useAIDealSimilarity, useAIEffortEstimation, useAIMarginAdvisor, useAIScenarioRecommendation, useAIRiskSummary } from "@/hooks/use-api";
 import { formatCurrency, formatPercent, formatNumber, getStatusColor, getStatusLabel, cn } from "@/lib/utils";
-import { ArrowLeft, Check, ChevronRight, Sparkles, AlertTriangle, TrendingUp, Target, FileText, Shield, CheckCircle, XCircle, Clock, Loader2, Plus, Trash2, Lightbulb, Copy, RefreshCw, Pencil, Save } from "lucide-react";
+import { ArrowLeft, Check, ChevronRight, Sparkles, AlertTriangle, TrendingUp, Target, FileText, Shield, CheckCircle, XCircle, Clock, Loader2, Plus, Trash2, Lightbulb, Copy, RefreshCw, Pencil, Save, GitBranch } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/context/AuthContext";
 
@@ -1117,6 +1117,23 @@ function ApprovalStep({ deal }: { deal: any }) {
 function SummaryStep({ deal }: { deal: any }) {
   return (
     <div className="max-w-4xl mx-auto space-y-6">
+      <div className="flex gap-3 justify-end">
+        <a
+          href={`/api/deals/${deal.id}/proposal`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="btn-primary flex items-center gap-2"
+        >
+          <FileText className="w-4 h-4" />
+          Generate Proposal
+        </a>
+        <Link href={`/deals/${deal.id}/change-orders`}>
+          <button className="px-4 py-2 rounded-lg border border-stone-200 text-sm font-medium hover:bg-stone-50 transition-all flex items-center gap-2">
+            <GitBranch className="w-4 h-4" />
+            Change Orders
+          </button>
+        </Link>
+      </div>
       <div className="card overflow-hidden">
         <div className="bg-primary px-8 py-6 text-primary-foreground">
           <div className="flex items-center justify-between">

@@ -10,6 +10,8 @@ import { ScopeCatalogAdmin } from "./pages/ScopeCatalogAdmin";
 import { Architecture } from "./pages/Architecture";
 import { ArchitectureInteractive } from "./pages/ArchitectureInteractive";
 import { ArchitectureHub } from "./pages/ArchitectureHub";
+import { Analytics } from "./pages/Analytics";
+import { ChangeOrders } from "./pages/ChangeOrders";
 import { Login } from "./pages/Login";
 import { Shield } from "lucide-react";
 
@@ -50,6 +52,12 @@ function AuthenticatedApp() {
         </Route>
         <Route path="/admin/scope-catalog">
           {hasPermission("manageScopeCatalog") ? <ScopeCatalogAdmin /> : <NoAccess feature="scope catalog management" />}
+        </Route>
+        <Route path="/analytics">
+          {hasPermission("viewDeals") ? <Analytics /> : <NoAccess feature="analytics" />}
+        </Route>
+        <Route path="/deals/:id/change-orders">
+          {hasPermission("viewDeals") ? <ChangeOrders /> : <NoAccess feature="change orders" />}
         </Route>
         <Route path="/architecture" component={ArchitectureHub} />
         <Route path="/architecture-i" component={ArchitectureInteractive} />
