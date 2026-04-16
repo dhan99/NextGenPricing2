@@ -204,6 +204,10 @@ async function start() {
 
   registerRoutes(app);
 
+  app.get("/architecture-doc", (_req, res) => {
+    res.sendFile(path.join(process.cwd(), "DealPad_Architecture_Document.html"));
+  });
+
   const clientDistPath = path.join(process.cwd(), "dist", "public");
   app.use(express.static(clientDistPath));
   app.get("/{*path}", (_req, res) => {
