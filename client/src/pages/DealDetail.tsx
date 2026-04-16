@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRoute } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
-import { useDeal, useUpdateDeal, useScopeCatalog, useDealScopeItems, useAddScopeItem, useRemoveScopeItem, useRoles, useDealPricing, useUpdatePricingLine, useDealScenarios, useDealApprovals, useSubmitApproval, useDealPrompts, useUpdatePrompt, useCloneDeal, useAIDealSimilarity, useAIEffortEstimation, useAIMarginAdvisor, useAIScenarioRecommendation, useAIRiskSummary } from "@/hooks/use-api";
+import { useDeal, useUpdateDeal, useScopeCatalog, useDealScopeItems, useAddScopeItem, useRemoveScopeItem, useRoles, useDealPricing, useUpdatePricingLine, useDealScenarios, useSelectScenario, useDealApprovals, useSubmitApproval, useDealPrompts, useUpdatePrompt, useCloneDeal, useAIDealSimilarity, useAIEffortEstimation, useAIMarginAdvisor, useAIScenarioRecommendation, useAIRiskSummary } from "@/hooks/use-api";
 import { formatCurrency, formatPercent, formatNumber, getStatusColor, getStatusLabel, cn } from "@/lib/utils";
 import { ArrowLeft, Check, ChevronRight, Sparkles, AlertTriangle, TrendingUp, Target, FileText, Shield, CheckCircle, XCircle, Clock, Loader2, Plus, Trash2, Lightbulb, Copy, RefreshCw, Pencil, Save } from "lucide-react";
 import { Link, useLocation } from "wouter";
@@ -789,71 +789,114 @@ function PricingStep({ deal }: { deal: any }) {
 
 function ScenariosStep({ deal }: { deal: any }) {
   const { data: scenarios } = useDealScenarios(deal.id);
+  const selectScenario = useSelectScenario();
   const recommendation = useAIScenarioRecommendation();
+  const { persona } = useAuth();
 
   useEffect(() => {
     if (deal.id) recommendation.mutate({ dealId: deal.id });
   }, [deal.id]);
 
+  const selectedScenario = (scenarios || []).find((s: any) => s.isRecommended);
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-foreground">Pricing Scenarios</h2>
-        {recommendation.data?.recommendation && (
-          <div className="flex items-center gap-2 bg-primary/10 px-4 py-2 rounded-lg">
-            <Sparkles className="w-4 h-4 text-primary" />
-            <span className="text-sm font-medium text-primary">AI Recommended: {recommendation.data.recommendation.scenarioName}</span>
+        <div>
+          <h2 className="text-lg font-semibold text-foreground">Pricing Scenarios</h2>
+          <p className="text-sm text-muted-foreground mt-1">Compare options and select the best fit for this engagement.</p>
+        </div>
+        {selectedScenario && (
+          <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 px-4 py-2 rounded-lg">
+            <CheckCircle className="w-4 h-4 text-emerald-600" />
+            <span className="text-sm font-medium text-emerald-700">Selected: {selectedScenario.name}</span>
           </div>
         )}
       </div>
 
       {recommendation.data?.narrative && (
         <div className="card p-4 border-primary/20 bg-primary/5">
-          <p className="text-sm text-foreground leading-relaxed">{recommendation.data.narrative}</p>
+          <div className="flex items-start gap-2">
+            <Sparkles className="w-4 h-4 text-primary mt-0.5 shrink-0" />
+            <p className="text-sm text-foreground leading-relaxed">{recommendation.data.narrative}</p>
+          </div>
         </div>
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {(scenarios || []).map((scenario: any) => (
-          <div key={scenario.id} className={cn("card overflow-hidden", scenario.isRecommended && "ring-2 ring-primary")}>
-            {scenario.isRecommended && (
-              <div className="bg-primary text-primary-foreground px-4 py-1.5 text-xs font-semibold text-center uppercase tracking-wider">AI Recommended</div>
-            )}
-            <div className="p-6">
-              <h3 className="text-lg font-bold text-foreground mb-1">{scenario.name}</h3>
-              <p className="text-sm text-muted-foreground mb-4">{scenario.description}</p>
-
-              <div className="space-y-3 mb-4">
-                <div className="flex items-center justify-between py-2 border-b border-border">
-                  <span className="text-sm text-muted-foreground">Total Fee</span>
-                  <span className="text-sm font-bold text-foreground">{formatCurrency(scenario.totalFee || 0)}</span>
-                </div>
-                <div className="flex items-center justify-between py-2 border-b border-border">
-                  <span className="text-sm text-muted-foreground">Total Cost</span>
-                  <span className="text-sm text-foreground">{formatCurrency(scenario.totalCost || 0)}</span>
-                </div>
-                <div className="flex items-center justify-between py-2 border-b border-border">
-                  <span className="text-sm text-muted-foreground">Total Hours</span>
-                  <span className="text-sm text-foreground">{formatNumber(scenario.totalHours || 0)}</span>
-                </div>
-                <div className="flex items-center justify-between py-2 border-b border-border">
-                  <span className="text-sm text-muted-foreground">Margin</span>
-                  <span className={cn("text-sm font-bold", parseFloat(scenario.marginPercent) >= 25 ? "text-success" : "text-warning")}>{formatPercent(scenario.marginPercent || 0)}</span>
-                </div>
-                <div className="flex items-center justify-between py-2">
-                  <span className="text-sm text-muted-foreground">Blended Rate</span>
-                  <span className="text-sm text-foreground">{formatCurrency(scenario.blendedRate || 0)}/hr</span>
-                </div>
-              </div>
-
-              {scenario.aiReasoning && (
-                <div className="bg-muted/50 rounded-lg p-3 mt-4">
-                  <p className="text-xs text-muted-foreground leading-relaxed">{scenario.aiReasoning}</p>
+        {(scenarios || []).map((scenario: any) => {
+          const isSelected = scenario.isRecommended;
+          return (
+            <div key={scenario.id} className={cn(
+              "card overflow-hidden transition-all",
+              isSelected ? "ring-2 ring-primary shadow-lg" : "hover:shadow-md"
+            )}>
+              {isSelected && (
+                <div className="bg-primary text-primary-foreground px-4 py-1.5 text-xs font-semibold text-center uppercase tracking-wider flex items-center justify-center gap-1.5">
+                  <CheckCircle className="w-3.5 h-3.5" />
+                  Selected
                 </div>
               )}
+              <div className="p-6">
+                <div className="flex items-start justify-between mb-1">
+                  <h3 className="text-lg font-bold text-foreground">{scenario.name}</h3>
+                  {scenario.scenarioType === "premium" && !isSelected && (
+                    <span className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-primary/10 text-primary">AI Pick</span>
+                  )}
+                </div>
+                <p className="text-sm text-muted-foreground mb-4">{scenario.description}</p>
+
+                <div className="space-y-3 mb-5">
+                  <div className="flex items-center justify-between py-2 border-b border-border">
+                    <span className="text-sm text-muted-foreground">Total Fee</span>
+                    <span className="text-sm font-bold text-foreground">{formatCurrency(scenario.totalFee || 0)}</span>
+                  </div>
+                  <div className="flex items-center justify-between py-2 border-b border-border">
+                    <span className="text-sm text-muted-foreground">Total Cost</span>
+                    <span className="text-sm text-foreground">{formatCurrency(scenario.totalCost || 0)}</span>
+                  </div>
+                  <div className="flex items-center justify-between py-2 border-b border-border">
+                    <span className="text-sm text-muted-foreground">Total Hours</span>
+                    <span className="text-sm text-foreground">{formatNumber(scenario.totalHours || 0)}</span>
+                  </div>
+                  <div className="flex items-center justify-between py-2 border-b border-border">
+                    <span className="text-sm text-muted-foreground">Margin</span>
+                    <span className={cn("text-sm font-bold", parseFloat(scenario.marginPercent) >= 25 ? "text-success" : "text-warning")}>{formatPercent(scenario.marginPercent || 0)}</span>
+                  </div>
+                  <div className="flex items-center justify-between py-2">
+                    <span className="text-sm text-muted-foreground">Blended Rate</span>
+                    <span className="text-sm text-foreground">{formatCurrency(scenario.blendedRate || 0)}/hr</span>
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => selectScenario.mutate({ dealId: deal.id, scenarioId: scenario.id, userName: persona?.name })}
+                  disabled={isSelected || selectScenario.isPending}
+                  className={cn(
+                    "w-full py-2.5 rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-2",
+                    isSelected
+                      ? "bg-primary/10 text-primary cursor-default"
+                      : "bg-primary text-primary-foreground hover:bg-primary/90"
+                  )}
+                >
+                  {isSelected ? (
+                    <><CheckCircle className="w-4 h-4" /> Selected</>
+                  ) : selectScenario.isPending ? (
+                    <><Loader2 className="w-4 h-4 animate-spin" /> Applying...</>
+                  ) : (
+                    "Select This Scenario"
+                  )}
+                </button>
+
+                {scenario.aiReasoning && (
+                  <div className="bg-muted/50 rounded-lg p-3 mt-4">
+                    <p className="text-xs text-muted-foreground leading-relaxed">{scenario.aiReasoning}</p>
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

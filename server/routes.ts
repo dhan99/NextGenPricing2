@@ -529,6 +529,34 @@ export function registerRoutes(app: Express) {
     res.json(result);
   });
 
+  app.post("/api/deals/:dealId/scenarios/:id/select", async (req: Request, res: Response) => {
+    const dealId = parseInt(req.params.dealId);
+    const scenarioId = parseInt(req.params.id);
+
+    await db.update(scenarios).set({ isRecommended: false }).where(eq(scenarios.dealId, dealId));
+    const [selected] = await db.update(scenarios).set({ isRecommended: true })
+      .where(eq(scenarios.id, scenarioId)).returning();
+    if (!selected) return res.status(404).json({ error: "Scenario not found" });
+
+    await db.update(deals).set({
+      totalFee: selected.totalFee,
+      totalCost: selected.totalCost,
+      totalHours: selected.totalHours,
+      marginPercent: selected.marginPercent,
+      blendedRate: selected.blendedRate,
+      updatedAt: new Date(),
+    }).where(eq(deals.id, dealId));
+
+    await db.insert(activityLog).values({
+      dealId,
+      action: "scenario_selected",
+      description: `Selected "${selected.name}" scenario — Fee: $${parseFloat(selected.totalFee || "0").toLocaleString()}, Margin: ${selected.marginPercent}%`,
+      userName: req.body.userName || "System",
+    });
+
+    res.json(selected);
+  });
+
   // ========== APPROVALS ==========
   app.get("/api/deals/:dealId/approvals", async (req: Request, res: Response) => {
     const result = await db.select().from(approvals)

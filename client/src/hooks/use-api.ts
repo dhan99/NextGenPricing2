@@ -93,6 +93,19 @@ export function useDealScenarios(dealId: number) {
   return useQuery({ queryKey: ["deal-scenarios", dealId], queryFn: () => fetchApi(`/api/deals/${dealId}/scenarios`), enabled: !!dealId });
 }
 
+export function useSelectScenario() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ dealId, scenarioId, userName }: { dealId: number; scenarioId: number; userName?: string }) =>
+      fetchApi(`/api/deals/${dealId}/scenarios/${scenarioId}/select`, { method: "POST", body: JSON.stringify({ userName }) }),
+    onSuccess: (_, { dealId }) => {
+      qc.invalidateQueries({ queryKey: ["deal-scenarios", dealId] });
+      qc.invalidateQueries({ queryKey: ["deal", dealId] });
+      qc.invalidateQueries({ queryKey: ["deals"] });
+    },
+  });
+}
+
 export function useDealApprovals(dealId: number) {
   return useQuery({ queryKey: ["deal-approvals", dealId], queryFn: () => fetchApi(`/api/deals/${dealId}/approvals`), enabled: !!dealId });
 }
