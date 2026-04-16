@@ -15,11 +15,11 @@ export function NewDeal() {
   const [form, setForm] = useState({
     title: "",
     clientId: "",
-    dealType: "new",
+    dealType: "",
     businessUnit: "",
     serviceLine: "",
     region: "",
-    complexity: "medium",
+    complexity: "",
     startDate: "",
     endDate: "",
     pdlName: "",
@@ -154,74 +154,84 @@ export function NewDeal() {
             </div>
           )}
 
-          <div className="grid grid-cols-2 gap-4 mt-4">
-            <div className="col-span-2">
-              <label className="label">Deal Title</label>
-              <input type="text" required value={form.title} onChange={e => setForm({...form, title: e.target.value})} className="input-field mt-1" placeholder="e.g., ERP Modernization - Phase 1" />
+          <fieldset disabled={!form.dealType} className={!form.dealType ? "opacity-50 pointer-events-none select-none" : ""}>
+            {!form.dealType && (
+              <p className="text-xs text-muted-foreground mt-4 mb-2 italic">Select a Deal Type to enable the remaining fields.</p>
+            )}
+            <div className="grid grid-cols-2 gap-4 mt-4">
+              <div className="col-span-2">
+                <label className="label">Deal Title</label>
+                <input type="text" required value={form.title} onChange={e => setForm({...form, title: e.target.value})} className="input-field mt-1" placeholder="e.g., ERP Modernization - Phase 1" />
+              </div>
+              <div>
+                <label className="label">Business Unit</label>
+                <select value={form.businessUnit} onChange={e => setForm({...form, businessUnit: e.target.value})} className="input-field mt-1">
+                  <option value="">Select...</option>
+                  {businessUnits.map(bu => <option key={bu} value={bu}>{bu}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="label">Service Line</label>
+                <select value={form.serviceLine} onChange={e => setForm({...form, serviceLine: e.target.value})} className="input-field mt-1">
+                  <option value="">Select...</option>
+                  {serviceLines.map(sl => <option key={sl} value={sl}>{sl}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="label">Region</label>
+                <select value={form.region} onChange={e => setForm({...form, region: e.target.value})} className="input-field mt-1">
+                  <option value="">Select...</option>
+                  {regions.map(r => <option key={r} value={r}>{r}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="label">Complexity</label>
+                <select value={form.complexity} onChange={e => setForm({...form, complexity: e.target.value})} className="input-field mt-1">
+                  <option value="">Select...</option>
+                  <option value="low">Low</option>
+                  <option value="medium">Medium</option>
+                  <option value="high">High</option>
+                  <option value="very_high">Very High</option>
+                </select>
+              </div>
+              <div>
+                <label className="label">Start Date</label>
+                <input type="date" value={form.startDate} onChange={e => { setForm({...form, startDate: e.target.value}); e.target.blur(); }} className="input-field mt-1" />
+              </div>
+              <div>
+                <label className="label">End Date</label>
+                <input type="date" value={form.endDate} onChange={e => { setForm({...form, endDate: e.target.value}); e.target.blur(); }} className="input-field mt-1" />
+              </div>
             </div>
-            <div>
-              <label className="label">Business Unit</label>
-              <select value={form.businessUnit} onChange={e => setForm({...form, businessUnit: e.target.value})} className="input-field mt-1">
-                <option value="">Select...</option>
-                {businessUnits.map(bu => <option key={bu} value={bu}>{bu}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="label">Service Line</label>
-              <select value={form.serviceLine} onChange={e => setForm({...form, serviceLine: e.target.value})} className="input-field mt-1">
-                <option value="">Select...</option>
-                {serviceLines.map(sl => <option key={sl} value={sl}>{sl}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="label">Region</label>
-              <select value={form.region} onChange={e => setForm({...form, region: e.target.value})} className="input-field mt-1">
-                <option value="">Select...</option>
-                {regions.map(r => <option key={r} value={r}>{r}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="label">Complexity</label>
-              <select value={form.complexity} onChange={e => setForm({...form, complexity: e.target.value})} className="input-field mt-1">
-                <option value="low">Low</option>
-                <option value="medium">Medium</option>
-                <option value="high">High</option>
-                <option value="very_high">Very High</option>
-              </select>
-            </div>
-            <div>
-              <label className="label">Start Date</label>
-              <input type="date" value={form.startDate} onChange={e => { setForm({...form, startDate: e.target.value}); e.target.blur(); }} className="input-field mt-1" />
-            </div>
-            <div>
-              <label className="label">End Date</label>
-              <input type="date" value={form.endDate} onChange={e => { setForm({...form, endDate: e.target.value}); e.target.blur(); }} className="input-field mt-1" />
-            </div>
-          </div>
+          </fieldset>
         </div>
 
-        <div className="card p-6">
-          <h2 className="text-lg font-semibold text-foreground mb-4">PDL Assignment</h2>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="label">PDL Name</label>
-              <input type="text" value={form.pdlName} onChange={e => setForm({...form, pdlName: e.target.value})} className="input-field mt-1" placeholder="Full name" />
-            </div>
-            <div>
-              <label className="label">PDL Email</label>
-              <input type="email" value={form.pdlEmail} onChange={e => setForm({...form, pdlEmail: e.target.value})} className="input-field mt-1" placeholder="email@armanino.com" />
+        <fieldset disabled={!form.dealType} className={!form.dealType ? "opacity-50 pointer-events-none select-none" : ""}>
+          <div className="card p-6">
+            <h2 className="text-lg font-semibold text-foreground mb-4">PDL Assignment</h2>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="label">PDL Name</label>
+                <input type="text" value={form.pdlName} onChange={e => setForm({...form, pdlName: e.target.value})} className="input-field mt-1" placeholder="Full name" />
+              </div>
+              <div>
+                <label className="label">PDL Email</label>
+                <input type="email" value={form.pdlEmail} onChange={e => setForm({...form, pdlEmail: e.target.value})} className="input-field mt-1" placeholder="email@armanino.com" />
+              </div>
             </div>
           </div>
-        </div>
+        </fieldset>
 
-        <div className="card p-6">
-          <h2 className="text-lg font-semibold text-foreground mb-4">Additional Notes</h2>
-          <textarea value={form.notes} onChange={e => setForm({...form, notes: e.target.value})} className="input-field mt-1 min-h-[100px] resize-y" placeholder="Any additional context about this engagement..." />
-        </div>
+        <fieldset disabled={!form.dealType} className={!form.dealType ? "opacity-50 pointer-events-none select-none" : ""}>
+          <div className="card p-6">
+            <h2 className="text-lg font-semibold text-foreground mb-4">Additional Notes</h2>
+            <textarea value={form.notes} onChange={e => setForm({...form, notes: e.target.value})} className="input-field mt-1 min-h-[100px] resize-y" placeholder="Any additional context about this engagement..." />
+          </div>
+        </fieldset>
 
         <div className="flex items-center justify-end gap-3">
           <Link href="/deals"><button type="button" className="btn-ghost">Cancel</button></Link>
-          <button type="submit" disabled={submitting || (isRenewal && !form.sourceDealId)} className="btn-primary">
+          <button type="submit" disabled={submitting || !form.dealType || (isRenewal && !form.sourceDealId)} className="btn-primary">
             {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : (isRenewal ? <Sparkles className="w-4 h-4" /> : <FileText className="w-4 h-4" />)}
             {submitting
               ? (isRenewal ? "Building Leadsheet..." : "Creating...")
