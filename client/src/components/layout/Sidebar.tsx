@@ -10,7 +10,6 @@ export function Sidebar() {
   const [adminOpen, setAdminOpen] = useState(location.startsWith("/admin"));
 
   const showDeals = hasPermission("viewDeals");
-  const showAdmin = hasPermission("manageRateCards") || hasPermission("manageScopeCatalog");
 
   const navigation = [
     { name: "Dashboard", href: "/", icon: LayoutDashboard, show: true },
@@ -19,9 +18,10 @@ export function Sidebar() {
     { name: "Architecture-I", href: "/architecture-i", icon: Network, show: true },
   ];
 
+  const showAdmin = true;
   const adminNavigation = [
-    { name: "Rate Cards", href: "/admin/rate-cards", icon: DollarSign, show: hasPermission("manageRateCards") },
-    { name: "Scope Catalog", href: "/admin/scope-catalog", icon: BookOpen, show: hasPermission("manageScopeCatalog") },
+    { name: "Rate Cards", href: "/admin/rate-cards", icon: DollarSign, show: true },
+    { name: "Scope Catalog", href: "/admin/scope-catalog", icon: BookOpen, show: true },
   ];
 
   const roleColor: Record<string, string> = {
