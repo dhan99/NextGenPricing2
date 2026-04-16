@@ -1,5 +1,5 @@
 import { useLocation, Link } from "wouter";
-import { LayoutDashboard, FileText, Settings, ChevronDown, BookOpen, DollarSign, Layers, LogOut, Shield } from "lucide-react";
+import { LayoutDashboard, FileText, Settings, ChevronDown, BookOpen, DollarSign, Layers, Network, LogOut, Shield } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
 import { useAuth } from "@/context/AuthContext";
@@ -16,6 +16,7 @@ export function Sidebar() {
     { name: "Dashboard", href: "/", icon: LayoutDashboard, show: true },
     { name: "Deals", href: "/deals", icon: FileText, show: showDeals },
     { name: "Architecture", href: "/architecture", icon: Layers, show: true },
+    { name: "Architecture-I", href: "/architecture-i", icon: Network, show: true },
   ];
 
   const adminNavigation = [

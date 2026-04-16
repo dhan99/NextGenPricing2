@@ -8,6 +8,7 @@ import { DealDetail } from "./pages/DealDetail";
 import { RateCards } from "./pages/RateCards";
 import { ScopeCatalogAdmin } from "./pages/ScopeCatalogAdmin";
 import { Architecture } from "./pages/Architecture";
+import { ArchitectureInteractive } from "./pages/ArchitectureInteractive";
 import { Login } from "./pages/Login";
 import { Shield } from "lucide-react";
 
@@ -50,6 +51,7 @@ function AuthenticatedApp() {
           {hasPermission("manageScopeCatalog") ? <ScopeCatalogAdmin /> : <NoAccess feature="scope catalog management" />}
         </Route>
         <Route path="/architecture" component={Architecture} />
+        <Route path="/architecture-i" component={ArchitectureInteractive} />
         <Route>
           <div className="flex items-center justify-center min-h-screen">
             <p className="text-xl text-muted-foreground">Page not found</p>
