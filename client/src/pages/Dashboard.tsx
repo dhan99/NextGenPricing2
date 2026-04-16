@@ -1,16 +1,18 @@
-import { useDashboardSummary, useDeals, useActivity } from "@/hooks/use-api";
+import { useState, useMemo, useRef, useEffect } from "react";
+import { useDashboardSummary, useDeals } from "@/hooks/use-api";
 import { formatCurrency, formatPercent, getStatusColor, getStatusLabel } from "@/lib/utils";
 import { Link } from "wouter";
-import { TrendingUp, DollarSign, Clock, AlertCircle, ArrowRight, FileText, Activity, ShieldCheck, Layers, Network, BookOpen, BarChart3, Shield, Eye, CheckCircle } from "lucide-react";
+import { TrendingUp, DollarSign, AlertCircle, ArrowRight, FileText, ShieldCheck, Layers, Network, BarChart3, Shield, CheckCircle, Search, Sparkles, Send, Bot, Lightbulb, RefreshCw, Lock } from "lucide-react";
 import { useAuth, type PersonaRole } from "@/context/AuthContext";
+import { useQuery, useMutation } from "@tanstack/react-query";
 
-const ROLE_ACCENT: Record<PersonaRole, { bg: string; border: string; text: string; badge: string; gradient: string }> = {
-  pdl: { bg: "bg-orange-50", border: "border-orange-200", text: "text-orange-700", badge: "bg-orange-100 text-orange-700", gradient: "from-orange-500 to-amber-500" },
-  sll: { bg: "bg-blue-50", border: "border-blue-200", text: "text-blue-700", badge: "bg-blue-100 text-blue-700", gradient: "from-blue-500 to-indigo-500" },
-  po: { bg: "bg-emerald-50", border: "border-emerald-200", text: "text-emerald-700", badge: "bg-emerald-100 text-emerald-700", gradient: "from-emerald-500 to-teal-500" },
-  fin: { bg: "bg-violet-50", border: "border-violet-200", text: "text-violet-700", badge: "bg-violet-100 text-violet-700", gradient: "from-violet-500 to-purple-500" },
-  qrm: { bg: "bg-red-50", border: "border-red-200", text: "text-red-700", badge: "bg-red-100 text-red-700", gradient: "from-red-500 to-rose-500" },
-  it: { bg: "bg-stone-50", border: "border-stone-200", text: "text-stone-700", badge: "bg-stone-100 text-stone-700", gradient: "from-stone-500 to-zinc-500" },
+const ROLE_ACCENT: Record<PersonaRole, { bg: string; border: string; text: string; badge: string }> = {
+  pdl: { bg: "bg-orange-50", border: "border-orange-200", text: "text-orange-700", badge: "bg-orange-100 text-orange-700" },
+  sll: { bg: "bg-blue-50", border: "border-blue-200", text: "text-blue-700", badge: "bg-blue-100 text-blue-700" },
+  po: { bg: "bg-emerald-50", border: "border-emerald-200", text: "text-emerald-700", badge: "bg-emerald-100 text-emerald-700" },
+  fin: { bg: "bg-violet-50", border: "border-violet-200", text: "text-violet-700", badge: "bg-violet-100 text-violet-700" },
+  qrm: { bg: "bg-red-50", border: "border-red-200", text: "text-red-700", badge: "bg-red-100 text-red-700" },
+  it: { bg: "bg-stone-50", border: "border-stone-200", text: "text-stone-700", badge: "bg-stone-100 text-stone-700" },
 };
 
 const ROLE_GREETING: Record<PersonaRole, { title: string; subtitle: string }> = {
@@ -22,93 +24,146 @@ const ROLE_GREETING: Record<PersonaRole, { title: string; subtitle: string }> = 
   it: { title: "System Overview", subtitle: "View architecture, integration points, and technical infrastructure status." },
 };
 
-interface QuickAction {
-  label: string;
-  href: string;
-  icon: any;
-  description: string;
-  permission?: string;
+const STATUS_OPTIONS = [
+  { value: "all", label: "All" },
+  { value: "draft", label: "Draft" },
+  { value: "submitted", label: "Submitted" },
+  { value: "approved", label: "Approved" },
+  { value: "rejected", label: "Rejected" },
+];
+
+interface Insight { type: string; title: string; body: string; cta?: string; href?: string }
+interface ChatMsg { role: "user" | "ai"; content: string; restricted?: boolean }
+
+function InsightCard({ insight }: { insight: Insight }) {
+  const styles: Record<string, { icon: any; bg: string; border: string; iconColor: string; pill: string }> = {
+    suggestion: { icon: Sparkles, bg: "bg-emerald-50", border: "border-emerald-200", iconColor: "text-emerald-600", pill: "bg-emerald-100 text-emerald-700" },
+    alert:      { icon: AlertCircle, bg: "bg-amber-50", border: "border-amber-200", iconColor: "text-amber-600", pill: "bg-amber-100 text-amber-700" },
+    info:       { icon: Lightbulb, bg: "bg-blue-50", border: "border-blue-200", iconColor: "text-blue-600", pill: "bg-blue-100 text-blue-700" },
+  };
+  const s = styles[insight.type] || styles.info;
+  const Icon = s.icon;
+  return (
+    <div className={`rounded-xl border p-3 ${s.bg} ${s.border}`}>
+      <div className="flex items-center gap-2 mb-1.5">
+        <Icon className={`w-3.5 h-3.5 ${s.iconColor}`} />
+        <span className={`text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full ${s.pill}`}>{insight.title}</span>
+      </div>
+      <p className="text-xs text-foreground leading-relaxed">{insight.body}</p>
+      {insight.cta && insight.href && (
+        <Link href={insight.href}>
+          <span className={`text-xs font-medium ${s.iconColor} inline-flex items-center gap-1 mt-2 hover:underline cursor-pointer`}>
+            {insight.cta} <ArrowRight className="w-3 h-3" />
+          </span>
+        </Link>
+      )}
+    </div>
+  );
 }
 
-const ROLE_ACTIONS: Record<PersonaRole, QuickAction[]> = {
-  pdl: [
-    { label: "New Deal", href: "/deals/new", icon: FileText, description: "Start a new pricing engagement" },
-    { label: "My Deals", href: "/deals", icon: Layers, description: "View and manage all your deals" },
-    { label: "Dashboard", href: "/", icon: BarChart3, description: "Return to overview metrics" },
-  ],
-  sll: [
-    { label: "Review Deals", href: "/deals", icon: CheckCircle, description: "Deals pending your review" },
-    { label: "Pipeline", href: "/deals", icon: BarChart3, description: "Service line pipeline view" },
-    { label: "Dashboard", href: "/", icon: TrendingUp, description: "Overview of key metrics" },
-  ],
-  po: [
-    { label: "Rate Cards", href: "/admin/rate-cards", icon: DollarSign, description: "Manage billing rate cards" },
-    { label: "Scope Catalog", href: "/admin/scope-catalog", icon: BookOpen, description: "Configure scope templates" },
-    { label: "View Deals", href: "/deals", icon: Eye, description: "Review deal pricing" },
-  ],
-  fin: [
-    { label: "View Deals", href: "/deals", icon: BarChart3, description: "Analyze deal margins" },
-    { label: "Pipeline", href: "/deals", icon: TrendingUp, description: "Financial pipeline metrics" },
-    { label: "Dashboard", href: "/", icon: DollarSign, description: "Financial overview at a glance" },
-  ],
-  qrm: [
-    { label: "Risk Review", href: "/deals", icon: Shield, description: "Review deal risk profiles" },
-    { label: "Compliance", href: "/deals", icon: ShieldCheck, description: "Audit compliance status" },
-    { label: "Dashboard", href: "/", icon: AlertCircle, description: "Risk overview and metrics" },
-  ],
-  it: [
-    { label: "System Status", href: "/", icon: CheckCircle, description: "View system health overview" },
-    { label: "View Deals", href: "/deals", icon: FileText, description: "Browse deal pipeline" },
-    { label: "Dashboard", href: "/", icon: Layers, description: "Platform overview" },
-  ],
-};
-
 export function Dashboard() {
-  const { data: summary, isLoading: summaryLoading } = useDashboardSummary();
+  const { data: summary } = useDashboardSummary();
   const { data: deals } = useDeals();
-  const { data: activity } = useActivity();
   const { hasPermission, persona } = useAuth();
 
-  const role = persona?.role || "pdl";
+  const role = (persona?.role || "pdl") as PersonaRole;
   const accent = ROLE_ACCENT[role];
   const greeting = ROLE_GREETING[role];
-  const actions = ROLE_ACTIONS[role];
 
-  const kpiSets: Record<PersonaRole, { label: string; value: string; icon: any; href?: string }[]> = {
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+
+  const filteredDeals = useMemo(() => {
+    if (!deals) return [];
+    const term = searchTerm.trim().toLowerCase();
+    return deals.filter((d: any) => {
+      const matchStatus = statusFilter === "all" || d.status === statusFilter;
+      const haystack = `${d.title || ""} ${d.dealNumber || ""} ${d.client?.name || ""} ${d.serviceLine || ""}`.toLowerCase();
+      const matchSearch = !term || haystack.includes(term);
+      return matchStatus && matchSearch;
+    });
+  }, [deals, searchTerm, statusFilter]);
+
+  // AI Insights
+  const { data: insightsData, isLoading: insightsLoading, refetch: refetchInsights } = useQuery<{ capability: string; insights: Insight[] }>({
+    queryKey: ["dashboard-insights", role],
+    queryFn: async () => {
+      const r = await fetch(`/api/ai/dashboard-insights?role=${role}`);
+      return r.json();
+    },
+  });
+
+  // Chat
+  const [chatInput, setChatInput] = useState("");
+  const [chatLog, setChatLog] = useState<ChatMsg[]>([
+    { role: "ai", content: `Hi ${persona?.name.split(" ")[0] || "there"}! I can answer questions within your ${persona?.fullTitle || "role"} capability. Try asking about pipeline, margins, or approvals.` },
+  ]);
+  const chatEndRef = useRef<HTMLDivElement>(null);
+
+  const chat = useMutation({
+    mutationFn: async (message: string) => {
+      const r = await fetch("/api/ai/dashboard-chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message, role }),
+      });
+      return r.json();
+    },
+    onSuccess: (data) => {
+      setChatLog((prev) => [...prev, { role: "ai", content: data.response, restricted: data.restricted }]);
+    },
+    onError: () => {
+      setChatLog((prev) => [...prev, { role: "ai", content: "Sorry, something went wrong reaching the AI service." }]);
+    },
+  });
+
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [chatLog]);
+
+  const sendChat = () => {
+    const q = chatInput.trim();
+    if (!q) return;
+    setChatLog((prev) => [...prev, { role: "user", content: q }]);
+    chat.mutate(q);
+    setChatInput("");
+  };
+
+  const kpiSets: Record<PersonaRole, { label: string; value: string; icon: any; href?: string; valueClass?: string }[]> = {
     pdl: [
-      { label: "Total Pipeline", value: summary ? formatCurrency(summary.totalPipeline) : "--", icon: DollarSign, href: "/deals" },
+      { label: "Pipeline Value", value: summary ? formatCurrency(summary.totalPipeline) : "--", icon: DollarSign, href: "/deals" },
+      { label: "Avg Margin", value: summary ? `${summary.averageMargin}%` : "--", icon: TrendingUp, href: "/deals", valueClass: "text-emerald-600" },
+      { label: "Pending Approvals", value: String(summary?.pendingApprovals ?? "--"), icon: AlertCircle, href: "/deals?status=submitted", valueClass: "text-primary" },
       { label: "Active Deals", value: String(summary?.totalDeals ?? "--"), icon: FileText, href: "/deals" },
-      { label: "Avg Margin", value: summary ? `${summary.averageMargin}%` : "--", icon: TrendingUp, href: "/deals" },
-      { label: "Pending Approvals", value: String(summary?.pendingApprovals ?? "--"), icon: AlertCircle, href: "/deals?status=submitted" },
     ],
     sll: [
-      { label: "Total Pipeline", value: summary ? formatCurrency(summary.totalPipeline) : "--", icon: DollarSign, href: "/deals" },
-      { label: "Deals to Review", value: String(summary?.pendingApprovals ?? "--"), icon: CheckCircle, href: "/deals?status=submitted" },
-      { label: "Avg Margin", value: summary ? `${summary.averageMargin}%` : "--", icon: TrendingUp, href: "/deals" },
+      { label: "Pipeline Value", value: summary ? formatCurrency(summary.totalPipeline) : "--", icon: DollarSign, href: "/deals" },
+      { label: "Deals to Review", value: String(summary?.pendingApprovals ?? "--"), icon: CheckCircle, href: "/deals?status=submitted", valueClass: "text-primary" },
+      { label: "Avg Margin", value: summary ? `${summary.averageMargin}%` : "--", icon: TrendingUp, href: "/deals", valueClass: "text-emerald-600" },
       { label: "Active Deals", value: String(summary?.totalDeals ?? "--"), icon: FileText, href: "/deals" },
     ],
     po: [
       { label: "Active Deals", value: String(summary?.totalDeals ?? "--"), icon: FileText, href: "/deals" },
-      { label: "Avg Margin", value: summary ? `${summary.averageMargin}%` : "--", icon: TrendingUp },
-      { label: "Total Pipeline", value: summary ? formatCurrency(summary.totalPipeline) : "--", icon: DollarSign },
+      { label: "Avg Margin", value: summary ? `${summary.averageMargin}%` : "--", icon: TrendingUp, valueClass: "text-emerald-600" },
+      { label: "Pipeline Value", value: summary ? formatCurrency(summary.totalPipeline) : "--", icon: DollarSign },
       { label: "Rate Compliance", value: "98%", icon: ShieldCheck, href: "/admin/rate-cards" },
     ],
     fin: [
-      { label: "Total Pipeline", value: summary ? formatCurrency(summary.totalPipeline) : "--", icon: DollarSign, href: "/deals" },
-      { label: "Avg Margin", value: summary ? `${summary.averageMargin}%` : "--", icon: TrendingUp, href: "/deals" },
+      { label: "Pipeline Value", value: summary ? formatCurrency(summary.totalPipeline) : "--", icon: DollarSign, href: "/deals" },
+      { label: "Avg Margin", value: summary ? `${summary.averageMargin}%` : "--", icon: TrendingUp, href: "/deals", valueClass: "text-emerald-600" },
       { label: "Active Deals", value: String(summary?.totalDeals ?? "--"), icon: FileText, href: "/deals" },
-      { label: "Pending Review", value: String(summary?.pendingApprovals ?? "--"), icon: Clock, href: "/deals?status=submitted" },
+      { label: "Pending Review", value: String(summary?.pendingApprovals ?? "--"), icon: AlertCircle, href: "/deals?status=submitted" },
     ],
     qrm: [
       { label: "Active Deals", value: String(summary?.totalDeals ?? "--"), icon: FileText, href: "/deals" },
       { label: "Pending Reviews", value: String(summary?.pendingApprovals ?? "--"), icon: AlertCircle, href: "/deals?status=submitted" },
-      { label: "Avg Margin", value: summary ? `${summary.averageMargin}%` : "--", icon: TrendingUp },
-      { label: "Risk Flags", value: "2", icon: Shield, href: "/deals" },
+      { label: "Avg Margin", value: summary ? `${summary.averageMargin}%` : "--", icon: TrendingUp, valueClass: "text-emerald-600" },
+      { label: "Risk Flags", value: "2", icon: Shield, href: "/deals", valueClass: "text-red-600" },
     ],
     it: [
       { label: "Active Deals", value: String(summary?.totalDeals ?? "--"), icon: FileText },
       { label: "Integrations", value: "5", icon: Network },
-      { label: "System Health", value: "99.9%", icon: CheckCircle },
+      { label: "System Health", value: "99.9%", icon: CheckCircle, valueClass: "text-emerald-600" },
       { label: "API Endpoints", value: "12", icon: Layers },
     ],
   };
@@ -116,50 +171,36 @@ export function Dashboard() {
   const kpis = kpiSets[role];
 
   return (
-    <div className="p-8 max-w-7xl mx-auto">
-      <div className={`rounded-2xl p-6 mb-8 border ${accent.border} ${accent.bg}`}>
-        <div className="flex items-center justify-between">
-          <div>
-            <div className="flex items-center gap-3 mb-2">
-              <span className={`text-xs font-semibold uppercase tracking-wider px-2.5 py-1 rounded-full ${accent.badge}`}>
-                {persona?.fullTitle}
-              </span>
-            </div>
-            <h1 className="text-2xl font-bold text-foreground tracking-tight">{greeting.title}</h1>
-            <p className="text-muted-foreground text-sm mt-1 max-w-xl">{greeting.subtitle}</p>
+    <div className="p-6 max-w-[1600px] mx-auto">
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <div className="flex items-center gap-3 mb-1">
+            <span className={`text-xs font-semibold uppercase tracking-wider px-2.5 py-1 rounded-full ${accent.badge}`}>
+              {persona?.fullTitle}
+            </span>
           </div>
-          <div className="hidden md:flex items-center gap-3">
-            {hasPermission("createDeals") && (
-              <Link href="/deals/new">
-                <button className="btn-primary">
-                  <FileText className="w-4 h-4" />
-                  New Deal
-                </button>
-              </Link>
-            )}
-          </div>
+          <h1 className="text-2xl font-bold text-foreground tracking-tight">{greeting.title}</h1>
+          <p className="text-muted-foreground text-sm mt-1 max-w-2xl">{greeting.subtitle}</p>
         </div>
+        {hasPermission("createDeals") && (
+          <Link href="/deals/new">
+            <button className="btn-primary">
+              <FileText className="w-4 h-4" />
+              New Deal
+            </button>
+          </Link>
+        )}
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         {kpis.map((kpi) => {
           const content = (
             <div className={`card p-5 h-full flex flex-col transition-all ${kpi.href ? "hover:shadow-md hover:border-primary/30 cursor-pointer" : ""}`}>
               <div className="flex items-center justify-between mb-3">
-                <span className="text-sm text-muted-foreground font-medium">{kpi.label}</span>
-                <kpi.icon className={`w-5 h-5 ${accent.text}`} />
+                <span className="text-xs text-muted-foreground font-medium">{kpi.label}</span>
+                <kpi.icon className={`w-4 h-4 ${accent.text}`} />
               </div>
-              <p className="text-2xl font-bold text-foreground">{kpi.value}</p>
-              <div className="flex items-center gap-1 mt-auto pt-2">
-                {kpi.href ? (
-                  <>
-                    <span className={`text-xs font-medium ${accent.text}`}>View details</span>
-                    <ArrowRight className={`w-3 h-3 ${accent.text}`} />
-                  </>
-                ) : (
-                  <span className="text-xs text-transparent select-none">-</span>
-                )}
-              </div>
+              <p className={`text-2xl font-bold ${kpi.valueClass || "text-foreground"}`}>{kpi.value}</p>
             </div>
           );
           return kpi.href ? (
@@ -170,90 +211,149 @@ export function Dashboard() {
         })}
       </div>
 
-      <div className="mb-8">
-        <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">Quick Actions</h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {actions.map((action) => (
-            <Link key={action.label} href={action.href}>
-              <div className={`card p-5 hover:shadow-md transition-all cursor-pointer group border-l-4 ${accent.border}`}>
-                <div className="flex items-start gap-4">
-                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${accent.bg}`}>
-                    <action.icon className={`w-5 h-5 ${accent.text}`} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-foreground text-sm group-hover:text-primary transition-colors">{action.label}</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">{action.description}</p>
-                  </div>
-                  <ArrowRight className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors mt-1 shrink-0" />
-                </div>
-              </div>
-            </Link>
-          ))}
-        </div>
-      </div>
-
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Left: Deals list with search + filter */}
         {hasPermission("viewDeals") && (
           <div className="lg:col-span-2 card">
-            <div className="px-6 py-4 border-b border-border flex items-center justify-between">
-              <h2 className="font-semibold text-foreground">Recent Deals</h2>
-              <Link href="/deals">
-                <span className="text-sm text-primary font-medium hover:underline cursor-pointer flex items-center gap-1">
-                  View All <ArrowRight className="w-3.5 h-3.5" />
-                </span>
-              </Link>
+            <div className="px-5 py-3 border-b border-border flex items-center gap-3">
+              <div className="flex-1 relative">
+                <Search className="w-4 h-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  placeholder="Search deals..."
+                  className="w-full pl-9 pr-3 py-2 text-sm rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-muted-foreground font-medium whitespace-nowrap">Status:</span>
+                <select
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                  className="text-sm py-2 pl-3 pr-8 rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary cursor-pointer"
+                >
+                  {STATUS_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>{o.label}</option>
+                  ))}
+                </select>
+              </div>
             </div>
-            <div className="divide-y divide-border">
-              {deals?.slice(0, 5).map((deal: any) => (
+            <div className="divide-y divide-border max-h-[640px] overflow-y-auto">
+              {filteredDeals.map((deal: any) => (
                 <Link key={deal.id} href={`/deals/${deal.id}`}>
-                  <div className="px-6 py-4 hover:bg-muted/50 transition-colors cursor-pointer">
-                    <div className="flex items-center justify-between">
+                  <div className="px-5 py-4 hover:bg-muted/50 transition-colors cursor-pointer">
+                    <div className="flex items-start justify-between gap-4">
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-3">
-                          <p className="font-medium text-foreground text-sm truncate">{deal.title}</p>
+                        <p className="font-semibold text-foreground text-sm">{deal.client?.name || deal.title}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5 truncate">
+                          {deal.serviceLine || "—"} • {deal.dealType || "New"} • {deal.title}
+                        </p>
+                        <div className="flex items-center gap-2 mt-2 flex-wrap">
                           <span className={`badge ${getStatusColor(deal.status)}`}>{getStatusLabel(deal.status)}</span>
-                        </div>
-                        <div className="flex items-center gap-4 mt-1">
-                          <span className="text-xs text-muted-foreground">{deal.dealNumber}</span>
-                          <span className="text-xs text-muted-foreground">{deal.client?.name}</span>
-                          <span className="text-xs text-muted-foreground">{deal.serviceLine}</span>
+                          {deal.marginPercent && parseFloat(deal.marginPercent) > 0 && (
+                            <span className={`badge ${parseFloat(deal.marginPercent) < 25 ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700"}`}>
+                              {formatPercent(deal.marginPercent)} margin
+                            </span>
+                          )}
                         </div>
                       </div>
-                      <div className="text-right ml-4">
+                      <div className="text-right shrink-0">
                         <p className="font-semibold text-foreground text-sm">{formatCurrency(deal.totalFee || 0)}</p>
-                        <p className="text-xs text-muted-foreground">{formatPercent(deal.marginPercent || 0)} margin</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">{deal.dealNumber}</p>
                       </div>
                     </div>
                   </div>
                 </Link>
               ))}
-              {(!deals || deals.length === 0) && (
-                <div className="px-6 py-12 text-center text-muted-foreground text-sm">No deals yet.</div>
+              {filteredDeals.length === 0 && (
+                <div className="px-6 py-12 text-center text-muted-foreground text-sm">
+                  {searchTerm || statusFilter !== "all" ? "No deals match your filters." : "No deals yet."}
+                </div>
               )}
             </div>
           </div>
         )}
 
-        <div className={hasPermission("viewDeals") ? "" : "lg:col-span-3"}>
+        {/* Right: AI Insights + Chat */}
+        <div className="flex flex-col gap-6">
           <div className="card">
-            <div className="px-6 py-4 border-b border-border">
-              <h2 className="font-semibold text-foreground flex items-center gap-2">
-                <Activity className="w-4 h-4 text-muted-foreground" />
-                Recent Activity
+            <div className="px-5 py-3 border-b border-border flex items-center justify-between">
+              <h2 className="font-semibold text-foreground flex items-center gap-2 text-sm">
+                <Sparkles className="w-4 h-4 text-primary" />
+                AI Insights
               </h2>
+              <button
+                onClick={() => refetchInsights()}
+                className="text-muted-foreground hover:text-foreground transition-colors"
+                title="Refresh"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${insightsLoading ? "animate-spin" : ""}`} />
+              </button>
             </div>
-            <div className="divide-y divide-border max-h-96 overflow-y-auto">
-              {activity?.slice(0, 8).map((item: any) => (
-                <div key={item.id} className="px-6 py-3">
-                  <p className="text-sm text-foreground">{item.description}</p>
-                  <div className="flex items-center gap-2 mt-1">
-                    <span className="text-xs text-muted-foreground">{item.userName}</span>
-                    <span className="text-xs text-muted-foreground">
-                      {item.createdAt ? new Date(item.createdAt).toLocaleDateString() : ""}
-                    </span>
+            <div className="p-4 space-y-3">
+              {insightsLoading && (
+                <div className="text-xs text-muted-foreground text-center py-6">Loading insights...</div>
+              )}
+              {insightsData?.insights.map((ins, i) => (
+                <InsightCard key={i} insight={ins} />
+              ))}
+            </div>
+          </div>
+
+          <div className="card flex flex-col">
+            <div className="px-5 py-3 border-b border-border bg-stone-900 rounded-t-xl">
+              <h2 className="font-semibold text-white flex items-center gap-2 text-sm">
+                <Bot className="w-4 h-4 text-primary" />
+                Ask DealPad AI
+              </h2>
+              <p className="text-[11px] text-stone-400 mt-0.5">Answers scoped to {persona?.fullTitle} permissions</p>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4 space-y-3 max-h-80 min-h-[220px]">
+              {chatLog.map((m, i) => (
+                <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
+                  <div className={`rounded-2xl px-3 py-2 text-xs max-w-[85%] ${
+                    m.role === "user"
+                      ? "bg-primary text-white"
+                      : m.restricted
+                        ? "bg-red-50 border border-red-200 text-red-900"
+                        : "bg-muted text-foreground"
+                  }`}>
+                    {m.restricted && (
+                      <div className="flex items-center gap-1 mb-1 text-red-600">
+                        <Lock className="w-3 h-3" />
+                        <span className="text-[10px] font-semibold uppercase tracking-wide">Access Restricted</span>
+                      </div>
+                    )}
+                    <p className="whitespace-pre-wrap leading-relaxed">{m.content}</p>
                   </div>
                 </div>
               ))}
+              {chat.isPending && (
+                <div className="flex justify-start">
+                  <div className="bg-muted rounded-2xl px-3 py-2 text-xs text-muted-foreground">Thinking...</div>
+                </div>
+              )}
+              <div ref={chatEndRef} />
+            </div>
+            <div className="p-3 border-t border-border flex items-center gap-2">
+              <input
+                type="text"
+                value={chatInput}
+                onChange={(e) => setChatInput(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && sendChat()}
+                placeholder="Ask a question..."
+                disabled={chat.isPending}
+                className="flex-1 px-3 py-2 text-sm rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary disabled:opacity-50"
+              />
+              <button
+                onClick={sendChat}
+                disabled={chat.isPending || !chatInput.trim()}
+                className="w-9 h-9 rounded-lg bg-primary hover:bg-primary/90 text-white flex items-center justify-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+                aria-label="Send"
+              >
+                <Send className="w-4 h-4" />
+              </button>
             </div>
           </div>
         </div>
@@ -261,7 +361,10 @@ export function Dashboard() {
 
       {summary?.statusBreakdown && summary.statusBreakdown.length > 0 && hasPermission("viewDeals") && (
         <div className="mt-6 card p-6">
-          <h2 className="font-semibold text-foreground mb-4">Pipeline by Status</h2>
+          <h2 className="font-semibold text-foreground mb-4 flex items-center gap-2">
+            <BarChart3 className="w-4 h-4 text-muted-foreground" />
+            Pipeline by Status
+          </h2>
           <div className="flex items-center gap-3">
             {summary.statusBreakdown.map((s: any) => (
               <div key={s.status} className="flex-1">

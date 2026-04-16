@@ -1016,6 +1016,166 @@ export function registerRoutes(app: Express) {
     });
   });
 
+  // ========== DASHBOARD AI: INSIGHTS + CHAT (role-based) ==========
+  // Capability taxonomy mirrors AuthContext permissions. Derived from persona role.
+  // NOTE: This PoC trusts client-supplied role (matches localStorage-based auth).
+  // Production target: derive role from authenticated session / JWT middleware.
+  const ROLE_CAPABILITIES: Record<string, { can: string[]; label: string }> = {
+    pdl: { label: "Project Delivery Lead", can: ["deals", "pricing", "margins", "risk", "scope_catalog", "scenarios", "approvals"] },
+    sll: { label: "Service Line Leader",   can: ["deals", "pricing", "margins", "risk", "approvals", "scenarios"] },
+    po:  { label: "Pricing Operations",    can: ["deals", "pricing", "margins", "rate_cards", "scope_catalog"] },
+    fin: { label: "Finance / FP&A",        can: ["deals", "pricing", "margins", "scenarios"] },
+    qrm: { label: "Risk / QRM",            can: ["deals", "risk", "approvals", "compliance"] },
+    it:  { label: "IT / Data Consumer",    can: ["architecture", "integrations"] },
+  };
+
+  function buildRoleInsights(role: string, allDeals: any[], pendingApprovals: number, avgMargin: number) {
+    const highRisk = allDeals.filter(d => parseFloat(d.marginPercent || "0") < 25 && parseFloat(d.marginPercent || "0") > 0);
+    const topPipeline = allDeals.reduce((sum, d) => sum + parseFloat(d.totalFee || "0"), 0);
+    const renewalCount = allDeals.filter(d => d.dealType === "renewal").length;
+
+    const base: Record<string, { type: string; title: string; body: string; cta?: string; href?: string }[]> = {
+      pdl: [
+        { type: "suggestion", title: "AI Suggestion", body: `Your pipeline totals $${(topPipeline/1000).toFixed(0)}K across ${allDeals.length} deals. Review any deal tracking below your 25% margin floor.`, cta: "View deals", href: "/deals" },
+        { type: "alert", title: "Margin Alert", body: `${highRisk.length} active deal(s) sit below the 25% margin threshold. Run Margin Advisor to identify role-mix shifts.`, cta: "Open deals", href: "/deals" },
+        { type: "info", title: "Portfolio Margin", body: `Average margin across your portfolio is ${avgMargin.toFixed(1)}% (illustrative benchmark: 31%).`, cta: "Analytics", href: "/analytics" },
+      ],
+      sll: [
+        { type: "alert", title: "Pending Approvals", body: `${pendingApprovals} deal(s) awaiting your review. Oldest submission may be aging.`, cta: "Review now", href: "/deals?status=submitted" },
+        { type: "suggestion", title: "Margin Watch", body: `${highRisk.length} deal(s) tracking below 25% margin. Consider requesting rework before approval.`, cta: "View deals", href: "/deals" },
+        { type: "info", title: "Service Line Health", body: `Pipeline-weighted margin is ${avgMargin.toFixed(1)}%. Your service line is ${avgMargin >= 30 ? "on target" : "below target"}.` },
+      ],
+      po: [
+        { type: "suggestion", title: "Rate Card Review", body: `${renewalCount} renewal deal(s) in pipeline. Evaluate rate uplift opportunities against your latest market survey.`, cta: "Manage rates", href: "/admin/rate-cards" },
+        { type: "info", title: "Scope Catalog", body: `Review scope catalog usage to identify underutilized templates.`, cta: "Open catalog", href: "/admin/scope-catalog" },
+        { type: "alert", title: "Pricing Governance", body: `Check for deals with off-rate-card line items. Enforce standards across ${allDeals.length} active deals.`, cta: "View deals", href: "/deals" },
+      ],
+      fin: [
+        { type: "info", title: "Portfolio Margin", body: `Weighted average margin is ${avgMargin.toFixed(1)}%. ${highRisk.length} deal(s) drag below your target.`, cta: "Analytics", href: "/analytics" },
+        { type: "alert", title: "Revenue at Risk", body: `${highRisk.length} low-margin deal(s) represent variance risk. Validate scenarios and assumptions.`, cta: "View deals", href: "/deals" },
+        { type: "suggestion", title: "Scenario Mix", body: `Premium scenarios typically lift margin. Encourage PDLs to present Premium options alongside Standard.` },
+      ],
+      qrm: [
+        { type: "alert", title: "Risk Flags", body: `${highRisk.length} deal(s) with compressed margins may indicate scope risk. Review AI Risk Summaries.`, cta: "Review deals", href: "/deals" },
+        { type: "info", title: "Approval Pipeline", body: `${pendingApprovals} deal(s) in approval queue. Ensure risk summaries are complete before sign-off.`, cta: "Open queue", href: "/deals?status=submitted" },
+        { type: "suggestion", title: "Compliance Check", body: `Confirm all submitted deals include assumptions and change-order readiness.` },
+      ],
+      it: [
+        { type: "info", title: "System Health", body: `All integrations nominal. Review the Architecture Hub for active endpoints and data flows.`, cta: "Architecture", href: "/architecture" },
+        { type: "suggestion", title: "Integration Map", body: `Explore integration points and upstream/downstream dependencies.`, cta: "Open hub", href: "/architecture" },
+        { type: "alert", title: "Data Access", body: `Your role is scoped to infrastructure and architecture views. Deal financials are not accessible.` },
+      ],
+    };
+    return base[role] || base.pdl;
+  }
+
+  app.get("/api/ai/dashboard-insights", async (req: Request, res: Response) => {
+    const role = String(req.query.role || "pdl").toLowerCase();
+    const allDeals = await db.select().from(deals);
+    const pendingApprovals = allDeals.filter(d => d.status === "submitted").length;
+    const margins = allDeals.map(d => parseFloat(d.marginPercent || "0")).filter(m => m > 0);
+    const avgMargin = margins.length ? margins.reduce((a, b) => a + b, 0) / margins.length : 0;
+    res.json({
+      role,
+      capability: ROLE_CAPABILITIES[role]?.label || role,
+      insights: buildRoleInsights(role, allDeals, pendingApprovals, avgMargin),
+    });
+  });
+
+  app.post("/api/ai/dashboard-chat", async (req: Request, res: Response) => {
+    const { message, role } = req.body || {};
+    if (!message) return res.status(400).json({ error: "message is required" });
+    const r = String(role || "pdl").toLowerCase();
+    const caps = ROLE_CAPABILITIES[r] || ROLE_CAPABILITIES.pdl;
+    const msg = String(message).toLowerCase();
+
+    const allDeals = await db.select().from(deals);
+    const allClients = await db.select().from(clients);
+    const clientMap = new Map(allClients.map(c => [c.id, c]));
+    const pendingApprovals = allDeals.filter(d => d.status === "submitted").length;
+    const margins = allDeals.map(d => parseFloat(d.marginPercent || "0")).filter(m => m > 0);
+    const avgMargin = margins.length ? margins.reduce((a, b) => a + b, 0) / margins.length : 0;
+    const totalFee = allDeals.reduce((s, d) => s + parseFloat(d.totalFee || "0"), 0);
+
+    const denies = (topic: string) => !caps.can.includes(topic);
+
+    const topics: { keys: string[]; need: string; answer: () => string }[] = [
+      {
+        keys: ["pipeline", "total value", "total deals"],
+        need: "deals",
+        answer: () => `Current pipeline: $${(totalFee/1000).toFixed(0)}K across ${allDeals.length} deals. ${pendingApprovals} awaiting approval.`,
+      },
+      {
+        keys: ["margin", "low margin", "profit", "profitability"],
+        need: "margins",
+        answer: () => {
+          const low = allDeals.filter(d => parseFloat(d.marginPercent || "0") < 25 && parseFloat(d.marginPercent || "0") > 0);
+          const names = low.slice(0, 3).map(d => {
+            const c = clientMap.get(d.clientId);
+            return `${c?.name || d.title} (${parseFloat(d.marginPercent || "0").toFixed(1)}%)`;
+          }).join(", ");
+          return `Portfolio average margin is ${avgMargin.toFixed(1)}%. ${low.length} deal(s) below 25%${names ? ": " + names : ""}. Standard BU target is 31%.`;
+        },
+      },
+      {
+        keys: ["approval", "pending", "review", "awaiting"],
+        need: "deals",
+        answer: () => `${pendingApprovals} deal(s) pending approval. ${r === "sll" ? "You are the approver — open the review queue from the sidebar." : "Only Service Line Leaders can approve deals."}`,
+      },
+      {
+        keys: ["risk", "compliance", "flag"],
+        need: "risk",
+        answer: () => {
+          const risky = allDeals.filter(d => parseFloat(d.marginPercent || "0") < 20);
+          return `Risk scan: ${risky.length} deal(s) show compressed margins indicating scope or rate risk. Review AI Risk Summaries on each deal.`;
+        },
+      },
+      {
+        keys: ["rate card", "rates", "billing rate"],
+        need: "rate_cards",
+        answer: () => "Rate cards are managed under Configuration. Current recommended uplift is 4.2% based on market averages.",
+      },
+      {
+        keys: ["scope", "catalog", "template"],
+        need: "scope_catalog",
+        answer: () => "The scope catalog defines standardized engagement templates with default hours and complexity multipliers.",
+      },
+      {
+        keys: ["scenario", "premium", "value option"],
+        need: "scenarios",
+        answer: () => "Each deal generates Standard, Premium, and Value scenarios. Premium averages +10pts margin vs Standard.",
+      },
+      {
+        keys: ["architecture", "integration", "stack", "tech"],
+        need: "architecture",
+        answer: () => "DealPad is built on React 19, Express 5, Drizzle ORM, PostgreSQL. Explore the Architecture Hub for diagrams and integration points.",
+      },
+    ];
+
+    let matched = topics.find(t => t.keys.some(k => msg.includes(k)));
+    let response: string;
+    let restricted = false;
+
+    if (matched) {
+      if (denies(matched.need)) {
+        restricted = true;
+        response = `As a ${caps.label}, you do not have access to ${matched.need.replace("_", " ")} data. This query is outside your capability scope. Contact your administrator if you believe this is incorrect.`;
+      } else {
+        response = matched.answer();
+      }
+    } else {
+      response = `I can help with topics within your role (${caps.label}): ${caps.can.join(", ").replace(/_/g, " ")}. Try asking about one of those areas.`;
+    }
+
+    res.json({
+      response,
+      role: r,
+      capability: caps.label,
+      restricted,
+      timestamp: new Date().toISOString(),
+    });
+  });
+
   // ========== CHANGE ORDERS ==========
   app.get("/api/deals/:dealId/change-orders", async (req: Request, res: Response) => {
     const dealId = parseInt(req.params.dealId);
