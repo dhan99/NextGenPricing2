@@ -100,11 +100,11 @@ export function NewDeal() {
             </div>
             <div>
               <label className="label">Start Date</label>
-              <input type="date" value={form.startDate} onChange={e => setForm({...form, startDate: e.target.value})} className="input-field mt-1" />
+              <input type="date" value={form.startDate} onChange={e => { setForm({...form, startDate: e.target.value}); e.target.blur(); }} className="input-field mt-1" />
             </div>
             <div>
               <label className="label">End Date</label>
-              <input type="date" value={form.endDate} onChange={e => setForm({...form, endDate: e.target.value})} className="input-field mt-1" />
+              <input type="date" value={form.endDate} onChange={e => { setForm({...form, endDate: e.target.value}); e.target.blur(); }} className="input-field mt-1" />
             </div>
           </div>
         </div>
