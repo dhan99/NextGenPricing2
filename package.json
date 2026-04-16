@@ -7,7 +7,7 @@
     "dev": "concurrently \"tsx server/index.ts\" \"vite\"",
     "dev:server": "tsx server/index.ts",
     "dev:client": "vite",
-    "build": "vite build",
+    "build": "vite build --outDir dist/public",
     "preview": "vite preview",
     "db:push": "drizzle-kit push"
   },
