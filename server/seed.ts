@@ -143,20 +143,20 @@ export async function seedDatabase() {
 
   await db.insert(scenarios).values([
     {
-      dealId: deal1.id, name: "Standard", description: "Balanced team composition with standard timeline",
-      scenarioType: "standard", isRecommended: false,
+      dealId: deal1.id, name: "Option 1", description: "Balanced team composition with standard timeline",
+      scenarioType: "option_1", isRecommended: false,
       totalFee: "425000", totalCost: "310250", totalHours: "1200", marginPercent: "27.0", blendedRate: "354.17",
       aiReasoning: "Standard delivery model with balanced senior-to-junior ratio. Meets minimum margin requirements.",
     },
     {
-      dealId: deal1.id, name: "Premium Service", description: "Senior-heavy team with accelerated timeline",
-      scenarioType: "premium", isRecommended: true,
+      dealId: deal1.id, name: "Option 2", description: "Senior-heavy team with accelerated timeline",
+      scenarioType: "option_2", isRecommended: true,
       totalFee: "495000", totalCost: "346500", totalHours: "1100", marginPercent: "30.0", blendedRate: "450.00",
       aiReasoning: "Recommended based on client history of selecting senior-heavy teams. Higher margin compensates for reduced hours through experienced delivery.",
     },
     {
-      dealId: deal1.id, name: "Value Delivery", description: "Cost-optimized with extended timeline",
-      scenarioType: "value", isRecommended: false,
+      dealId: deal1.id, name: "Option 3", description: "Cost-optimized with extended timeline",
+      scenarioType: "option_3", isRecommended: false,
       totalFee: "365000", totalCost: "255500", totalHours: "1400", marginPercent: "30.0", blendedRate: "260.71",
       aiReasoning: "Budget-conscious option leveraging more junior resources with extended timeline. Higher total hours but lower blended rate.",
     },

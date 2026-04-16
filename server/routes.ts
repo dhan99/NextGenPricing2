@@ -502,24 +502,24 @@ export function registerRoutes(app: Express) {
 
         await db.insert(scenarios).values([
           {
-            dealId, name: "Standard", description: "Balanced team composition with standard timeline",
-            scenarioType: "standard", isRecommended: false,
+            dealId, name: "Option 1", description: "Balanced team composition with standard timeline",
+            scenarioType: "option_1", isRecommended: false,
             totalFee: String(Math.round(fee)), totalCost: String(Math.round(cost)),
             totalHours: String(Math.round(hours)), marginPercent: String(stdMargin.toFixed(1)),
             blendedRate: hours > 0 ? String((fee / hours).toFixed(2)) : "0",
             aiReasoning: `Standard delivery model maintaining ${stdMargin.toFixed(0)}% margin with balanced senior-to-junior ratio across ${Math.round(hours)} hours. Meets baseline requirements with predictable delivery timeline.`,
           },
           {
-            dealId, name: "Premium Service", description: "Senior-heavy team with accelerated timeline",
-            scenarioType: "premium", isRecommended: true,
+            dealId, name: "Option 2", description: "Senior-heavy team with accelerated timeline",
+            scenarioType: "option_2", isRecommended: true,
             totalFee: String(premFee), totalCost: String(premCost),
             totalHours: String(premHours), marginPercent: String(premMargin.toFixed(1)),
             blendedRate: premHours > 0 ? String((premFee / premHours).toFixed(2)) : "0",
             aiReasoning: `Recommended option with ${premMargin.toFixed(0)}% margin. Senior-heavy staffing reduces total hours to ${premHours} while increasing fee to ${premFee.toLocaleString()}. Higher blended rate compensated by faster, more experienced delivery.`,
           },
           {
-            dealId, name: "Value Delivery", description: "Cost-optimized with extended timeline",
-            scenarioType: "value", isRecommended: false,
+            dealId, name: "Option 3", description: "Cost-optimized with extended timeline",
+            scenarioType: "option_3", isRecommended: false,
             totalFee: String(valFee), totalCost: String(valCost),
             totalHours: String(valHours), marginPercent: String(valMargin.toFixed(1)),
             blendedRate: valHours > 0 ? String((valFee / valHours).toFixed(2)) : "0",

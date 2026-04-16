@@ -840,7 +840,7 @@ function ScenariosStep({ deal }: { deal: any }) {
               <div className="p-6">
                 <div className="flex items-start justify-between mb-1">
                   <h3 className="text-lg font-bold text-foreground">{scenario.name}</h3>
-                  {scenario.scenarioType === "premium" && !isSelected && (
+                  {scenario.scenarioType === "option_2" && !isSelected && (
                     <span className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-primary/10 text-primary">AI Pick</span>
                   )}
                 </div>

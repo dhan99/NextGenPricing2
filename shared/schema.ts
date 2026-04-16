@@ -110,7 +110,7 @@ export const scenarios = pgTable("scenarios", {
   dealId: integer("deal_id").references(() => deals.id).notNull(),
   name: text("name").notNull(),
   description: text("description"),
-  scenarioType: text("scenario_type").notNull().default("standard"),
+  scenarioType: text("scenario_type").notNull().default("option_1"),
   isRecommended: boolean("is_recommended").default(false),
   totalFee: decimal("total_fee", { precision: 12, scale: 2 }).default("0"),
   totalCost: decimal("total_cost", { precision: 12, scale: 2 }).default("0"),
