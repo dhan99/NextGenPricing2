@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRoute } from "wouter";
+import { useQueryClient } from "@tanstack/react-query";
 import { useDeal, useUpdateDeal, useScopeCatalog, useDealScopeItems, useAddScopeItem, useRemoveScopeItem, useRoles, useDealPricing, useUpdatePricingLine, useDealScenarios, useDealApprovals, useSubmitApproval, useDealPrompts, useUpdatePrompt, useCloneDeal, useAIDealSimilarity, useAIEffortEstimation, useAIMarginAdvisor, useAIScenarioRecommendation, useAIRiskSummary } from "@/hooks/use-api";
 import { formatCurrency, formatPercent, formatNumber, getStatusColor, getStatusLabel, cn } from "@/lib/utils";
 import { ArrowLeft, Check, ChevronRight, Sparkles, AlertTriangle, TrendingUp, Target, FileText, Shield, CheckCircle, XCircle, Clock, Loader2, Plus, Trash2, Lightbulb, Copy, RefreshCw, Pencil, Save } from "lucide-react";
@@ -25,6 +26,17 @@ export function DealDetail() {
   const { hasPermission, persona } = useAuth();
   const cloneDeal = useCloneDeal();
   const [, navigate] = useLocation();
+  const qc = useQueryClient();
+
+  const navigateToStep = useCallback((step: number) => {
+    qc.invalidateQueries({ queryKey: ["deal", dealId] });
+    qc.invalidateQueries({ queryKey: ["deal-scope", dealId] });
+    qc.invalidateQueries({ queryKey: ["deal-prompts", dealId] });
+    qc.invalidateQueries({ queryKey: ["deal-pricing", dealId] });
+    qc.invalidateQueries({ queryKey: ["deal-scenarios", dealId] });
+    qc.invalidateQueries({ queryKey: ["deal-approvals", dealId] });
+    setCurrentStep(step);
+  }, [dealId, qc]);
 
   useEffect(() => {
     if (deal?.currentStep) setCurrentStep(deal.currentStep);
@@ -82,7 +94,7 @@ export function DealDetail() {
           {STEPS.map((step, i) => (
             <button
               key={step.num}
-              onClick={() => setCurrentStep(step.num)}
+              onClick={() => navigateToStep(step.num)}
               className={cn(
                 "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-all",
                 currentStep === step.num
@@ -112,7 +124,7 @@ export function DealDetail() {
 
         <div className="flex items-center justify-between mt-8 pt-6 border-t border-border">
           <button
-            onClick={() => setCurrentStep(Math.max(1, currentStep - 1))}
+            onClick={() => navigateToStep(Math.max(1, currentStep - 1))}
             disabled={currentStep === 1}
             className={cn(
               "flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-medium transition-all",
@@ -131,7 +143,7 @@ export function DealDetail() {
 
           {currentStep < STEPS.length ? (
             <button
-              onClick={() => setCurrentStep(Math.min(STEPS.length, currentStep + 1))}
+              onClick={() => navigateToStep(Math.min(STEPS.length, currentStep + 1))}
               className="flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-all"
             >
               {STEPS[currentStep].label}
