@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRoute } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
-import { useDeal, useUpdateDeal, useScopeCatalog, useDealScopeItems, useAddScopeItem, useRemoveScopeItem, useRoles, useDealPricing, useUpdatePricingLine, useDealScenarios, useSelectScenario, useDealApprovals, useSubmitApproval, useDealPrompts, useUpdatePrompt, useCloneDeal, useAIDealSimilarity, useAIEffortEstimation, useAIMarginAdvisor, useAIScenarioRecommendation, useAIRiskSummary } from "@/hooks/use-api";
+import { useDeal, useUpdateDeal, useScopeCatalog, useDealScopeItems, useAddScopeItem, useRemoveScopeItem, useRoles, useDealPricing, useUpdatePricingLine, useDealScenarios, useSelectScenario, useDealApprovals, useSubmitApproval, useUpdateApproval, useDealPrompts, useUpdatePrompt, useCloneDeal, useAIDealSimilarity, useAIEffortEstimation, useAIMarginAdvisor, useAIScenarioRecommendation, useAIRiskSummary } from "@/hooks/use-api";
 import { formatCurrency, formatPercent, formatNumber, getStatusColor, getStatusLabel, cn } from "@/lib/utils";
 import { ArrowLeft, Check, ChevronRight, Sparkles, AlertTriangle, TrendingUp, Target, FileText, Shield, CheckCircle, XCircle, Clock, Loader2, Plus, Trash2, Lightbulb, Copy, RefreshCw, Pencil, Save } from "lucide-react";
 import { Link, useLocation } from "wouter";
@@ -996,6 +996,21 @@ function ReviewStep({ deal }: { deal: any }) {
 function ApprovalStep({ deal }: { deal: any }) {
   const { data: approvals } = useDealApprovals(deal.id);
   const submitApproval = useSubmitApproval();
+  const updateApproval = useUpdateApproval();
+  const { hasPermission, persona } = useAuth();
+  const [reviewComment, setReviewComment] = useState("");
+  const canApprove = hasPermission("approveDeals");
+
+  const handleDecision = (approvalId: number, status: "approved" | "rejected") => {
+    updateApproval.mutate({
+      id: approvalId,
+      data: {
+        status,
+        comments: reviewComment || `${status === "approved" ? "Approved" : "Rejected"} by ${persona?.name || "Reviewer"}`,
+      },
+    });
+    setReviewComment("");
+  };
 
   return (
     <div className="max-w-3xl mx-auto space-y-6">
@@ -1005,9 +1020,11 @@ function ApprovalStep({ deal }: { deal: any }) {
           <div className="text-center py-12">
             <Clock className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
             <p className="text-sm text-muted-foreground">No approval requests submitted yet.</p>
-            <button className="btn-primary mt-4" onClick={() => {
-              submitApproval.mutate({ dealId: deal.id, data: { approverName: "Practice Leader", approverRole: "Service Line Lead", status: "pending", notes: "Auto-submitted for review" } });
-            }}>Submit for Approval</button>
+            {hasPermission("editDeals") && (
+              <button className="btn-primary mt-4" onClick={() => {
+                submitApproval.mutate({ dealId: deal.id, data: { approverName: "Practice Leader", approverRole: "Service Line Lead", status: "pending", notes: "Auto-submitted for review", submittedBy: persona?.name } });
+              }}>Submit for Approval</button>
+            )}
           </div>
         ) : (
           <div className="space-y-4">
@@ -1048,9 +1065,39 @@ function ApprovalStep({ deal }: { deal: any }) {
                 )}
 
                 {approval.comments && (
-                  <div className="bg-muted/50 rounded-lg p-3">
+                  <div className="bg-muted/50 rounded-lg p-3 mb-3">
                     <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Comments</p>
                     <p className="text-sm text-foreground">{approval.comments}</p>
+                  </div>
+                )}
+
+                {canApprove && approval.status === "pending" && (
+                  <div className="mt-4 pt-4 border-t border-border">
+                    <label className="label mb-2">Review Comments (optional)</label>
+                    <textarea
+                      value={reviewComment}
+                      onChange={(e) => setReviewComment(e.target.value)}
+                      className="input-field min-h-[80px] resize-y mb-3"
+                      placeholder="Add comments about your decision..."
+                    />
+                    <div className="flex items-center gap-3">
+                      <button
+                        onClick={() => handleDecision(approval.id, "approved")}
+                        disabled={updateApproval.isPending}
+                        className="flex items-center gap-2 px-5 py-2.5 rounded-lg text-white text-sm font-medium bg-emerald-600 hover:bg-emerald-700 transition-colors"
+                      >
+                        <CheckCircle className="w-4 h-4" />
+                        Approve Deal
+                      </button>
+                      <button
+                        onClick={() => handleDecision(approval.id, "rejected")}
+                        disabled={updateApproval.isPending}
+                        className="flex items-center gap-2 px-5 py-2.5 rounded-lg text-white text-sm font-medium bg-red-600 hover:bg-red-700 transition-colors"
+                      >
+                        <XCircle className="w-4 h-4" />
+                        Reject Deal
+                      </button>
+                    </div>
                   </div>
                 )}
 
