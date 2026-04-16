@@ -302,6 +302,54 @@ export function registerRoutes(app: Express) {
     res.status(201).json(result);
   });
 
+  app.post("/api/deals/:id/reset-pricing", async (req: Request, res: Response) => {
+    const dealId = parseInt(req.params.id);
+    const deal = await db.query.deals.findFirst({ where: eq(deals.id, dealId) });
+    if (!deal) return res.status(404).json({ error: "Deal not found" });
+    if (!deal.parentDealId) return res.status(400).json({ error: "Deal has no parent to reset from" });
+
+    const parentLines = await db.select().from(pricingLines).where(eq(pricingLines.dealId, deal.parentDealId));
+    const currentLines = await db.select().from(pricingLines).where(eq(pricingLines.dealId, dealId));
+
+    // Match lines by roleId; fall back to order
+    const parentByRole = new Map(parentLines.map((p) => [p.roleId, p]));
+    for (const line of currentLines) {
+      const src = parentByRole.get(line.roleId) || parentLines[currentLines.indexOf(line)];
+      if (!src) continue;
+      const rate = parseFloat(src.rate);
+      const costRate = parseFloat(src.costRate);
+      const hours = parseFloat(line.hours || "0");
+      await db.update(pricingLines).set({
+        rate: rate.toFixed(2),
+        costRate: costRate.toFixed(2),
+        fee: (hours * rate).toFixed(2),
+        cost: (hours * costRate).toFixed(2),
+        margin: (hours * (rate - costRate)).toFixed(2),
+      }).where(eq(pricingLines.id, line.id));
+    }
+
+    const updated = await db.select().from(pricingLines).where(eq(pricingLines.dealId, dealId));
+    const calcFee = updated.reduce((s, l) => s + parseFloat(l.fee || "0"), 0);
+    const calcCost = updated.reduce((s, l) => s + parseFloat(l.cost || "0"), 0);
+    const calcHours = updated.reduce((s, l) => s + parseFloat(l.hours || "0"), 0);
+    await db.update(deals).set({
+      totalFee: String(calcFee),
+      totalCost: String(calcCost),
+      totalHours: String(calcHours),
+      marginPercent: calcFee > 0 ? String(((calcFee - calcCost) / calcFee * 100).toFixed(1)) : "0",
+      blendedRate: calcHours > 0 ? String((calcFee / calcHours).toFixed(2)) : "0",
+    }).where(eq(deals.id, dealId));
+
+    await db.insert(activityLog).values({
+      dealId,
+      action: "pricing_reset",
+      description: `Pricing reset to prior-year baseline`,
+      userName: req.body.userName || "System",
+    });
+
+    res.json({ success: true, totalFee: calcFee, totalCost: calcCost, totalHours: calcHours });
+  });
+
   app.post("/api/deals/:id/rate-adjust", async (req: Request, res: Response) => {
     const dealId = parseInt(req.params.id);
     const factor = parseFloat(req.body.factor);

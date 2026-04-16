@@ -5,7 +5,7 @@ import {
   Sparkles, Loader2, ArrowRight, Zap,
 } from "lucide-react";
 import {
-  useDeal, useDealScopeItems, useDealPricing, useRateAdjust, useSubmitApproval,
+  useDeal, useDealScopeItems, useDealPricing, useRateAdjust, useResetPricing, useSubmitApproval,
 } from "@/hooks/use-api";
 import { useAuth } from "@/context/AuthContext";
 
@@ -53,6 +53,7 @@ export function RenewalLeadsheet() {
   const { data: pyPricing } = useDealPricing(parentId);
 
   const rateAdjust = useRateAdjust();
+  const resetPricing = useResetPricing();
   const submitApproval = useSubmitApproval();
   const [customPct, setCustomPct] = useState("");
   const [appliedPct, setAppliedPct] = useState<number | null>(null);
@@ -158,9 +159,7 @@ export function RenewalLeadsheet() {
   };
 
   const resetAdjustments = async () => {
-    if (cumulativeFactor === 1) return;
-    const inverse = 1 / cumulativeFactor;
-    await rateAdjust.mutateAsync({ dealId, factor: inverse, userName: persona?.name });
+    await resetPricing.mutateAsync({ dealId, userName: persona?.name });
     setCumulativeFactor(1);
     setAppliedPct(null);
     setCustomPct("");
@@ -285,7 +284,7 @@ export function RenewalLeadsheet() {
             <button
               type="button"
               onClick={resetAdjustments}
-              disabled={cumulativeFactor === 1 || rateAdjust.isPending}
+              disabled={rateAdjust.isPending || resetPricing.isPending}
               className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-md border border-stone-300 text-foreground hover:bg-stone-50 disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <RefreshCw className="w-3.5 h-3.5" />

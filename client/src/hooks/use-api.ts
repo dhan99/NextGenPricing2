@@ -161,6 +161,19 @@ export function useCloneDeal() {
   });
 }
 
+export function useResetPricing() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ dealId, userName }: { dealId: number; userName?: string }) =>
+      fetchApi(`/api/deals/${dealId}/reset-pricing`, { method: "POST", body: JSON.stringify({ userName }) }),
+    onSuccess: (_, { dealId }) => {
+      qc.invalidateQueries({ queryKey: ["deal", dealId] });
+      qc.invalidateQueries({ queryKey: ["deal-pricing", dealId] });
+      qc.invalidateQueries({ queryKey: ["deals"] });
+    },
+  });
+}
+
 export function useRateAdjust() {
   const qc = useQueryClient();
   return useMutation({
