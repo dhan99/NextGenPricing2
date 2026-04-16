@@ -34,10 +34,12 @@ const ROLE_ACTIONS: Record<PersonaRole, QuickAction[]> = {
   pdl: [
     { label: "New Deal", href: "/deals/new", icon: FileText, description: "Start a new pricing engagement" },
     { label: "My Deals", href: "/deals", icon: Layers, description: "View and manage all your deals" },
+    { label: "Dashboard", href: "/", icon: BarChart3, description: "Return to overview metrics" },
   ],
   sll: [
     { label: "Review Deals", href: "/deals", icon: CheckCircle, description: "Deals pending your review" },
     { label: "Pipeline", href: "/deals", icon: BarChart3, description: "Service line pipeline view" },
+    { label: "Dashboard", href: "/", icon: TrendingUp, description: "Overview of key metrics" },
   ],
   po: [
     { label: "Rate Cards", href: "/admin/rate-cards", icon: DollarSign, description: "Manage billing rate cards" },
@@ -47,13 +49,17 @@ const ROLE_ACTIONS: Record<PersonaRole, QuickAction[]> = {
   fin: [
     { label: "View Deals", href: "/deals", icon: BarChart3, description: "Analyze deal margins" },
     { label: "Pipeline", href: "/deals", icon: TrendingUp, description: "Financial pipeline metrics" },
+    { label: "Dashboard", href: "/", icon: DollarSign, description: "Financial overview at a glance" },
   ],
   qrm: [
     { label: "Risk Review", href: "/deals", icon: Shield, description: "Review deal risk profiles" },
     { label: "Compliance", href: "/deals", icon: ShieldCheck, description: "Audit compliance status" },
+    { label: "Dashboard", href: "/", icon: AlertCircle, description: "Risk overview and metrics" },
   ],
   it: [
     { label: "System Status", href: "/", icon: CheckCircle, description: "View system health overview" },
+    { label: "View Deals", href: "/deals", icon: FileText, description: "Browse deal pipeline" },
+    { label: "Dashboard", href: "/", icon: Layers, description: "Platform overview" },
   ],
 };
 
