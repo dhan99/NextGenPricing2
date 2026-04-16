@@ -37,7 +37,7 @@ export function useUpdateDeal() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id, data }: { id: number; data: any }) => fetchApi(`/api/deals/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
-    onSuccess: (_, { id }) => { qc.invalidateQueries({ queryKey: ["deal", id] }); qc.invalidateQueries({ queryKey: ["deals"] }); },
+    onSuccess: (_, { id }) => { qc.invalidateQueries({ queryKey: ["deal", id] }); qc.invalidateQueries({ queryKey: ["deals"] }); qc.invalidateQueries({ queryKey: ["deal-pricing", id] }); },
   });
 }
 
@@ -53,7 +53,7 @@ export function useAddScopeItem() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ dealId, data }: { dealId: number; data: any }) => fetchApi(`/api/deals/${dealId}/scope-items`, { method: "POST", body: JSON.stringify(data) }),
-    onSuccess: (_, { dealId }) => qc.invalidateQueries({ queryKey: ["deal-scope", dealId] }),
+    onSuccess: (_, { dealId }) => { qc.invalidateQueries({ queryKey: ["deal-scope", dealId] }); qc.invalidateQueries({ queryKey: ["deal-pricing", dealId] }); qc.invalidateQueries({ queryKey: ["deal", dealId] }); },
   });
 }
 
@@ -61,7 +61,7 @@ export function useRemoveScopeItem() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ dealId, id }: { dealId: number; id: number }) => fetchApi(`/api/deals/${dealId}/scope-items/${id}`, { method: "DELETE" }),
-    onSuccess: (_, { dealId }) => qc.invalidateQueries({ queryKey: ["deal-scope", dealId] }),
+    onSuccess: (_, { dealId }) => { qc.invalidateQueries({ queryKey: ["deal-scope", dealId] }); qc.invalidateQueries({ queryKey: ["deal-pricing", dealId] }); qc.invalidateQueries({ queryKey: ["deal", dealId] }); },
   });
 }
 
@@ -122,7 +122,7 @@ export function useUpdatePrompt() {
   return useMutation({
     mutationFn: ({ dealId, promptId, answer, impactMultiplier }: { dealId: number; promptId: number; answer: string; impactMultiplier: string }) =>
       fetchApi(`/api/deals/${dealId}/prompts/${promptId}`, { method: "PATCH", body: JSON.stringify({ answer, impactMultiplier }) }),
-    onSuccess: (_, { dealId }) => { qc.invalidateQueries({ queryKey: ["deal-prompts", dealId] }); },
+    onSuccess: (_, { dealId }) => { qc.invalidateQueries({ queryKey: ["deal-prompts", dealId] }); qc.invalidateQueries({ queryKey: ["deal-pricing", dealId] }); qc.invalidateQueries({ queryKey: ["deal", dealId] }); },
   });
 }
 

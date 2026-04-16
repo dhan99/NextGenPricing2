@@ -29,6 +29,71 @@ async function createDefaultPrompts(dealId: number) {
   );
 }
 
+const ROLE_DISTRIBUTION: Record<string, number> = {
+  "Partner": 0.07, "Managing Director": 0.10, "Senior Manager": 0.17,
+  "Manager": 0.20, "Senior Consultant": 0.26, "Consultant": 0.13, "Analyst": 0.07,
+};
+
+const COMPLEXITY_MULTIPLIERS: Record<string, number> = { low: 0.8, medium: 1.0, high: 1.2, very_high: 1.5 };
+
+async function recalcPricingFromScope(dealId: number) {
+  const deal = await db.query.deals.findFirst({
+    where: eq(deals.id, dealId),
+    with: { scopeItems: { with: { scopeItem: true } }, promptResponses: true },
+  });
+  if (!deal) return;
+
+  const baseMultiplier = COMPLEXITY_MULTIPLIERS[deal.complexity || "medium"] || 1.0;
+  const promptMultiplier = (deal.promptResponses || []).reduce(
+    (m: number, p: any) => m * (parseFloat(p.impactMultiplier) || 1.0), 1.0
+  );
+  const totalMultiplier = baseMultiplier * promptMultiplier;
+
+  let totalHours: number;
+  if (deal.scopeItems && deal.scopeItems.length > 0) {
+    totalHours = deal.scopeItems.reduce((sum: number, si: any) => {
+      const baseHrs = parseFloat(si.adjustedHours || si.scopeItem?.defaultHours || "40");
+      return sum + Math.round(baseHrs * totalMultiplier);
+    }, 0);
+  } else {
+    totalHours = Math.round(200 * totalMultiplier);
+  }
+
+  const existingLines = await db.select().from(pricingLines)
+    .where(eq(pricingLines.dealId, dealId));
+
+  if (existingLines.length > 0) {
+    const allRoles = await db.select().from(roles).orderBy(roles.sortOrder);
+    const roleMap = new Map(allRoles.map(r => [r.id, r]));
+
+    for (const line of existingLines) {
+      const role = roleMap.get(line.roleId!);
+      const pct = role ? (ROLE_DISTRIBUTION[role.name] || (1 / allRoles.length)) : (1 / existingLines.length);
+      const hours = Math.max(Math.round(totalHours * pct), 1);
+      const rate = parseFloat(line.rate || "300");
+      const costRate = parseFloat(line.costRate || "150");
+      await db.update(pricingLines).set({
+        hours: String(hours),
+        fee: String(hours * rate),
+        cost: String(hours * costRate),
+        margin: String(hours * (rate - costRate)),
+      }).where(eq(pricingLines.id, line.id));
+    }
+  }
+
+  const updatedLines = await db.select().from(pricingLines).where(eq(pricingLines.dealId, dealId));
+  const calcFee = updatedLines.reduce((s, l) => s + parseFloat(l.fee || "0"), 0);
+  const calcCost = updatedLines.reduce((s, l) => s + parseFloat(l.cost || "0"), 0);
+  const calcHours = updatedLines.reduce((s, l) => s + parseFloat(l.hours || "0"), 0);
+  await db.update(deals).set({
+    totalFee: String(calcFee),
+    totalCost: String(calcCost),
+    totalHours: String(calcHours),
+    marginPercent: calcFee > 0 ? String(((calcFee - calcCost) / calcFee * 100).toFixed(1)) : "0",
+    blendedRate: calcHours > 0 ? String((calcFee / calcHours).toFixed(2)) : "0",
+  }).where(eq(deals.id, dealId));
+}
+
 export function registerRoutes(app: Express) {
 
   // ========== DASHBOARD ==========
@@ -119,11 +184,15 @@ export function registerRoutes(app: Express) {
   });
 
   app.patch("/api/deals/:id", async (req: Request, res: Response) => {
+    const dealId = parseInt(req.params.id);
     const [updated] = await db.update(deals)
       .set({ ...req.body, updatedAt: new Date() })
-      .where(eq(deals.id, parseInt(req.params.id)))
+      .where(eq(deals.id, dealId))
       .returning();
     if (!updated) return res.status(404).json({ error: "Deal not found" });
+    if (req.body.complexity) {
+      await recalcPricingFromScope(dealId);
+    }
     res.json(updated);
   });
 
@@ -242,17 +311,21 @@ export function registerRoutes(app: Express) {
   });
 
   app.post("/api/deals/:dealId/scope-items", async (req: Request, res: Response) => {
+    const dealId = parseInt(req.params.dealId);
     const [item] = await db.insert(dealScopeItems).values({
-      dealId: parseInt(req.params.dealId),
+      dealId,
       ...req.body,
     }).returning();
+    await recalcPricingFromScope(dealId);
     res.status(201).json(item);
   });
 
   app.delete("/api/deals/:dealId/scope-items/:id", async (req: Request, res: Response) => {
+    const dealId = parseInt(req.params.dealId);
     await db.delete(dealScopeItems).where(
-      and(eq(dealScopeItems.id, parseInt(req.params.id)), eq(dealScopeItems.dealId, parseInt(req.params.dealId)))
+      and(eq(dealScopeItems.id, parseInt(req.params.id)), eq(dealScopeItems.dealId, dealId))
     );
+    await recalcPricingFromScope(dealId);
     res.json({ success: true });
   });
 
@@ -450,11 +523,13 @@ export function registerRoutes(app: Express) {
   });
 
   app.patch("/api/deals/:dealId/prompts/:id", async (req: Request, res: Response) => {
+    const dealId = parseInt(req.params.dealId);
     const [updated] = await db.update(promptResponses)
       .set({ answer: req.body.answer, impactMultiplier: req.body.impactMultiplier })
       .where(eq(promptResponses.id, parseInt(req.params.id)))
       .returning();
     if (!updated) return res.status(404).json({ error: "Prompt not found" });
+    await recalcPricingFromScope(dealId);
     res.json(updated);
   });
 
