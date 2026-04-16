@@ -3,6 +3,32 @@ import { db } from "./db";
 import { clients, deals, scopeCatalog, dealScopeItems, roles, rateCards, rateCardEntries, pricingLines, scenarios, approvals, promptResponses, activityLog } from "../shared/schema";
 import { eq, desc, sql, and, count } from "drizzle-orm";
 
+const STANDARD_PROMPTS = [
+  { question: "How many geographic regions are involved?", category: "Complexity", sortOrder: 1 },
+  { question: "Are there regulatory/compliance requirements?", category: "Compliance", sortOrder: 2 },
+  { question: "What is the expected data volume?", category: "Complexity", sortOrder: 3 },
+  { question: "How many integrations are required?", category: "Integration", sortOrder: 4 },
+  { question: "Is there an existing system being replaced?", category: "Migration", sortOrder: 5 },
+  { question: "What is the client's technical maturity?", category: "Client", sortOrder: 6 },
+  { question: "Is there a hard deadline or external dependency?", category: "Timeline", sortOrder: 7 },
+];
+
+async function createDefaultPrompts(dealId: number) {
+  const existing = await db.select({ id: promptResponses.id }).from(promptResponses)
+    .where(eq(promptResponses.dealId, dealId)).limit(1);
+  if (existing.length > 0) return;
+  await db.insert(promptResponses).values(
+    STANDARD_PROMPTS.map((p) => ({
+      dealId,
+      question: p.question,
+      answer: null,
+      category: p.category,
+      impactMultiplier: "1.0",
+      sortOrder: p.sortOrder,
+    }))
+  );
+}
+
 export function registerRoutes(app: Express) {
 
   // ========== DASHBOARD ==========
@@ -79,6 +105,8 @@ export function registerRoutes(app: Express) {
       ...req.body,
       dealNumber,
     }).returning();
+
+    await createDefaultPrompts(newDeal.id);
 
     await db.insert(activityLog).values({
       dealId: newDeal.id,
@@ -157,6 +185,21 @@ export function registerRoutes(app: Express) {
           margin: pl.margin,
         }))
       );
+    }
+
+    if (source.promptResponses?.length) {
+      await db.insert(promptResponses).values(
+        source.promptResponses.map((pr: any) => ({
+          dealId: newDeal.id,
+          question: pr.question,
+          answer: isRenewal ? pr.answer : null,
+          category: pr.category,
+          impactMultiplier: isRenewal ? pr.impactMultiplier : "1.0",
+          sortOrder: pr.sortOrder,
+        }))
+      );
+    } else {
+      await createDefaultPrompts(newDeal.id);
     }
 
     const totalFee = source.pricingLines?.reduce((s: number, p: any) => s + parseFloat(p.fee || "0"), 0) || 0;
@@ -310,9 +353,19 @@ export function registerRoutes(app: Express) {
 
   // ========== PROMPT RESPONSES ==========
   app.get("/api/deals/:dealId/prompts", async (req: Request, res: Response) => {
-    const result = await db.select().from(promptResponses)
-      .where(eq(promptResponses.dealId, parseInt(req.params.dealId)))
+    const dealId = parseInt(req.params.dealId);
+    let result = await db.select().from(promptResponses)
+      .where(eq(promptResponses.dealId, dealId))
       .orderBy(promptResponses.sortOrder);
+    if (result.length === 0) {
+      const deal = await db.query.deals.findFirst({ where: eq(deals.id, dealId) });
+      if (deal) {
+        await createDefaultPrompts(dealId);
+        result = await db.select().from(promptResponses)
+          .where(eq(promptResponses.dealId, dealId))
+          .orderBy(promptResponses.sortOrder);
+      }
+    }
     res.json(result);
   });
 
