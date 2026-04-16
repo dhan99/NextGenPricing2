@@ -1,0 +1,2442 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>DealPad: Architecture &amp; Technical Decision Record</title>
+        <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+        <style>
+            :root {
+                --primary: #da720f;
+                --bg: #fafaf9;
+                --text: #1c1917;
+                --muted: #78716c;
+                --border: #e7e5e4;
+                --card-bg: #ffffff;
+                --code-bg: #f5f5f4;
+                --heading-weight: 700;
+            }
+            * {
+                margin: 0;
+                padding: 0;
+                box-sizing: border-box;
+            }
+            body {
+                font-family:
+                    "Inter",
+                    -apple-system,
+                    BlinkMacSystemFont,
+                    "Segoe UI",
+                    sans-serif;
+                background: var(--bg);
+                color: var(--text);
+                line-height: 1.7;
+                font-size: 15px;
+            }
+            .container {
+                max-width: 1100px;
+                margin: 0 auto;
+                padding: 40px 32px 80px;
+            }
+            .header {
+                border-bottom: 3px solid var(--primary);
+                padding-bottom: 28px;
+                margin-bottom: 40px;
+            }
+            .header h1 {
+                font-size: 32px;
+                font-weight: 800;
+                letter-spacing: -0.5px;
+                margin-bottom: 12px;
+            }
+            .header .meta {
+                color: var(--muted);
+                font-size: 14px;
+                line-height: 1.8;
+            }
+            .header .meta strong {
+                color: var(--text);
+            }
+
+            .toc {
+                background: var(--card-bg);
+                border: 1px solid var(--border);
+                border-radius: 12px;
+                padding: 28px 32px;
+                margin-bottom: 48px;
+            }
+            .toc h2 {
+                font-size: 18px;
+                margin-bottom: 16px;
+                color: var(--primary);
+            }
+            .toc ol {
+                columns: 2;
+                column-gap: 32px;
+                padding-left: 20px;
+            }
+            .toc li {
+                margin-bottom: 6px;
+                font-size: 14px;
+            }
+            .toc a {
+                color: var(--text);
+                text-decoration: none;
+            }
+            .toc a:hover {
+                color: var(--primary);
+            }
+
+            h2 {
+                font-size: 26px;
+                font-weight: var(--heading-weight);
+                margin-top: 56px;
+                margin-bottom: 20px;
+                padding-bottom: 10px;
+                border-bottom: 2px solid var(--border);
+                color: var(--primary);
+            }
+            h3 {
+                font-size: 20px;
+                font-weight: 650;
+                margin-top: 36px;
+                margin-bottom: 14px;
+            }
+            h4 {
+                font-size: 17px;
+                font-weight: 600;
+                margin-top: 28px;
+                margin-bottom: 10px;
+            }
+            p {
+                margin-bottom: 14px;
+            }
+            ul,
+            ol {
+                margin-bottom: 14px;
+                padding-left: 24px;
+            }
+            li {
+                margin-bottom: 4px;
+            }
+
+            table {
+                width: 100%;
+                border-collapse: collapse;
+                margin: 16px 0 24px;
+                font-size: 14px;
+            }
+            th {
+                background: #292524;
+                color: #fafaf9;
+                text-align: left;
+                padding: 10px 14px;
+                font-weight: 600;
+                font-size: 13px;
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+            }
+            th:first-child {
+                border-radius: 8px 0 0 0;
+            }
+            th:last-child {
+                border-radius: 0 8px 0 0;
+            }
+            td {
+                padding: 10px 14px;
+                border-bottom: 1px solid var(--border);
+                vertical-align: top;
+            }
+            tr:nth-child(even) td {
+                background: #fafaf9;
+            }
+            tr:hover td {
+                background: #f5f5f0;
+            }
+
+            .diagram-container {
+                background: var(--card-bg);
+                border: 1px solid var(--border);
+                border-radius: 12px;
+                padding: 28px;
+                margin: 20px 0 28px;
+                overflow-x: auto;
+            }
+            .diagram-container .mermaid {
+                display: flex;
+                justify-content: center;
+            }
+            .diagram-label {
+                font-size: 12px;
+                color: var(--muted);
+                text-align: center;
+                margin-top: 12px;
+                font-style: italic;
+            }
+
+            code {
+                background: var(--code-bg);
+                padding: 2px 6px;
+                border-radius: 4px;
+                font-size: 13px;
+                font-family: "JetBrains Mono", "Fira Code", monospace;
+            }
+            pre {
+                background: #292524;
+                color: #e7e5e4;
+                padding: 20px 24px;
+                border-radius: 10px;
+                overflow-x: auto;
+                margin: 16px 0 24px;
+                font-size: 13px;
+                line-height: 1.6;
+            }
+            pre code {
+                background: none;
+                padding: 0;
+                color: inherit;
+            }
+
+            .adr {
+                background: var(--card-bg);
+                border: 1px solid var(--border);
+                border-left: 4px solid var(--primary);
+                border-radius: 0 10px 10px 0;
+                padding: 24px 28px;
+                margin: 20px 0 28px;
+            }
+            .adr h3 {
+                margin-top: 0;
+                color: var(--primary);
+            }
+
+            .note {
+                background: #fef3c7;
+                border: 1px solid #fcd34d;
+                border-radius: 8px;
+                padding: 14px 18px;
+                margin: 16px 0;
+                font-size: 14px;
+            }
+
+            .badge {
+                display: inline-block;
+                padding: 2px 10px;
+                border-radius: 12px;
+                font-size: 12px;
+                font-weight: 600;
+            }
+            .badge-yes {
+                background: #d1fae5;
+                color: #065f46;
+            }
+            .badge-no {
+                background: #f5f5f4;
+                color: #a8a29e;
+            }
+
+            hr {
+                border: none;
+                border-top: 1px solid var(--border);
+                margin: 48px 0;
+            }
+            .footer {
+                margin-top: 60px;
+                padding-top: 24px;
+                border-top: 1px solid var(--border);
+                color: var(--muted);
+                font-size: 13px;
+                font-style: italic;
+                text-align: center;
+            }
+
+            @media print {
+                body {
+                    font-size: 12px;
+                }
+                .container {
+                    padding: 20px;
+                    max-width: 100%;
+                }
+                .diagram-container {
+                    break-inside: avoid;
+                }
+                h2 {
+                    break-before: page;
+                }
+                table {
+                    font-size: 11px;
+                }
+            }
+            @media (max-width: 768px) {
+                .container {
+                    padding: 20px 16px;
+                }
+                .toc ol {
+                    columns: 1;
+                }
+                h2 {
+                    font-size: 22px;
+                }
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <h1>DealPad: Architecture &amp; Technical Decision Record</h1>
+                <div class="meta">
+                    <strong>Project:</strong> NextGenApp Pricing &amp; Scoping
+                    2.0<br />
+                    <strong>Client:</strong> Armanino LLP<br />
+                    <strong>Version:</strong> 1.0 (Proof of Concept)<br />
+                    <strong>Date:</strong> April 16, 2026<br />
+                    <strong>Classification:</strong> Internal / Confidential
+                </div>
+            </div>
+
+            <nav class="toc">
+                <h2>Table of Contents</h2>
+                <ol>
+                    <li><a href="#s1">Executive Summary</a></li>
+                    <li>
+                        <a href="#s2">Project Vision &amp; Problem Statement</a>
+                    </li>
+                    <li><a href="#s3">High-Level System Architecture</a></li>
+                    <li><a href="#s4">Domain-Driven Design (DDD)</a></li>
+                    <li><a href="#s5">Data Architecture</a></li>
+                    <li><a href="#s6">AI Services Layer</a></li>
+                    <li><a href="#s7">Role-Based Access Control (RBAC)</a></li>
+                    <li><a href="#s8">Frontend Architecture</a></li>
+                    <li><a href="#s9">Backend Architecture</a></li>
+                    <li><a href="#s10">API Design</a></li>
+                    <li>
+                        <a href="#s11">Deal Lifecycle &amp; Workflow Engine</a>
+                    </li>
+                    <li><a href="#s12">Pricing Engine</a></li>
+                    <li><a href="#s13">Azure Target Architecture</a></li>
+                    <li><a href="#s14">External Integrations</a></li>
+                    <li><a href="#s15">Observability &amp; Monitoring</a></li>
+                    <li><a href="#s16">Security Architecture</a></li>
+                    <li><a href="#s17">Deployment Architecture</a></li>
+                    <li>
+                        <a href="#s18">Key Architectural Decisions (ADRs)</a>
+                    </li>
+                    <li><a href="#s19">Future Roadmap</a></li>
+                </ol>
+            </nav>
+
+            <!-- SECTION 1 -->
+            <h2 id="s1">1. Executive Summary</h2>
+            <p>
+                DealPad is a full-stack Proof of Concept (PoC) application built
+                for <strong>Armanino LLP</strong> to replace legacy Excel-based
+                pricing and scoping workbooks used across the firm's consulting
+                practice. The application introduces five AI-powered use cases,
+                role-based access control across six organizational personas,
+                and a modern user experience inspired by leading fintech
+                platforms (Ramp.com, Gusto.com).
+            </p>
+            <p>
+                The PoC validates the core deal lifecycle workflow -- from
+                scoping and pricing through scenario comparison and approval --
+                while establishing the architectural patterns and design
+                language that will carry forward into the production
+                Azure-hosted platform.
+            </p>
+
+            <h3>Key Metrics</h3>
+            <table>
+                <tr>
+                    <th>Dimension</th>
+                    <th>Value</th>
+                </tr>
+                <tr>
+                    <td>Database Tables</td>
+                    <td>12 normalized tables</td>
+                </tr>
+                <tr>
+                    <td>API Endpoints</td>
+                    <td>25+ REST endpoints</td>
+                </tr>
+                <tr>
+                    <td>AI Use Cases</td>
+                    <td>5 simulation endpoints</td>
+                </tr>
+                <tr>
+                    <td>User Personas</td>
+                    <td>6 RBAC-controlled roles</td>
+                </tr>
+                <tr>
+                    <td>Deal Wizard Steps</td>
+                    <td>8-step guided workflow</td>
+                </tr>
+                <tr>
+                    <td>Scope Catalog Items</td>
+                    <td>15 standardized items</td>
+                </tr>
+                <tr>
+                    <td>Professional Roles</td>
+                    <td>7 billable role levels</td>
+                </tr>
+                <tr>
+                    <td>Scenario Types</td>
+                    <td>3 (Standard, Premium, Value)</td>
+                </tr>
+            </table>
+
+            <hr />
+
+            <!-- SECTION 2 -->
+            <h2 id="s2">2. Project Vision &amp; Problem Statement</h2>
+            <h3>Problem</h3>
+            <p>
+                Armanino's consulting practice relies on Excel workbooks for
+                deal pricing and scoping, leading to:
+            </p>
+            <ul>
+                <li>
+                    <strong>Inconsistent pricing</strong> across partners and
+                    service lines
+                </li>
+                <li>
+                    <strong>No auditability</strong> of pricing decisions or
+                    approval history
+                </li>
+                <li>
+                    <strong>Manual effort estimation</strong> without historical
+                    benchmarking
+                </li>
+                <li>
+                    <strong>Disconnected workflows</strong> between scoping,
+                    pricing, approval, and CRM
+                </li>
+                <li>
+                    <strong>Limited visibility</strong> for leadership into
+                    pipeline margin health
+                </li>
+            </ul>
+
+            <h3>Vision</h3>
+            <p>
+                DealPad provides a unified platform where every deal progresses
+                through a structured, AI-augmented lifecycle:
+            </p>
+            <pre><code>Discovery -> Scoping -> Pricing -> Scenarios -> Risk Assessment -> Approval -> Delivery</code></pre>
+            <p>
+                Each stage benefits from AI insights, historical benchmarks, and
+                role-appropriate guardrails -- replacing tribal knowledge with
+                data-driven recommendations.
+            </p>
+
+            <hr />
+
+            <!-- SECTION 3 -->
+            <h2 id="s3">3. High-Level System Architecture</h2>
+            <h3>System Architecture Diagram</h3>
+            <div class="diagram-container">
+                <div class="mermaid">
+                    graph TB subgraph "Presentation Layer" Browser["Browser /
+                    Client\nReact 19 + Vite + Tailwind CSS"] end subgraph
+                    "Application Layer" API["Express.js API Server\nREST
+                    Endpoints | CORS | JSON"] end subgraph "Intelligence Layer"
+                    AI["AI Services\n5 Use Cases"] AI1["UC-1: Deal Similarity"]
+                    AI2["UC-2: Effort Estimation"] AI3["UC-3: Margin Advisor"]
+                    AI4["UC-4: Scenario Recommendation"] AI5["UC-5: Risk
+                    Summary"] AI --> AI1 & AI2 & AI3 & AI4 & AI5 end subgraph
+                    "Data Layer" DB[("PostgreSQL\n12 Tables | Drizzle ORM")] end
+                    subgraph "Integration Layer - Target" CRM["Dynamics CRM"]
+                    WD["Workday"] IA["Intapp"] PBI["Power BI"] end subgraph
+                    "Cloud Infrastructure - Target" Azure["Azure Cloud\nEntra ID
+                    | APIM | Service Bus\nEvent Grid | Container Apps | Key
+                    Vault"] end Browser -->|"REST / JSON"| API API --> AI API
+                    -->|"SQL via Drizzle ORM"| DB API -.->|"Client Sync"| CRM
+                    API -.->|"Budget Data"| WD API -.->|"Conflict Checks"| IA
+                    API -.->|"Analytics"| PBI AI -.->|"Compute - Target"| Azure
+                    DB -.->|"Hosting - Target"| Azure style Browser
+                    fill:#e0f2fe,stroke:#0284c7 style API
+                    fill:#292524,stroke:#44403c,color:#fafaf9 style AI
+                    fill:#fef3c7,stroke:#d97706 style DB
+                    fill:#d1fae5,stroke:#059669 style Azure
+                    fill:#dbeafe,stroke:#3b82f6
+                </div>
+                <div class="diagram-label">
+                    Figure 3.1 - DealPad System Architecture Overview
+                </div>
+            </div>
+
+            <h3>Data Flow Summary</h3>
+            <div class="diagram-container">
+                <div class="mermaid">
+                    sequenceDiagram participant U as User (Browser) participant
+                    A as Express API participant AI as AI Services participant D
+                    as PostgreSQL U->>A: Create/Update Deal (REST) A->>D:
+                    Persist Deal Data A-->>U: Deal Response U->>A: Request AI
+                    Insight A->>D: Fetch Deal + Historical Data A->>AI: Run
+                    Heuristic/Model AI-->>A: Insight Response A-->>U: AI
+                    Recommendation U->>A: Submit for Approval A->>D: Update
+                    Status (draft → submitted) A->>D: Create Approval Record
+                    A-->>U: Confirmation U->>A: Approve/Reject Deal A->>D:
+                    Update Approval + Deal Status A->>D: Log Activity A-->>U:
+                    Updated Deal
+                </div>
+                <div class="diagram-label">
+                    Figure 3.2 - Core Data Flow Sequence
+                </div>
+            </div>
+
+            <hr />
+
+            <!-- SECTION 4 -->
+            <h2 id="s4">4. Domain-Driven Design (DDD)</h2>
+            <h3>Bounded Contexts</h3>
+            <p>
+                The application is decomposed into six bounded contexts, each
+                representing a distinct domain concern with its own entities,
+                business rules, and lifecycle.
+            </p>
+            <div class="diagram-container">
+                <div class="mermaid">
+                    graph LR subgraph "Deal Context" D1["Deal Aggregate"]
+                    D2["Client Entity"] D3["Deal Versioning"] end subgraph
+                    "Scope Context" S1["Scope Catalog"] S2["Deal Scope Items"]
+                    S3["Contextual Prompts"] end subgraph "Pricing Context"
+                    P1["Pricing Lines"] P2["Rate Cards"] P3["Role Rates"] end
+                    subgraph "Scenario Context" SC1["Scenario Generation"]
+                    SC2["Scenario Comparison"] SC3["AI Reasoning"] end subgraph
+                    "Approval Context" A1["Approval Workflow"] A2["Status
+                    Transitions"] A3["Risk Narratives"] end subgraph "Analytics
+                    Context" AN1["Dashboard KPIs"] AN2["Activity Log"]
+                    AN3["Pipeline Metrics"] end D1 --> S2 S2 --> P1 P1 --> SC1
+                    SC1 --> A1 D1 --> AN1 style D1 fill:#fbbf24,stroke:#d97706
+                    style S1 fill:#60a5fa,stroke:#2563eb style P1
+                    fill:#34d399,stroke:#059669 style SC1
+                    fill:#34d399,stroke:#059669 style A1
+                    fill:#a78bfa,stroke:#7c3aed style AN1
+                    fill:#f87171,stroke:#dc2626
+                </div>
+                <div class="diagram-label">
+                    Figure 4.1 - Bounded Context Map
+                </div>
+            </div>
+
+            <h3>Context Details</h3>
+            <table>
+                <tr>
+                    <th>Context</th>
+                    <th>User Stories</th>
+                    <th>Core Entities</th>
+                    <th>Key Business Rules</th>
+                </tr>
+                <tr>
+                    <td><strong>Deal Context</strong></td>
+                    <td>US-01 to US-07</td>
+                    <td>Deal, Client, Deal Number</td>
+                    <td>
+                        Unique deal numbering; client relationship tracking;
+                        deal cloning/renewal; parent-child deal linking
+                    </td>
+                </tr>
+                <tr>
+                    <td><strong>Scope Context</strong></td>
+                    <td>US-08 to US-17</td>
+                    <td>Scope Catalog, Deal Scope Items, Prompt Responses</td>
+                    <td>
+                        Hierarchical scope catalog with assemblies; contextual
+                        prompts with impact multipliers; scope-to-pricing
+                        recalculation
+                    </td>
+                </tr>
+                <tr>
+                    <td><strong>Pricing Context</strong></td>
+                    <td>US-18 to US-31</td>
+                    <td>Pricing Lines, Rate Cards, Rate Card Entries, Roles</td>
+                    <td>
+                        7-tier role hierarchy; complexity multipliers
+                        (0.8x-1.5x); automatic margin/fee/cost calculation; rate
+                        card versioning
+                    </td>
+                </tr>
+                <tr>
+                    <td><strong>Approval Context</strong></td>
+                    <td>US-39 to US-45</td>
+                    <td>Approvals</td>
+                    <td>
+                        Status state machine
+                        (draft&#8594;submitted&#8594;approved/rejected);
+                        approver comments; AI narrative attachment
+                    </td>
+                </tr>
+                <tr>
+                    <td><strong>Catalog &amp; Config</strong></td>
+                    <td>US-54 to US-57</td>
+                    <td>Rate Cards, Scope Catalog</td>
+                    <td>
+                        Admin governance; rate card effective dates; regional
+                        rate support
+                    </td>
+                </tr>
+                <tr>
+                    <td><strong>Analytics Context</strong></td>
+                    <td>US-32 to US-38</td>
+                    <td>Activity Log, Dashboard Summary</td>
+                    <td>
+                        Role-aware KPIs; pending approval counts; pipeline
+                        status breakdown; recent activity feed
+                    </td>
+                </tr>
+            </table>
+
+            <h3>Aggregate Design</h3>
+            <p>
+                The <strong>Deal</strong> is the primary aggregate root, with
+                the following composition:
+            </p>
+            <div class="diagram-container">
+                <div class="mermaid">
+                    classDiagram class Deal { +int id +string dealNumber +string
+                    title +string status +string complexity +decimal totalFee
+                    +decimal totalCost +decimal marginPercent +int currentStep
+                    +string aiSummary +decimal riskScore } class Client { +int
+                    id +string name +string industry +string segment +int
+                    relationshipYears } class DealScopeItem { +int id +int
+                    quantity +decimal adjustedHours +decimal
+                    complexityMultiplier } class ScopeCatalogItem { +string code
+                    +string name +string category +decimal defaultHours +bool
+                    isAssembly } class PricingLine { +int id +decimal hours
+                    +decimal rate +decimal costRate +decimal fee +decimal cost
+                    +decimal margin } class Role { +string name +string level
+                    +decimal defaultRate +decimal costRate } class Scenario {
+                    +string name +string scenarioType +bool isRecommended
+                    +string aiReasoning } class Approval { +string status
+                    +string approverName +string comments +string aiNarrative }
+                    class PromptResponse { +string question +string answer
+                    +decimal impactMultiplier } class ActivityLogEntry { +string
+                    action +string description +jsonb metadata } Deal "1" -->
+                    "1" Client : belongs to Deal "1" --> "*" DealScopeItem : has
+                    DealScopeItem --> ScopeCatalogItem : references Deal "1" -->
+                    "*" PricingLine : has PricingLine --> Role : uses Deal "1"
+                    --> "*" Scenario : generates Deal "1" --> "*" Approval :
+                    submitted for Deal "1" --> "*" PromptResponse : answered
+                    Deal "1" --> "*" ActivityLogEntry : logged
+                </div>
+                <div class="diagram-label">
+                    Figure 4.2 - Deal Aggregate Root &amp; Entity Relationships
+                </div>
+            </div>
+
+            <h3>Context Mapping (Anti-Corruption Patterns)</h3>
+            <table>
+                <tr>
+                    <th>Upstream Context</th>
+                    <th>Downstream Context</th>
+                    <th>Relationship</th>
+                </tr>
+                <tr>
+                    <td>Scope Context</td>
+                    <td>Pricing Context</td>
+                    <td>
+                        Conformist -- scope hours drive pricing line generation
+                        via <code>recalcPricingFromScope()</code>
+                    </td>
+                </tr>
+                <tr>
+                    <td>Pricing Context</td>
+                    <td>Scenario Context</td>
+                    <td>
+                        Published Language -- scenarios are auto-generated from
+                        base pricing with multiplier adjustments
+                    </td>
+                </tr>
+                <tr>
+                    <td>Deal Context</td>
+                    <td>Approval Context</td>
+                    <td>
+                        Customer/Supplier -- deal status transitions are
+                        governed by approval outcomes
+                    </td>
+                </tr>
+                <tr>
+                    <td>Deal Context</td>
+                    <td>Analytics Context</td>
+                    <td>
+                        Published Language -- dashboard aggregates deal data
+                        through summary queries
+                    </td>
+                </tr>
+                <tr>
+                    <td>Catalog &amp; Config</td>
+                    <td>Scope Context</td>
+                    <td>
+                        Shared Kernel -- scope catalog items are referenced by
+                        deal scope items
+                    </td>
+                </tr>
+                <tr>
+                    <td>Catalog &amp; Config</td>
+                    <td>Pricing Context</td>
+                    <td>
+                        Shared Kernel -- rate cards and roles provide pricing
+                        baselines
+                    </td>
+                </tr>
+            </table>
+
+            <hr />
+
+            <!-- SECTION 5 -->
+            <h2 id="s5">5. Data Architecture</h2>
+            <h3>Entity-Relationship Diagram</h3>
+            <div class="diagram-container">
+                <div class="mermaid">
+                    erDiagram CLIENTS ||--o{ DEALS : "has many" DEALS ||--o{
+                    DEAL_SCOPE_ITEMS : "contains" DEALS ||--o{ PRICING_LINES :
+                    "priced by" DEALS ||--o{ SCENARIOS : "generates" DEALS
+                    ||--o{ APPROVALS : "submitted for" DEALS ||--o{
+                    PROMPT_RESPONSES : "qualified by" DEALS ||--o{ ACTIVITY_LOG
+                    : "tracked in" SCOPE_CATALOG ||--o{ DEAL_SCOPE_ITEMS :
+                    "referenced by" ROLES ||--o{ PRICING_LINES : "rates from"
+                    ROLES ||--o{ RATE_CARD_ENTRIES : "defined in" RATE_CARDS
+                    ||--o{ RATE_CARD_ENTRIES : "contains" CLIENTS { serial id PK
+                    text name text industry text segment text region int
+                    relationship_years } DEALS { serial id PK text deal_number
+                    UK text title int client_id FK text status decimal total_fee
+                    decimal total_cost decimal margin_percent text ai_summary
+                    decimal risk_score } SCOPE_CATALOG { serial id PK text code
+                    UK text name text category decimal default_hours bool
+                    is_assembly } PRICING_LINES { serial id PK int deal_id FK
+                    int role_id FK decimal hours decimal rate decimal fee
+                    decimal cost } SCENARIOS { serial id PK int deal_id FK text
+                    name text scenario_type bool is_recommended text
+                    ai_reasoning } APPROVALS { serial id PK int deal_id FK text
+                    status text approver_name text comments text ai_narrative }
+                    ROLES { serial id PK text name text level decimal
+                    default_rate decimal cost_rate } RATE_CARDS { serial id PK
+                    text name bool is_active text region } RATE_CARD_ENTRIES {
+                    serial id PK int rate_card_id FK int role_id FK decimal rate
+                    }
+                </div>
+                <div class="diagram-label">
+                    Figure 5.1 - Entity-Relationship Diagram (12 Tables)
+                </div>
+            </div>
+
+            <h3>Schema Design Decisions</h3>
+            <table>
+                <tr>
+                    <th>Decision</th>
+                    <th>Rationale</th>
+                </tr>
+                <tr>
+                    <td>
+                        <strong
+                            >Drizzle ORM with
+                            <code>shared/schema.ts</code></strong
+                        >
+                    </td>
+                    <td>
+                        Single source of truth for data model, shared between
+                        frontend (type inference) and backend (query building).
+                        Eliminates schema drift.
+                    </td>
+                </tr>
+                <tr>
+                    <td><strong>Serial integer primary keys</strong></td>
+                    <td>
+                        Simpler than UUIDs for the PoC; production migration to
+                        UUIDs is straightforward
+                    </td>
+                </tr>
+                <tr>
+                    <td><strong>Decimal types for financial fields</strong></td>
+                    <td>
+                        <code>DECIMAL(12,2)</code> for monetary values avoids
+                        floating-point precision errors critical in pricing
+                        calculations
+                    </td>
+                </tr>
+                <tr>
+                    <td>
+                        <strong
+                            >Text-based dates for start_date/end_date</strong
+                        >
+                    </td>
+                    <td>
+                        ISO string dates simplify frontend handling; timestamps
+                        used only for audit fields
+                    </td>
+                </tr>
+                <tr>
+                    <td><strong>JSONB for activity_log.metadata</strong></td>
+                    <td>
+                        Flexible schema for varying activity metadata without
+                        table proliferation
+                    </td>
+                </tr>
+                <tr>
+                    <td><strong>Hierarchical scope catalog</strong></td>
+                    <td>
+                        <code>parent_id</code> supports assembly/sub-item
+                        nesting for complex scope structures
+                    </td>
+                </tr>
+                <tr>
+                    <td>
+                        <strong>AI metadata fields on domain entities</strong>
+                    </td>
+                    <td>
+                        <code>deals.ai_summary</code>,
+                        <code>scenarios.ai_reasoning</code>,
+                        <code>approvals.ai_narrative</code> store AI outputs
+                        alongside business data
+                    </td>
+                </tr>
+            </table>
+
+            <hr />
+
+            <!-- SECTION 6 -->
+            <h2 id="s6">6. AI Services Layer</h2>
+            <p>
+                The AI Services Layer implements five use cases that augment
+                human decision-making across the deal lifecycle. In the PoC,
+                these are implemented as
+                <strong>deterministic heuristic engines</strong> that simulate
+                AI behavior using rule-based logic and database queries. The
+                target production architecture replaces these with Azure OpenAI
+                LLM calls orchestrated through Semantic Kernel.
+            </p>
+
+            <h3>AI Use Case Architecture</h3>
+            <div class="diagram-container">
+                <div class="mermaid">
+                    graph TD subgraph "AI Services Layer" UC1["UC-1: Deal
+                    Similarity\nHistorical Benchmarking"] UC2["UC-2: Effort
+                    Estimation\nHours Prediction"] UC3["UC-3: Margin
+                    Advisor\nPricing Optimization"] UC4["UC-4: Scenario
+                    Recommendation\nAlternative Comparison"] UC5["UC-5: Risk
+                    Summary\nExecutive Narrative"] end subgraph "Data Sources"
+                    HD["Historical Deals"] SC["Scope Catalog"] PL["Pricing
+                    Lines"] PR["Prompt Responses"] CL["Client Profile"] end
+                    subgraph "Outputs" O1["Benchmark Report"] O2["Hours by Role
+                    Distribution"] O3["Margin Improvement Suggestions"]
+                    O4["Recommended Scenario"] O5["Risk Score + Narrative"] end
+                    HD --> UC1 --> O1 SC --> UC2 PR --> UC2 UC2 --> O2 PL -->
+                    UC3 --> O3 PL --> UC4 --> O4 HD --> UC5 CL --> UC5 UC5 -->
+                    O5 style UC1 fill:#fef3c7,stroke:#d97706 style UC2
+                    fill:#fef3c7,stroke:#d97706 style UC3
+                    fill:#fef3c7,stroke:#d97706 style UC4
+                    fill:#fef3c7,stroke:#d97706 style UC5
+                    fill:#fef3c7,stroke:#d97706
+                </div>
+                <div class="diagram-label">
+                    Figure 6.1 - AI Services Data Flow
+                </div>
+            </div>
+
+            <h4>
+                UC-1: Deal Similarity (<code>POST /api/ai/deal-similarity</code
+                >)
+            </h4>
+            <p>
+                <strong>Purpose:</strong> Benchmarks a new engagement against
+                historical approved deals from the same client or service line.
+            </p>
+            <p>
+                <strong>PoC Logic:</strong> Queries the database for approved
+                deals matching the same <code>clientId</code>. Falls back to all
+                approved deals if no client-specific matches exist. Computes
+                average margin, average fee, and deal count.
+            </p>
+            <p>
+                <strong>Target:</strong> RAG (Retrieval-Augmented Generation)
+                over a vector store of historical deal embeddings, with Azure
+                OpenAI generating contextual recommendations.
+            </p>
+
+            <h4>
+                UC-2: Effort Estimation (<code
+                    >POST /api/ai/effort-estimation</code
+                >)
+            </h4>
+            <p>
+                <strong>Purpose:</strong> Predicts total hours and role
+                distribution based on scope complexity and contextual prompts.
+            </p>
+            <p>
+                <strong>PoC Logic:</strong> Applies complexity multipliers
+                (low=0.8x, medium=1.0x, high=1.2x, very_high=1.5x). Compounds
+                with prompt response impact multipliers. Distributes total hours
+                across 7 roles using a fixed distribution model.
+            </p>
+            <p>
+                <strong>Target:</strong> Fine-tuned model trained on Armanino's
+                historical engagement data.
+            </p>
+
+            <h4>
+                UC-3: Margin Advisor (<code>POST /api/ai/margin-advisor</code>)
+            </h4>
+            <p>
+                <strong>Purpose:</strong> Analyzes current pricing structure and
+                suggests optimizations to meet margin targets (default 25%).
+            </p>
+            <p>
+                <strong>PoC Logic:</strong> If below target, suggests (1) Role
+                Shift: Move 40 hours from senior to junior roles, and (2) Rate
+                Uplift: Apply 5% rate increase (~3.5% margin improvement).
+            </p>
+            <p>
+                <strong>Target:</strong> Optimization model using linear
+                programming.
+            </p>
+
+            <h4>
+                UC-4: Scenario Recommendation (<code
+                    >POST /api/ai/scenario-recommendation</code
+                >)
+            </h4>
+            <p>
+                <strong>Purpose:</strong> Compares generated pricing scenarios
+                and recommends the best option. Returns confidence score (0.87
+                for PoC).
+            </p>
+
+            <h4>UC-5: Risk Summary (<code>POST /api/ai/risk-summary</code>)</h4>
+            <p>
+                <strong>Purpose:</strong> Generates an executive-level risk
+                assessment with approval likelihood prediction.
+            </p>
+            <p>
+                <strong>PoC Logic:</strong> Evaluates margin position,
+                complexity, engagement size, and client relationship depth.
+                Predicts approval likelihood: Low risk = 89%, Medium = 72%, High
+                = 45%.
+            </p>
+
+            <h3>Contextual Prompts System</h3>
+            <table>
+                <tr>
+                    <th>Prompt</th>
+                    <th>Category</th>
+                    <th>Purpose</th>
+                </tr>
+                <tr>
+                    <td>How many geographic regions are involved?</td>
+                    <td>Complexity</td>
+                    <td>Multi-region multiplier</td>
+                </tr>
+                <tr>
+                    <td>Are there regulatory/compliance requirements?</td>
+                    <td>Compliance</td>
+                    <td>Compliance effort uplift</td>
+                </tr>
+                <tr>
+                    <td>What is the expected data volume?</td>
+                    <td>Complexity</td>
+                    <td>Scale factor</td>
+                </tr>
+                <tr>
+                    <td>How many integrations are required?</td>
+                    <td>Integration</td>
+                    <td>Integration complexity</td>
+                </tr>
+                <tr>
+                    <td>Is there an existing system being replaced?</td>
+                    <td>Migration</td>
+                    <td>Migration effort</td>
+                </tr>
+                <tr>
+                    <td>What is the client's technical maturity?</td>
+                    <td>Client</td>
+                    <td>Delivery risk adjustment</td>
+                </tr>
+                <tr>
+                    <td>Is there a hard deadline or external dependency?</td>
+                    <td>Timeline</td>
+                    <td>Timeline pressure factor</td>
+                </tr>
+            </table>
+
+            <hr />
+
+            <!-- SECTION 7 -->
+            <h2 id="s7">7. Role-Based Access Control (RBAC)</h2>
+            <h3>RBAC Architecture</h3>
+            <div class="diagram-container">
+                <div class="mermaid">
+                    graph LR subgraph "Authentication - PoC" PS["Persona
+                    Switcher\nlocalStorage"] end subgraph "Authentication -
+                    Production" EID["Azure Entra ID\nSSO + OIDC"] end subgraph
+                    "Authorization Layer" AC["AuthContext\nReact Context"]
+                    HP["hasPermission\nPermission Check"] end subgraph
+                    "Enforcement Points" RL["Route-Level\nApp.tsx guards"]
+                    CL["Component-Level\nConditional rendering"]
+                    SL["Server-Level\nTarget: middleware"] end PS --> AC EID
+                    -.-> AC AC --> HP HP --> RL HP --> CL HP -.-> SL style PS
+                    fill:#fef3c7,stroke:#d97706 style EID
+                    fill:#dbeafe,stroke:#3b82f6 style AC
+                    fill:#d1fae5,stroke:#059669
+                </div>
+                <div class="diagram-label">
+                    Figure 7.1 - RBAC Architecture (PoC vs Production)
+                </div>
+            </div>
+
+            <h3>Persona Matrix</h3>
+            <table>
+                <tr>
+                    <th>Role ID</th>
+                    <th>Name</th>
+                    <th>Title</th>
+                    <th>Accent Color</th>
+                    <th>Primary Domain</th>
+                </tr>
+                <tr>
+                    <td><code>pdl</code></td>
+                    <td>Michael Torres</td>
+                    <td>Project Delivery Lead</td>
+                    <td style="color: #da720f">Orange (#DA720F)</td>
+                    <td>Deal creation, scoping, pricing, AI tools</td>
+                </tr>
+                <tr>
+                    <td><code>sll</code></td>
+                    <td>Sarah Chen</td>
+                    <td>Service Line Leader</td>
+                    <td style="color: #3b82f6">Blue (#3b82f6)</td>
+                    <td>Deal approval, pipeline oversight</td>
+                </tr>
+                <tr>
+                    <td><code>po</code></td>
+                    <td>James Wright</td>
+                    <td>Pricing Operations</td>
+                    <td style="color: #059669">Emerald (#059669)</td>
+                    <td>Rate card &amp; scope catalog governance</td>
+                </tr>
+                <tr>
+                    <td><code>fin</code></td>
+                    <td>Lisa Park</td>
+                    <td>Finance / FP&amp;A</td>
+                    <td style="color: #7c3aed">Violet (#7c3aed)</td>
+                    <td>Margin validation, financial metrics</td>
+                </tr>
+                <tr>
+                    <td><code>qrm</code></td>
+                    <td>David Kim</td>
+                    <td>Risk / QRM</td>
+                    <td style="color: #dc2626">Red (#dc2626)</td>
+                    <td>Risk compliance, AI risk summaries</td>
+                </tr>
+                <tr>
+                    <td><code>it</code></td>
+                    <td>Alex Rivera</td>
+                    <td>IT / Data Consumer</td>
+                    <td style="color: #78716c">Stone (#78716c)</td>
+                    <td>Architecture, infrastructure</td>
+                </tr>
+            </table>
+
+            <h3>Permission Matrix</h3>
+            <table>
+                <tr>
+                    <th>Permission</th>
+                    <th>PDL</th>
+                    <th>SLL</th>
+                    <th>PO</th>
+                    <th>FIN</th>
+                    <th>QRM</th>
+                    <th>IT</th>
+                </tr>
+                <tr>
+                    <td><code>createDeals</code></td>
+                    <td><span class="badge badge-yes">Yes</span></td>
+                    <td><span class="badge badge-no">-</span></td>
+                    <td><span class="badge badge-no">-</span></td>
+                    <td><span class="badge badge-no">-</span></td>
+                    <td><span class="badge badge-no">-</span></td>
+                    <td><span class="badge badge-no">-</span></td>
+                </tr>
+                <tr>
+                    <td><code>editDeals</code></td>
+                    <td><span class="badge badge-yes">Yes</span></td>
+                    <td><span class="badge badge-no">-</span></td>
+                    <td><span class="badge badge-no">-</span></td>
+                    <td><span class="badge badge-no">-</span></td>
+                    <td><span class="badge badge-no">-</span></td>
+                    <td><span class="badge badge-no">-</span></td>
+                </tr>
+                <tr>
+                    <td><code>viewDeals</code></td>
+                    <td><span class="badge badge-yes">Yes</span></td>
+                    <td><span class="badge badge-yes">Yes</span></td>
+                    <td><span class="badge badge-yes">Yes</span></td>
+                    <td><span class="badge badge-yes">Yes</span></td>
+                    <td><span class="badge badge-yes">Yes</span></td>
+                    <td><span class="badge badge-no">-</span></td>
+                </tr>
+                <tr>
+                    <td><code>approveDeals</code></td>
+                    <td><span class="badge badge-no">-</span></td>
+                    <td><span class="badge badge-yes">Yes</span></td>
+                    <td><span class="badge badge-no">-</span></td>
+                    <td><span class="badge badge-no">-</span></td>
+                    <td><span class="badge badge-no">-</span></td>
+                    <td><span class="badge badge-no">-</span></td>
+                </tr>
+                <tr>
+                    <td><code>manageRateCards</code></td>
+                    <td><span class="badge badge-no">-</span></td>
+                    <td><span class="badge badge-no">-</span></td>
+                    <td><span class="badge badge-yes">Yes</span></td>
+                    <td><span class="badge badge-no">-</span></td>
+                    <td><span class="badge badge-no">-</span></td>
+                    <td><span class="badge badge-no">-</span></td>
+                </tr>
+                <tr>
+                    <td><code>viewPricing</code></td>
+                    <td><span class="badge badge-yes">Yes</span></td>
+                    <td><span class="badge badge-yes">Yes</span></td>
+                    <td><span class="badge badge-yes">Yes</span></td>
+                    <td><span class="badge badge-yes">Yes</span></td>
+                    <td><span class="badge badge-yes">Yes</span></td>
+                    <td><span class="badge badge-no">-</span></td>
+                </tr>
+                <tr>
+                    <td><code>editPricing</code></td>
+                    <td><span class="badge badge-yes">Yes</span></td>
+                    <td><span class="badge badge-no">-</span></td>
+                    <td><span class="badge badge-no">-</span></td>
+                    <td><span class="badge badge-no">-</span></td>
+                    <td><span class="badge badge-no">-</span></td>
+                    <td><span class="badge badge-no">-</span></td>
+                </tr>
+                <tr>
+                    <td><code>viewMargins</code></td>
+                    <td><span class="badge badge-yes">Yes</span></td>
+                    <td><span class="badge badge-yes">Yes</span></td>
+                    <td><span class="badge badge-yes">Yes</span></td>
+                    <td><span class="badge badge-yes">Yes</span></td>
+                    <td><span class="badge badge-yes">Yes</span></td>
+                    <td><span class="badge badge-no">-</span></td>
+                </tr>
+                <tr>
+                    <td><code>viewRiskSummary</code></td>
+                    <td><span class="badge badge-yes">Yes</span></td>
+                    <td><span class="badge badge-yes">Yes</span></td>
+                    <td><span class="badge badge-no">-</span></td>
+                    <td><span class="badge badge-no">-</span></td>
+                    <td><span class="badge badge-yes">Yes</span></td>
+                    <td><span class="badge badge-no">-</span></td>
+                </tr>
+                <tr>
+                    <td><code>runAI</code></td>
+                    <td><span class="badge badge-yes">Yes</span></td>
+                    <td><span class="badge badge-no">-</span></td>
+                    <td><span class="badge badge-no">-</span></td>
+                    <td><span class="badge badge-no">-</span></td>
+                    <td><span class="badge badge-no">-</span></td>
+                    <td><span class="badge badge-no">-</span></td>
+                </tr>
+                <tr>
+                    <td><code>viewDashboard</code></td>
+                    <td><span class="badge badge-yes">Yes</span></td>
+                    <td><span class="badge badge-yes">Yes</span></td>
+                    <td><span class="badge badge-yes">Yes</span></td>
+                    <td><span class="badge badge-yes">Yes</span></td>
+                    <td><span class="badge badge-yes">Yes</span></td>
+                    <td><span class="badge badge-yes">Yes</span></td>
+                </tr>
+            </table>
+
+            <hr />
+
+            <!-- SECTION 8 -->
+            <h2 id="s8">8. Frontend Architecture</h2>
+            <h3>Technology Stack</h3>
+            <table>
+                <tr>
+                    <th>Layer</th>
+                    <th>Technology</th>
+                    <th>Version</th>
+                    <th>Purpose</th>
+                </tr>
+                <tr>
+                    <td>Framework</td>
+                    <td>React</td>
+                    <td>19</td>
+                    <td>Component-based UI</td>
+                </tr>
+                <tr>
+                    <td>Build Tool</td>
+                    <td>Vite</td>
+                    <td>8.x</td>
+                    <td>Fast HMR, optimized builds</td>
+                </tr>
+                <tr>
+                    <td>Styling</td>
+                    <td>Tailwind CSS</td>
+                    <td>4.x</td>
+                    <td>Utility-first CSS</td>
+                </tr>
+                <tr>
+                    <td>Routing</td>
+                    <td>Wouter</td>
+                    <td>3.9</td>
+                    <td>Lightweight client-side routing</td>
+                </tr>
+                <tr>
+                    <td>Server State</td>
+                    <td>TanStack React Query</td>
+                    <td>5.x</td>
+                    <td>Data fetching, caching, mutation</td>
+                </tr>
+                <tr>
+                    <td>UI Primitives</td>
+                    <td>Radix UI</td>
+                    <td>Various</td>
+                    <td>Accessible, unstyled components</td>
+                </tr>
+                <tr>
+                    <td>Icons</td>
+                    <td>Lucide React</td>
+                    <td>1.8</td>
+                    <td>Consistent icon system</td>
+                </tr>
+                <tr>
+                    <td>Animation</td>
+                    <td>Framer Motion</td>
+                    <td>12.x</td>
+                    <td>Smooth UI transitions</td>
+                </tr>
+                <tr>
+                    <td>Charts</td>
+                    <td>Recharts</td>
+                    <td>3.8</td>
+                    <td>Data visualization</td>
+                </tr>
+            </table>
+
+            <h3>Component Architecture</h3>
+            <div class="diagram-container">
+                <div class="mermaid">
+                    graph TD subgraph "App Shell" App["App.tsx\nRouter + Auth
+                    Guard"] AL["AppLayout.tsx\nSidebar + Content"]
+                    SB["Sidebar.tsx\nNavigation + Persona"] end subgraph "Pages"
+                    Login["Login\nPersona Selection"]
+                    Dash["Dashboard\nRole-Aware KPIs"] DL["DealsList\nFiltered
+                    Table"] DD["DealDetail\n8-Step Wizard"]
+                    ND["NewDeal\nCreation Form"] RC["RateCards\nAdmin"]
+                    SCA["ScopeCatalogAdmin\nAdmin"] Arch["Architecture\nSystem
+                    Diagrams"] end subgraph "State Management"
+                    ACtx["AuthContext\nPersona + Permissions"] RQ["React
+                    Query\nServer State Cache"] Hooks["use-api.ts\nAPI Hook
+                    Library"] end App --> AL --> SB App --> Login App --> Dash
+                    App --> DL App --> DD App --> ND App --> RC App --> SCA App
+                    --> Arch Hooks --> RQ ACtx --> App
+                </div>
+                <div class="diagram-label">
+                    Figure 8.1 - Frontend Component Architecture
+                </div>
+            </div>
+
+            <h3>Deal Wizard (8 Steps)</h3>
+            <div class="diagram-container">
+                <div class="mermaid">
+                    graph LR S1["1. Setup\nDeal Info + Client"] --> S2["2.
+                    Scope\nItem Selection"] S2 --> S3["3.
+                    Assumptions\nContextual Prompts"] S3 --> S4["4.
+                    Pricing\nRole Grid"] S4 --> S5["5. Scenarios\nCompare
+                    Options"] S5 --> S6["6. Review\nAI Risk Assessment"] S6 -->
+                    S7["7. Approval\nSubmit / Review"] S7 --> S8["8.
+                    Summary\nFinal View"] style S1 fill:#fef3c7,stroke:#d97706
+                    style S2 fill:#dbeafe,stroke:#3b82f6 style S3
+                    fill:#fef3c7,stroke:#d97706 style S4
+                    fill:#d1fae5,stroke:#059669 style S5
+                    fill:#d1fae5,stroke:#059669 style S6
+                    fill:#fecaca,stroke:#dc2626 style S7
+                    fill:#e9d5ff,stroke:#7c3aed style S8
+                    fill:#f5f5f4,stroke:#78716c
+                </div>
+                <div class="diagram-label">
+                    Figure 8.2 - 8-Step Deal Wizard Flow
+                </div>
+            </div>
+
+            <hr />
+
+            <!-- SECTION 9 -->
+            <h2 id="s9">9. Backend Architecture</h2>
+            <h3>Server Architecture</h3>
+            <div class="diagram-container">
+                <div class="mermaid">
+                    graph TD subgraph "Express Server - index.ts" MW["Middleware
+                    Stack\nCORS + JSON Parser"] INIT["Database Init\nSchema Push
+                    + Seed"] REG["Route Registration\nregisterRoutes - app"]
+                    SPA["SPA Fallback\nStatic + index.html"] end subgraph "Route
+                    Handlers - routes.ts" DASH["Dashboard Summary"] DEAL["Deal
+                    CRUD"] SCOPE["Scope Management"] PRICE["Pricing Engine"]
+                    SCEN["Scenario Generator"] APPR["Approval Workflow"]
+                    PROMPT["Contextual Prompts"] AIS["AI Service Endpoints"]
+                    ACT["Activity Log"] end subgraph "Data Access - db.ts"
+                    POOL["Connection Pool\npg.Pool"] DRZ["Drizzle
+                    Instance\nSchema-Aware"] end MW --> INIT --> REG --> SPA REG
+                    --> DASH REG --> DEAL REG --> SCOPE REG --> PRICE REG -->
+                    SCEN REG --> APPR REG --> PROMPT REG --> AIS REG --> ACT
+                    DEAL --> DRZ --> POOL style MW fill:#292524,color:#fafaf9
+                    style DRZ fill:#d1fae5,stroke:#059669
+                </div>
+                <div class="diagram-label">
+                    Figure 9.1 - Backend Server Architecture
+                </div>
+            </div>
+
+            <h3>Startup Sequence</h3>
+            <div class="diagram-container">
+                <div class="mermaid">
+                    sequenceDiagram participant S as Server Process participant
+                    DB as PostgreSQL participant FS as File System S->>DB:
+                    pushSchema - CREATE TABLE IF NOT EXISTS (12 tables) DB-->>S:
+                    Schema ready S->>DB: seedDatabase - Check for existing data
+                    alt Database empty S->>DB: Insert clients, roles, rate
+                    cards, scope catalog, deals, pricing DB-->>S: Seed complete
+                    end S->>S: registerRoutes(app) - Mount API handlers S->>FS:
+                    express.static(dist/public) - Serve frontend S->>S: SPA
+                    fallback - Catch-all to index.html S->>S: Listen on
+                    0.0.0.0:3001
+                </div>
+                <div class="diagram-label">
+                    Figure 9.2 - Server Startup Sequence
+                </div>
+            </div>
+
+            <h3>Key Backend Patterns</h3>
+            <table>
+                <tr>
+                    <th>Pattern</th>
+                    <th>Implementation</th>
+                    <th>Purpose</th>
+                </tr>
+                <tr>
+                    <td><strong>Automatic Recalculation</strong></td>
+                    <td><code>recalcPricingFromScope()</code></td>
+                    <td>
+                        Any scope change triggers full pricing recalc with role
+                        distribution
+                    </td>
+                </tr>
+                <tr>
+                    <td><strong>Cascading Updates</strong></td>
+                    <td>Deal PATCH triggers recalc + activity log</td>
+                    <td>Ensures data consistency across related entities</td>
+                </tr>
+                <tr>
+                    <td><strong>Scenario Auto-Generation</strong></td>
+                    <td>GET scenarios creates if none exist</td>
+                    <td>Lazy generation of Standard/Premium/Value scenarios</td>
+                </tr>
+                <tr>
+                    <td><strong>Default Prompts</strong></td>
+                    <td>
+                        <code>createDefaultPrompts()</code> on deal creation
+                    </td>
+                    <td>7 standard discovery questions auto-attached</td>
+                </tr>
+                <tr>
+                    <td><strong>Activity Logging</strong></td>
+                    <td>Action recorded on deal create/update/approval</td>
+                    <td>Full audit trail with actor attribution</td>
+                </tr>
+            </table>
+
+            <hr />
+
+            <!-- SECTION 10 -->
+            <h2 id="s10">10. API Design</h2>
+            <h3>Endpoint Catalog</h3>
+            <div class="diagram-container">
+                <div class="mermaid">
+                    graph LR subgraph "RESTful API - /api" subgraph "Dashboard"
+                    G1["GET /dashboard/summary"] end subgraph "Clients" G2["GET
+                    /clients"] G3["GET /clients/:id"] end subgraph "Deals"
+                    G4["GET /deals"] G5["GET /deals/:id"] P1["POST /deals"]
+                    PA1["PATCH /deals/:id"] P2["POST /deals/:id/clone"] end
+                    subgraph "Scope" G6["GET /scope-catalog"] G7["GET
+                    /deals/:dealId/scope-items"] P3["POST
+                    /deals/:dealId/scope-items"] D1["DELETE
+                    /deals/:dealId/scope-items/:id"] end subgraph "Roles and
+                    Rates" G12["GET /roles"] G13["GET /rate-cards"] G14["GET
+                    /rate-cards/:id/entries"] end subgraph "Pricing" G8["GET
+                    /deals/:dealId/pricing"] P4["POST /deals/:dealId/pricing"]
+                    PA2["PATCH /deals/:dealId/pricing/:id"] D2["DELETE
+                    /deals/:dealId/pricing"] end subgraph "Scenarios" G9["GET
+                    /deals/:dealId/scenarios"] P5["POST /scenarios/:id/select"]
+                    end subgraph "Approvals" G10["GET /deals/:dealId/approvals"]
+                    P6["POST /deals/:dealId/approvals"] PA3["PATCH
+                    /approvals/:id"] end subgraph "Prompts" G15["GET
+                    /deals/:dealId/prompts"] P7["POST /deals/:dealId/prompts"]
+                    PA4["PATCH /prompts/:id"] end subgraph "AI Services"
+                    AI1["POST /ai/deal-similarity"] AI2["POST
+                    /ai/effort-estimation"] AI3["POST /ai/margin-advisor"]
+                    AI4["POST /ai/scenario-rec"] AI5["POST /ai/risk-summary"]
+                    end subgraph "Activity" G11["GET /activity"] end end
+                </div>
+                <div class="diagram-label">
+                    Figure 10.1 - Complete API Endpoint Catalog (35 Endpoints)
+                </div>
+            </div>
+
+            <hr />
+
+            <!-- SECTION 11 -->
+            <h2 id="s11">11. Deal Lifecycle &amp; Workflow Engine</h2>
+            <h3>State Machine</h3>
+            <div class="diagram-container">
+                <div class="mermaid">
+                    stateDiagram-v2 [*] --> draft: Deal Created draft --> draft:
+                    Edit / Update Scope / Update Pricing draft --> submitted:
+                    Submit for Approval (PDL) submitted --> approved: Approve
+                    (SLL) submitted --> rejected: Reject (SLL) rejected -->
+                    draft: Revise and Resubmit approved --> [*]: Deal Finalized
+                </div>
+                <div class="diagram-label">
+                    Figure 11.1 - Deal Status State Machine
+                </div>
+            </div>
+            <div class="note">
+                <strong>Implementation Note (PoC):</strong> The state machine
+                transitions shown above are enforced at the
+                <strong>UI layer</strong> (conditional button rendering based on
+                deal status and persona permissions). The server-side API does
+                not currently enforce status transition rules. Production will
+                add server-side middleware to enforce the state machine and
+                validate actor authorization.
+            </div>
+
+            <h3>Deal Creation Flow</h3>
+            <div class="diagram-container">
+                <div class="mermaid">
+                    sequenceDiagram participant PDL as PDL (User) participant UI
+                    as React Frontend participant API as Express API participant
+                    DB as PostgreSQL PDL->>UI: Fill New Deal Form UI->>API: POST
+                    /api/deals API->>DB: Insert Deal Record API->>DB:
+                    createDefaultPrompts(dealId) API->>DB: Log Activity
+                    DB-->>API: New Deal API-->>UI: New Deal Response UI-->>PDL:
+                    Redirect to Deal Detail Note over UI,API: Pricing lines
+                    created lazily on first GET PDL->>UI: Navigate to Pricing
+                    Step UI->>API: GET /api/deals/:dealId/pricing API->>DB:
+                    Check existing pricing lines alt No pricing lines exist
+                    API->>DB: Create 7 pricing lines API->>DB:
+                    recalcPricingFromScope API->>DB: Update deal totals end
+                    DB-->>API: Pricing Lines API-->>UI: Pricing Grid Data
+                </div>
+                <div class="diagram-label">
+                    Figure 11.2 - Deal Creation &amp; Pricing Initialization
+                    Flow
+                </div>
+            </div>
+
+            <h3>Clone / Renewal Flow</h3>
+            <div class="diagram-container">
+                <div class="mermaid">
+                    sequenceDiagram participant U as User participant API as
+                    Express API participant DB as PostgreSQL U->>API: POST
+                    /deals/:id/clone API->>DB: Fetch Source Deal + Relations
+                    API->>DB: Insert Cloned Deal API->>DB: Clone Scope Items
+                    API->>DB: Clone Pricing Lines API->>DB: Clone Prompt
+                    Responses API->>DB: Log Activity DB-->>API: Cloned Deal
+                    API-->>U: New Deal Response
+                </div>
+                <div class="diagram-label">
+                    Figure 11.3 - Deal Clone / Renewal Flow
+                </div>
+            </div>
+
+            <hr />
+
+            <!-- SECTION 12 -->
+            <h2 id="s12">12. Pricing Engine</h2>
+            <h3>Calculation Model</h3>
+            <div class="diagram-container">
+                <div class="mermaid">
+                    graph TD subgraph "Inputs" SI["Scope Items\n(default hours
+                    per item)"] CM["Complexity Multiplier\n(0.8x - 1.5x)"]
+                    PM["Prompt Multipliers\n(compounded)"] RC["Rate Card\n(bill
+                    rate + cost rate per role)"] end subgraph "Pricing Engine"
+                    TM["Total Multiplier\n= Complexity x Prompt Factor"]
+                    TH["Total Hours\n= Sum of item hours x multiplier"] RD["Role
+                    Distribution\nPartner 7% | MD 10% | SM 17%\nMgr 20% | SC 26%
+                    | Con 13% | An 7%"] PL["Pricing Lines\nhours x rate =
+                    fee\nhours x costRate = cost\nfee - cost = margin"] end
+                    subgraph "Outputs" TF["Total Fee"] TC["Total Cost"]
+                    MP["Margin %"] BR["Blended Rate"] end SI --> TH CM --> TM PM
+                    --> TM TM --> TH TH --> RD RD --> PL RC --> PL PL --> TF PL
+                    --> TC PL --> MP PL --> BR style TM
+                    fill:#fef3c7,stroke:#d97706 style PL
+                    fill:#d1fae5,stroke:#059669
+                </div>
+                <div class="diagram-label">
+                    Figure 12.1 - Pricing Engine Calculation Model
+                </div>
+            </div>
+
+            <h3>Role Distribution Model</h3>
+            <table>
+                <tr>
+                    <th>Role</th>
+                    <th>Level</th>
+                    <th>Distribution</th>
+                    <th>Bill Rate</th>
+                    <th>Cost Rate</th>
+                </tr>
+                <tr>
+                    <td>Partner</td>
+                    <td>Partner</td>
+                    <td>7%</td>
+                    <td>$550/hr</td>
+                    <td>$275/hr</td>
+                </tr>
+                <tr>
+                    <td>Managing Director</td>
+                    <td>Director</td>
+                    <td>10%</td>
+                    <td>$475/hr</td>
+                    <td>$235/hr</td>
+                </tr>
+                <tr>
+                    <td>Senior Manager</td>
+                    <td>Manager</td>
+                    <td>17%</td>
+                    <td>$395/hr</td>
+                    <td>$195/hr</td>
+                </tr>
+                <tr>
+                    <td>Manager</td>
+                    <td>Manager</td>
+                    <td>20%</td>
+                    <td>$345/hr</td>
+                    <td>$170/hr</td>
+                </tr>
+                <tr>
+                    <td>Senior Consultant</td>
+                    <td>Senior</td>
+                    <td>26%</td>
+                    <td>$285/hr</td>
+                    <td>$140/hr</td>
+                </tr>
+                <tr>
+                    <td>Consultant</td>
+                    <td>Staff</td>
+                    <td>13%</td>
+                    <td>$225/hr</td>
+                    <td>$110/hr</td>
+                </tr>
+                <tr>
+                    <td>Analyst</td>
+                    <td>Staff</td>
+                    <td>7%</td>
+                    <td>$175/hr</td>
+                    <td>$85/hr</td>
+                </tr>
+            </table>
+
+            <h3>Scenario Generation</h3>
+            <table>
+                <tr>
+                    <th>Scenario</th>
+                    <th>Rate Multiplier</th>
+                    <th>Hours Adjustment</th>
+                    <th>Positioning</th>
+                </tr>
+                <tr>
+                    <td><strong>Standard</strong></td>
+                    <td>1.0x fee, 1.0x cost</td>
+                    <td>Baseline hours</td>
+                    <td>Cost-competitive baseline</td>
+                </tr>
+                <tr>
+                    <td><strong>Premium</strong></td>
+                    <td>1.15x fee, 1.05x cost</td>
+                    <td>-10% hours</td>
+                    <td>Higher margin, senior-heavy, efficiency-focused</td>
+                </tr>
+                <tr>
+                    <td><strong>Value</strong></td>
+                    <td>0.85x fee, 0.92x cost</td>
+                    <td>+15% hours</td>
+                    <td>
+                        Budget-conscious, junior-leveraged, extended timeline
+                    </td>
+                </tr>
+            </table>
+
+            <hr />
+
+            <!-- SECTION 13 -->
+            <h2 id="s13">13. Azure Target Architecture</h2>
+            <h3>Production Infrastructure Vision</h3>
+            <div class="diagram-container">
+                <div class="mermaid">
+                    graph TB subgraph "Identity and Access" EID["Azure Entra
+                    ID\nSSO + OIDC + RBAC"] end subgraph "API Management"
+                    APIM["Azure APIM\nRate Limiting | Auth | Routing"] end
+                    subgraph "Compute" CA["Azure Container Apps\nMicroservices
+                    Runtime"] ACA1["Deal Service"] ACA2["Pricing Service"]
+                    ACA3["Approval Service"] ACA4["Analytics Service"] CA -->
+                    ACA1 CA --> ACA2 CA --> ACA3 CA --> ACA4 end subgraph "AI
+                    and ML" AOI["Azure OpenAI\nGPT-4o"] SK["Semantic
+                    Kernel\nOrchestration"] LG["LangGraph\nAgent Workflows"] AOI
+                    --> SK --> LG end subgraph "Data" PG["Azure
+                    PostgreSQL\nFlexible Server"] REDIS["Azure Cache for
+                    Redis\nSession + Rate Cache"] BLOB["Azure Blob
+                    Storage\nDocuments + Exports"] end subgraph "Messaging"
+                    SB["Azure Service Bus\nAsync Commands"] EG["Azure Event
+                    Grid\nDomain Events"] end subgraph "Security" KV["Azure Key
+                    Vault\nSecrets + Certificates"] WAF["Azure WAF\nWeb
+                    Application Firewall"] end subgraph "Observability"
+                    AI2["Application Insights\nAPM + Tracing"] LA["Log
+                    Analytics\nCentralized Logging"] AZ["Azure Monitor\nAlerts +
+                    Dashboards"] end subgraph "CI/CD" GH["GitHub Actions"]
+                    ADO["Azure DevOps\nPipelines"] ACR["Azure Container
+                    Registry"] GH --> ADO --> ACR --> CA end EID --> APIM APIM
+                    --> CA CA --> AOI CA --> PG CA --> REDIS CA --> BLOB CA -->
+                    SB CA --> EG KV --> CA WAF --> APIM CA --> AI2 --> LA --> AZ
+                    style EID fill:#dbeafe,stroke:#3b82f6 style APIM
+                    fill:#dbeafe,stroke:#3b82f6 style AOI
+                    fill:#fef3c7,stroke:#d97706 style PG
+                    fill:#d1fae5,stroke:#059669 style AI2
+                    fill:#fce7f3,stroke:#db2777
+                </div>
+                <div class="diagram-label">
+                    Figure 13.1 - Azure Target Production Architecture
+                </div>
+            </div>
+
+            <h3>Azure Component Mapping</h3>
+            <table>
+                <tr>
+                    <th>Component</th>
+                    <th>Azure Service</th>
+                    <th>Purpose</th>
+                </tr>
+                <tr>
+                    <td>Identity/SSO</td>
+                    <td>Azure Entra ID</td>
+                    <td>OIDC-based SSO with role claims, MFA</td>
+                </tr>
+                <tr>
+                    <td>API Gateway</td>
+                    <td>Azure API Management</td>
+                    <td>Rate limiting, API versioning, OAuth validation</td>
+                </tr>
+                <tr>
+                    <td>Compute</td>
+                    <td>Azure Container Apps</td>
+                    <td>Serverless container orchestration, auto-scaling</td>
+                </tr>
+                <tr>
+                    <td>AI Models</td>
+                    <td>Azure OpenAI (GPT-4o)</td>
+                    <td>LLM inference for all 5 AI use cases</td>
+                </tr>
+                <tr>
+                    <td>AI Orchestration</td>
+                    <td>Semantic Kernel + LangGraph</td>
+                    <td>Multi-step agent workflows, tool calling</td>
+                </tr>
+                <tr>
+                    <td>Primary Database</td>
+                    <td>Azure Database for PostgreSQL</td>
+                    <td>Managed PostgreSQL with automated backups</td>
+                </tr>
+                <tr>
+                    <td>Caching</td>
+                    <td>Azure Cache for Redis</td>
+                    <td>Rate card caching, session state</td>
+                </tr>
+                <tr>
+                    <td>Object Storage</td>
+                    <td>Azure Blob Storage</td>
+                    <td>Deal documents, exported reports</td>
+                </tr>
+                <tr>
+                    <td>Async Messaging</td>
+                    <td>Azure Service Bus</td>
+                    <td>Command queue for long-running operations</td>
+                </tr>
+                <tr>
+                    <td>Events</td>
+                    <td>Azure Event Grid</td>
+                    <td>Domain event pub/sub</td>
+                </tr>
+                <tr>
+                    <td>Secrets</td>
+                    <td>Azure Key Vault</td>
+                    <td>API keys, connection strings, certificates</td>
+                </tr>
+                <tr>
+                    <td>WAF</td>
+                    <td>Azure WAF</td>
+                    <td>OWASP protection, DDoS mitigation</td>
+                </tr>
+                <tr>
+                    <td>APM</td>
+                    <td>Application Insights</td>
+                    <td>Performance monitoring, distributed tracing</td>
+                </tr>
+                <tr>
+                    <td>Logging</td>
+                    <td>Log Analytics</td>
+                    <td>Centralized log aggregation (KQL)</td>
+                </tr>
+                <tr>
+                    <td>CI/CD</td>
+                    <td>GitHub Actions + Azure DevOps</td>
+                    <td>Build, test, deploy pipelines</td>
+                </tr>
+            </table>
+
+            <h3>CQRS Readiness</h3>
+            <table>
+                <tr>
+                    <th>Concern</th>
+                    <th>Current (PoC)</th>
+                    <th>Target (Production)</th>
+                </tr>
+                <tr>
+                    <td>Commands</td>
+                    <td>Direct DB writes via Drizzle</td>
+                    <td>Service Bus command queue</td>
+                </tr>
+                <tr>
+                    <td>Queries</td>
+                    <td>Direct DB reads via Drizzle</td>
+                    <td>Read-optimized views / materialized views</td>
+                </tr>
+                <tr>
+                    <td>Events</td>
+                    <td>Activity log inserts</td>
+                    <td>Event Grid domain events</td>
+                </tr>
+                <tr>
+                    <td>Projections</td>
+                    <td>Dashboard summary query</td>
+                    <td>Denormalized read models in Redis</td>
+                </tr>
+            </table>
+
+            <hr />
+
+            <!-- SECTION 14 -->
+            <h2 id="s14">14. External Integrations</h2>
+            <h3>Integration Landscape</h3>
+            <div class="diagram-container">
+                <div class="mermaid">
+                    graph LR subgraph "DealPad Core" DP["DealPad API"] end
+                    subgraph "CRM" DYN["Microsoft Dynamics 365\nClient records,
+                    deal pipeline"] end subgraph "ERP / HR" WD["Workday\nBudget
+                    data, resources"] end subgraph "Compliance"
+                    IA["Intapp\nConflict screening"] end subgraph "Analytics"
+                    PBI["Power BI Embedded\nMargin analytics, KPIs"] end DP
+                    <-->|"REST API\nOAuth 2.0"| DYN DP <-->|"SOAP/REST API"| WD
+                    DP <-->|"REST API"| IA DP -->|"REST API\nEmbed SDK"| PBI
+                    style DP fill:#fef3c7,stroke:#d97706 style DYN
+                    fill:#dbeafe,stroke:#3b82f6 style WD
+                    fill:#d1fae5,stroke:#059669 style IA
+                    fill:#f5f5f4,stroke:#78716c style PBI
+                    fill:#fce7f3,stroke:#db2777
+                </div>
+                <div class="diagram-label">
+                    Figure 14.1 - External Integration Landscape (Target)
+                </div>
+            </div>
+
+            <table>
+                <tr>
+                    <th>System</th>
+                    <th>Direction</th>
+                    <th>Protocol</th>
+                    <th>Data Exchanged</th>
+                    <th>Status</th>
+                </tr>
+                <tr>
+                    <td><strong>Dynamics CRM</strong></td>
+                    <td>Bi-directional</td>
+                    <td>REST API, OAuth 2.0</td>
+                    <td>Client records, deal pipeline, opportunity stages</td>
+                    <td>Planned (Target)</td>
+                </tr>
+                <tr>
+                    <td><strong>Workday</strong></td>
+                    <td>Inbound</td>
+                    <td>SOAP/REST</td>
+                    <td>Budget data, resource availability, cost rates</td>
+                    <td>Planned (Target)</td>
+                </tr>
+                <tr>
+                    <td><strong>Intapp</strong></td>
+                    <td>Bi-directional</td>
+                    <td>REST API</td>
+                    <td>Conflict screening, independence verification</td>
+                    <td>Planned (Target)</td>
+                </tr>
+                <tr>
+                    <td><strong>Power BI</strong></td>
+                    <td>Outbound</td>
+                    <td>REST API, Embed SDK</td>
+                    <td>Margin trends, pipeline health, executive KPIs</td>
+                    <td>Planned (Target)</td>
+                </tr>
+            </table>
+
+            <hr />
+
+            <!-- SECTION 15 -->
+            <h2 id="s15">15. Observability &amp; Monitoring</h2>
+            <h3>Target Observability Stack (Azure)</h3>
+            <div class="diagram-container">
+                <div class="mermaid">
+                    graph TD subgraph "Telemetry Sources" APP["Application
+                    Code\nOpenTelemetry SDK"] DBT["Database\nQuery Performance"]
+                    AIT["AI Service\nInference Latency"] EXT["External
+                    APIs\nIntegration Health"] end subgraph "Collection"
+                    OTEL["OpenTelemetry Collector\nTraces + Metrics + Logs"] end
+                    subgraph "Azure Monitor" APPI["Application Insights\nAPM +
+                    Distributed Tracing"] LA["Log Analytics Workspace\nKQL
+                    Queries"] AZM["Azure Monitor\nDashboards + Alerts"] end
+                    subgraph "Alerting" PD["PagerDuty / OpsGenie\nOn-Call
+                    Routing"] TEAMS["Microsoft Teams\nNotifications"] end APP
+                    --> OTEL DBT --> OTEL AIT --> OTEL EXT --> OTEL OTEL -->
+                    APPI --> LA --> AZM AZM --> PD AZM --> TEAMS style OTEL
+                    fill:#fef3c7,stroke:#d97706 style APPI
+                    fill:#fce7f3,stroke:#db2777
+                </div>
+                <div class="diagram-label">
+                    Figure 15.1 - Target Observability Stack
+                </div>
+            </div>
+
+            <h3>Key Metrics &amp; SLIs</h3>
+            <table>
+                <tr>
+                    <th>Category</th>
+                    <th>Metric</th>
+                    <th>Target SLO</th>
+                </tr>
+                <tr>
+                    <td>Availability</td>
+                    <td>API uptime</td>
+                    <td>99.9%</td>
+                </tr>
+                <tr>
+                    <td>Latency</td>
+                    <td>Deal detail page load (P95)</td>
+                    <td>&lt; 500ms</td>
+                </tr>
+                <tr>
+                    <td>Latency</td>
+                    <td>AI endpoint response (P95)</td>
+                    <td>&lt; 2s</td>
+                </tr>
+                <tr>
+                    <td>Latency</td>
+                    <td>Dashboard summary query (P95)</td>
+                    <td>&lt; 300ms</td>
+                </tr>
+                <tr>
+                    <td>Error Rate</td>
+                    <td>HTTP 5xx responses</td>
+                    <td>&lt; 0.1%</td>
+                </tr>
+                <tr>
+                    <td>Throughput</td>
+                    <td>Concurrent deal sessions</td>
+                    <td>100+</td>
+                </tr>
+                <tr>
+                    <td>Data</td>
+                    <td>Pricing recalculation time</td>
+                    <td>&lt; 200ms</td>
+                </tr>
+                <tr>
+                    <td>AI</td>
+                    <td>Risk summary generation time</td>
+                    <td>&lt; 1.5s</td>
+                </tr>
+            </table>
+
+            <hr />
+
+            <!-- SECTION 16 -->
+            <h2 id="s16">16. Security Architecture</h2>
+            <h3>Target Security Architecture (Azure)</h3>
+            <div class="diagram-container">
+                <div class="mermaid">
+                    graph TD subgraph "Identity Layer" EID["Azure Entra ID\nOIDC
+                    + MFA + Conditional Access"] RBAC2["Azure RBAC\n6 Personas
+                    mapped to AD Groups"] end subgraph "Network Security"
+                    WAF["Azure WAF\nOWASP Top 10"] APIM2["APIM\nRate Limiting +
+                    IP Filtering"] VNET["Azure VNet\nPrivate Endpoints"] end
+                    subgraph "Data Security" TDE["Transparent Data
+                    Encryption\nPostgreSQL at-rest"] TLS["TLS 1.3\nIn-transit
+                    encryption"] KV2["Key Vault\nCertificate + Secret
+                    Management"] end subgraph "Application Security" JWT["JWT
+                    Validation Middleware"] AUDIT["Audit Logging\nAll mutations
+                    logged"] RLS["Row-Level Security\nFuture: Multi-tenant"] end
+                    subgraph "Compliance" SOC2["SOC 2 Type II"] GDPR["GDPR Data
+                    Handling"] HIPAA["HIPAA Awareness"] end EID --> RBAC2 WAF
+                    --> APIM2 --> VNET TDE --> KV2 TLS --> APIM2 JWT --> AUDIT
+                    --> RLS SOC2 --> GDPR GDPR --> HIPAA style EID
+                    fill:#dbeafe,stroke:#3b82f6 style WAF
+                    fill:#fecaca,stroke:#dc2626 style TDE
+                    fill:#d1fae5,stroke:#059669 style SOC2
+                    fill:#e9d5ff,stroke:#7c3aed
+                </div>
+                <div class="diagram-label">
+                    Figure 16.1 - Target Security Architecture
+                </div>
+            </div>
+
+            <h3>Security Controls Roadmap</h3>
+            <table>
+                <tr>
+                    <th>Control</th>
+                    <th>PoC</th>
+                    <th>Production Target</th>
+                </tr>
+                <tr>
+                    <td>Authentication</td>
+                    <td>localStorage persona</td>
+                    <td>Azure Entra ID + OIDC + MFA</td>
+                </tr>
+                <tr>
+                    <td>Authorization</td>
+                    <td>Client-side <code>hasPermission()</code></td>
+                    <td>Server middleware + JWT claims</td>
+                </tr>
+                <tr>
+                    <td>API Security</td>
+                    <td>Open CORS</td>
+                    <td>APIM + WAF + rate limiting</td>
+                </tr>
+                <tr>
+                    <td>Data Encryption (at-rest)</td>
+                    <td>Replit-managed</td>
+                    <td>Azure TDE</td>
+                </tr>
+                <tr>
+                    <td>Data Encryption (in-transit)</td>
+                    <td>Replit mTLS proxy</td>
+                    <td>TLS 1.3 end-to-end</td>
+                </tr>
+                <tr>
+                    <td>Secrets Management</td>
+                    <td>Environment variables</td>
+                    <td>Azure Key Vault</td>
+                </tr>
+                <tr>
+                    <td>Audit Logging</td>
+                    <td>Activity log table</td>
+                    <td>Application Insights + Log Analytics</td>
+                </tr>
+                <tr>
+                    <td>Vulnerability Scanning</td>
+                    <td>Manual</td>
+                    <td>Automated SAST/DAST in CI/CD</td>
+                </tr>
+                <tr>
+                    <td>Compliance</td>
+                    <td>N/A</td>
+                    <td>SOC 2 Type II alignment</td>
+                </tr>
+            </table>
+
+            <hr />
+
+            <!-- SECTION 17 -->
+            <h2 id="s17">17. Deployment Architecture</h2>
+            <h3>PoC Deployment (Replit)</h3>
+            <div class="diagram-container">
+                <div class="mermaid">
+                    graph LR subgraph "Build Phase" SRC["Source Code"] -->
+                    VITE["Vite Build\nnpm run build"] VITE -->
+                    DIST["dist/public/\nindex.html + assets"] end subgraph
+                    "Runtime" TSX["npx tsx server/index.ts"] EXPRESS["Express
+                    Server\nPort 3001"] STATIC["express.static\ndist/public"]
+                    FALLBACK["SPA Fallback\nindex.html"] TSX --> EXPRESS EXPRESS
+                    --> STATIC EXPRESS --> FALLBACK end subgraph
+                    "Infrastructure" REPLIT["Replit Autoscale\nDeployment"]
+                    PG["PostgreSQL\nReplit Managed"] end DIST --> STATIC EXPRESS
+                    --> PG REPLIT --> EXPRESS style VITE
+                    fill:#fef3c7,stroke:#d97706 style EXPRESS
+                    fill:#292524,color:#fafaf9 style REPLIT
+                    fill:#dbeafe,stroke:#3b82f6
+                </div>
+                <div class="diagram-label">
+                    Figure 17.1 - PoC Deployment Architecture (Replit)
+                </div>
+            </div>
+
+            <h3>Target Deployment (Azure)</h3>
+            <div class="diagram-container">
+                <div class="mermaid">
+                    graph TD subgraph "Source Control" GH["GitHub Repository"]
+                    end subgraph "CI Pipeline" GA["GitHub Actions\nLint + Test +
+                    Build"] ACR["Azure Container Registry\nDocker Image Push"]
+                    end subgraph "CD Pipeline" ADO["Azure DevOps\nRelease
+                    Pipeline"] STG["Staging Environment\nSlot"] PRD["Production
+                    Environment\nContainer Apps"] end subgraph "Environments"
+                    DEV["Development\nFeature branches"] QA["QA /
+                    UAT\nIntegration testing"] PROD["Production\nBlue/Green"]
+                    end GH --> GA --> ACR ACR --> ADO ADO --> STG --> PRD DEV
+                    --> QA --> PROD style GH fill:#f5f5f4,stroke:#78716c style
+                    GA fill:#292524,color:#fafaf9 style PRD
+                    fill:#d1fae5,stroke:#059669
+                </div>
+                <div class="diagram-label">
+                    Figure 17.2 - Target Azure CI/CD Pipeline
+                </div>
+            </div>
+
+            <h3>Environment Strategy</h3>
+            <table>
+                <tr>
+                    <th>Environment</th>
+                    <th>Purpose</th>
+                    <th>Database</th>
+                    <th>AI Service</th>
+                </tr>
+                <tr>
+                    <td>Development</td>
+                    <td>Feature development</td>
+                    <td>Local PostgreSQL</td>
+                    <td>Simulation endpoints</td>
+                </tr>
+                <tr>
+                    <td>Staging</td>
+                    <td>Integration testing</td>
+                    <td>Azure PostgreSQL (staging)</td>
+                    <td>Azure OpenAI (dev tier)</td>
+                </tr>
+                <tr>
+                    <td>Production</td>
+                    <td>Live users</td>
+                    <td>Azure PostgreSQL (production)</td>
+                    <td>Azure OpenAI (production)</td>
+                </tr>
+            </table>
+
+            <hr />
+
+            <!-- SECTION 18 -->
+            <h2 id="s18">18. Key Architectural Decisions (ADRs)</h2>
+
+            <div class="adr">
+                <h3>ADR-001: Monolithic PoC with Microservice-Ready Design</h3>
+                <p>
+                    <strong>Context:</strong> The PoC needs to demonstrate
+                    end-to-end functionality quickly while establishing patterns
+                    for future microservice decomposition.
+                </p>
+                <p>
+                    <strong>Decision:</strong> Build as a single Express.js
+                    application with clear bounded context separation in the
+                    codebase.
+                </p>
+                <p>
+                    <strong>Consequences:</strong> Faster development; clear
+                    migration path to Azure Container Apps microservices;
+                    bounded contexts translate directly to service boundaries.
+                </p>
+            </div>
+
+            <div class="adr">
+                <h3>ADR-002: Drizzle ORM Over Prisma / TypeORM</h3>
+                <p>
+                    <strong>Context:</strong> Need a TypeScript-first ORM with
+                    type-safe queries and minimal overhead.
+                </p>
+                <p>
+                    <strong>Decision:</strong> Use Drizzle ORM with the
+                    relational query API and <code>pg</code> (node-postgres)
+                    driver.
+                </p>
+                <p>
+                    <strong>Rationale:</strong> Schema in TypeScript (shared
+                    frontend/backend); relational query API (<code>with</code>
+                    clause) for eager loading; smaller bundle than Prisma;
+                    <code>drizzle-kit push</code> for schema sync.
+                </p>
+            </div>
+
+            <div class="adr">
+                <h3>ADR-003: Wouter Over React Router</h3>
+                <p>
+                    <strong>Decision:</strong> Use Wouter (3.9) instead of React
+                    Router.
+                </p>
+                <p>
+                    <strong>Rationale:</strong> ~1.5KB vs ~30KB bundle size;
+                    hook-based API; sufficient feature set for this application.
+                </p>
+            </div>
+
+            <div class="adr">
+                <h3>ADR-004: Heuristic-Based AI Simulation</h3>
+                <p>
+                    <strong>Decision:</strong> Implement all 5 AI use cases as
+                    deterministic heuristic engines producing structured JSON
+                    identical to the LLM-backed production versions.
+                </p>
+                <p>
+                    <strong>Consequences:</strong> Zero external API dependency;
+                    consistent demo results; API contract established; frontend
+                    already built against production response schema.
+                </p>
+            </div>
+
+            <div class="adr">
+                <h3>ADR-005: Persona-Based Auth for PoC</h3>
+                <p>
+                    <strong>Decision:</strong> Implement a persona switcher with
+                    client-side permission enforcement via React Context.
+                </p>
+                <p>
+                    <strong>Rationale:</strong> Allows instant persona switching
+                    for demos; permission matrix maps directly to Entra ID role
+                    claims; clear upgrade path to OIDC.
+                </p>
+            </div>
+
+            <div class="adr">
+                <h3>ADR-006: TanStack React Query for Server State</h3>
+                <p>
+                    <strong>Decision:</strong> Use TanStack React Query v5 for
+                    all API interactions.
+                </p>
+                <p>
+                    <strong>Rationale:</strong> Automatic cache invalidation on
+                    mutations; stale-while-revalidate pattern; query key
+                    hierarchy for targeted invalidation; built-in loading/error
+                    states.
+                </p>
+            </div>
+
+            <div class="adr">
+                <h3>ADR-007: Tailwind CSS v4 with Custom Design System</h3>
+                <p>
+                    <strong>Decision:</strong> Use Tailwind CSS v4 with CSS
+                    custom properties for theming and
+                    <code>@layer components</code> for reusable patterns.
+                </p>
+                <p>
+                    <strong>Rationale:</strong> Utility-first for rapid
+                    prototyping; CSS variables enable theming; persona-specific
+                    accent colors via dynamic classes; no runtime CSS-in-JS
+                    overhead.
+                </p>
+            </div>
+
+            <div class="adr">
+                <h3>ADR-008: Automated Schema Push Over Migrations</h3>
+                <p>
+                    <strong>Decision:</strong> Use
+                    <code>CREATE TABLE IF NOT EXISTS</code> in the server
+                    startup sequence with Drizzle schema as the source of truth.
+                </p>
+                <p>
+                    <strong>Rationale:</strong> Zero-friction schema changes
+                    during development; server self-initializes database;
+                    production will use versioned migrations.
+                </p>
+            </div>
+
+            <div class="adr">
+                <h3>ADR-009: Single-Server Architecture (API + Static)</h3>
+                <p>
+                    <strong>Decision:</strong> Express serves both the API
+                    (<code>/api/*</code>) and the built Vite frontend
+                    (<code>dist/public/</code>) from a single process.
+                </p>
+                <p>
+                    <strong>Rationale:</strong> Single deployment artifact; no
+                    CDN needed for PoC; SPA fallback in same process; Vite dev
+                    server proxies <code>/api</code> calls during development.
+                </p>
+            </div>
+
+            <div class="adr">
+                <h3>ADR-010: Activity Log as Event Source Precursor</h3>
+                <p>
+                    <strong>Decision:</strong> Implement an
+                    <code>activity_log</code> table with JSONB metadata for all
+                    significant deal lifecycle events.
+                </p>
+                <p>
+                    <strong>Consequences:</strong> Immediate audit trail for
+                    compliance; natural migration path to Event Grid domain
+                    events in production; activity feed on dashboard and deal
+                    detail views.
+                </p>
+            </div>
+
+            <hr />
+
+            <!-- SECTION 19 -->
+            <h2 id="s19">19. Future Roadmap</h2>
+            <h3>Phase 2: Production MVP</h3>
+            <table>
+                <tr>
+                    <th>Capability</th>
+                    <th>Description</th>
+                    <th>Azure Services</th>
+                </tr>
+                <tr>
+                    <td>Azure Entra ID Integration</td>
+                    <td>Replace persona switcher with SSO + MFA</td>
+                    <td>Entra ID, OIDC</td>
+                </tr>
+                <tr>
+                    <td>Server-Side Authorization</td>
+                    <td>JWT middleware with role enforcement</td>
+                    <td>APIM, Express middleware</td>
+                </tr>
+                <tr>
+                    <td>Azure OpenAI Integration</td>
+                    <td>Replace heuristic AI with GPT-4o inference</td>
+                    <td>Azure OpenAI, Semantic Kernel</td>
+                </tr>
+                <tr>
+                    <td>CI/CD Pipeline</td>
+                    <td>Automated build, test, deploy</td>
+                    <td>GitHub Actions, Azure DevOps</td>
+                </tr>
+                <tr>
+                    <td>Container Deployment</td>
+                    <td>Dockerized services on Container Apps</td>
+                    <td>ACR, Container Apps</td>
+                </tr>
+            </table>
+
+            <h3>Phase 3: Enterprise Features</h3>
+            <table>
+                <tr>
+                    <th>Capability</th>
+                    <th>Description</th>
+                </tr>
+                <tr>
+                    <td>CRM Integration</td>
+                    <td>Bi-directional sync with Dynamics 365</td>
+                </tr>
+                <tr>
+                    <td>Workday Integration</td>
+                    <td>
+                        Real-time resource availability and budget validation
+                    </td>
+                </tr>
+                <tr>
+                    <td>Intapp Integration</td>
+                    <td>Automated conflict-of-interest screening</td>
+                </tr>
+                <tr>
+                    <td>Power BI Embedded</td>
+                    <td>Advanced analytics dashboards within DealPad</td>
+                </tr>
+                <tr>
+                    <td>Multi-Tenant RBAC</td>
+                    <td>Row-level security for practice group isolation</td>
+                </tr>
+                <tr>
+                    <td>Document Generation</td>
+                    <td>Automated SOW/proposal generation from deal data</td>
+                </tr>
+                <tr>
+                    <td>Notification Engine</td>
+                    <td>Email/Teams notifications for approval workflow</td>
+                </tr>
+            </table>
+
+            <h3>Phase 4: Advanced AI</h3>
+            <table>
+                <tr>
+                    <th>Capability</th>
+                    <th>Description</th>
+                </tr>
+                <tr>
+                    <td>Fine-Tuned Models</td>
+                    <td>
+                        Armanino-specific effort prediction models trained on
+                        historical data
+                    </td>
+                </tr>
+                <tr>
+                    <td>RAG-Based Similarity</td>
+                    <td>
+                        Vector store of historical deals for semantic search
+                    </td>
+                </tr>
+                <tr>
+                    <td>Multi-Agent Workflows</td>
+                    <td>LangGraph orchestration of chained AI tasks</td>
+                </tr>
+                <tr>
+                    <td>Predictive Analytics</td>
+                    <td>Win probability scoring based on deal attributes</td>
+                </tr>
+                <tr>
+                    <td>Natural Language Querying</td>
+                    <td>
+                        "Show me all deals above 30% margin in the West region"
+                    </td>
+                </tr>
+            </table>
+
+            <hr />
+
+            <h2>Appendix A: Technology Stack Summary</h2>
+            <table>
+                <tr>
+                    <th>Category</th>
+                    <th>PoC Technology</th>
+                    <th>Production Target</th>
+                </tr>
+                <tr>
+                    <td><strong>Frontend</strong></td>
+                    <td>React 19, Vite, Tailwind CSS 4, TypeScript</td>
+                    <td>Same</td>
+                </tr>
+                <tr>
+                    <td><strong>Backend</strong></td>
+                    <td>Express.js 5, TypeScript, tsx</td>
+                    <td>Express.js or NestJS on Container Apps</td>
+                </tr>
+                <tr>
+                    <td><strong>ORM</strong></td>
+                    <td>Drizzle ORM 0.45</td>
+                    <td>Drizzle ORM with migrations</td>
+                </tr>
+                <tr>
+                    <td><strong>Database</strong></td>
+                    <td>PostgreSQL (Replit)</td>
+                    <td>Azure Database for PostgreSQL</td>
+                </tr>
+                <tr>
+                    <td><strong>AI</strong></td>
+                    <td>Heuristic simulation</td>
+                    <td>Azure OpenAI + Semantic Kernel</td>
+                </tr>
+                <tr>
+                    <td><strong>Auth</strong></td>
+                    <td>localStorage persona</td>
+                    <td>Azure Entra ID + OIDC</td>
+                </tr>
+                <tr>
+                    <td><strong>Hosting</strong></td>
+                    <td>Replit Autoscale</td>
+                    <td>Azure Container Apps</td>
+                </tr>
+                <tr>
+                    <td><strong>CI/CD</strong></td>
+                    <td>Replit auto-deploy</td>
+                    <td>GitHub Actions + Azure DevOps</td>
+                </tr>
+                <tr>
+                    <td><strong>Monitoring</strong></td>
+                    <td>Console logs + activity log</td>
+                    <td>Application Insights + Log Analytics</td>
+                </tr>
+                <tr>
+                    <td><strong>Secrets</strong></td>
+                    <td>Environment variables</td>
+                    <td>Azure Key Vault</td>
+                </tr>
+                <tr>
+                    <td><strong>CDN</strong></td>
+                    <td>N/A</td>
+                    <td>Azure Front Door</td>
+                </tr>
+                <tr>
+                    <td><strong>Messaging</strong></td>
+                    <td>Synchronous API calls</td>
+                    <td>Azure Service Bus + Event Grid</td>
+                </tr>
+            </table>
+
+            <h2>Appendix B: File Structure</h2>
+            <pre><code>dealpad/
+├── client/
+│   └── src/
+│       ├── App.tsx                    # Router + auth guards
+│       ├── index.css                  # Design system (Tailwind v4)
+│       ├── main.tsx                   # React entry point
+│       ├── components/
+│       │   ├── layout/
+│       │   │   ├── AppLayout.tsx      # Shell: sidebar + content
+│       │   │   └── Sidebar.tsx        # Navigation + persona display
+│       │   └── ui/                    # Radix-based UI primitives
+│       ├── context/
+│       │   └── AuthContext.tsx         # Persona RBAC engine
+│       ├── hooks/
+│       │   └── use-api.ts             # React Query API layer
+│       ├── lib/
+│       │   └── utils.ts               # Tailwind merge utility
+│       └── pages/
+│           ├── Dashboard.tsx           # Role-aware command center
+│           ├── DealDetail.tsx          # 8-step deal wizard
+│           ├── DealsList.tsx           # Filterable deal table
+│           ├── Login.tsx               # Persona selection
+│           ├── NewDeal.tsx             # Deal creation form
+│           ├── Architecture.tsx        # System diagrams
+│           ├── ArchitectureInteractive.tsx
+│           ├── RateCards.tsx           # Rate card admin
+│           └── ScopeCatalogAdmin.tsx   # Scope catalog admin
+├── server/
+│   ├── index.ts                       # Server entry + schema init
+│   ├── routes.ts                      # All API endpoints
+│   ├── db.ts                          # Drizzle + pg pool
+│   └── seed.ts                        # Demo data seeding
+├── shared/
+│   └── schema.ts                      # Drizzle schema (source of truth)
+├── package.json
+├── vite.config.js
+├── drizzle.config.ts
+└── tsconfig.json</code></pre>
+
+            <div class="footer">
+                <p>Document generated for Armanino LLP - DealPad PoC v1.0</p>
+                <p>
+                    This document reflects the architecture as implemented in
+                    the Proof of Concept. Production architecture decisions are
+                    subject to refinement during Phase 2 planning.
+                </p>
+            </div>
+        </div>
+
+        <script>
+            mermaid.initialize({
+                startOnLoad: true,
+                theme: "neutral",
+                securityLevel: "loose",
+                flowchart: {
+                    useMaxWidth: true,
+                    htmlLabels: true,
+                    curve: "basis",
+                    padding: 15,
+                    nodeSpacing: 30,
+                    rankSpacing: 40,
+                },
+                sequence: {
+                    useMaxWidth: true,
+                    actorMargin: 50,
+                    messageMargin: 30,
+                },
+                er: {
+                    useMaxWidth: true,
+                    fontSize: 12,
+                },
+                class: {
+                    useMaxWidth: true,
+                },
+            });
+        </script>
+    </body>
+</html>
