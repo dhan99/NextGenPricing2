@@ -363,7 +363,7 @@ export function ArchitectureHub() {
         </div>
       </div>
 
-      <div className="bg-stone-50 min-h-[calc(100vh-200px)]">
+      <div className="bg-stone-50 min-h-[calc(100vh-200px)] px-8 py-6">
         {view === "overview" && (
           <div className="overflow-y-auto">
             <Architecture />
