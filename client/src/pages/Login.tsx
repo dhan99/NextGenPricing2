@@ -1,6 +1,7 @@
 import { useAuth, PERSONAS, type PersonaRole } from "@/context/AuthContext";
 import { ArrowRight, Brain, ShieldCheck, Zap, TrendingUp, ChevronDown } from "lucide-react";
 import { useState } from "react";
+import { useLocation } from "wouter";
 
 const personaList: { role: PersonaRole; avatarBg: string; ringColor: string }[] = [
   { role: "pdl", avatarBg: "bg-orange-100 text-orange-700", ringColor: "ring-orange-400" },
@@ -40,6 +41,12 @@ const stats = [
 export function Login() {
   const { login } = useAuth();
   const [expandedRole, setExpandedRole] = useState<PersonaRole | null>(null);
+  const [, navigate] = useLocation();
+
+  const handleLogin = (role: PersonaRole) => {
+    login(role);
+    navigate("/");
+  };
 
   return (
     <div className="min-h-screen flex">
@@ -170,7 +177,7 @@ export function Login() {
                             </div>
 
                             <button
-                              onClick={(e) => { e.stopPropagation(); login(role); }}
+                              onClick={(e) => { e.stopPropagation(); handleLogin(role); }}
                               className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-white text-sm font-medium transition-all hover:opacity-90 focus-visible:ring-2 focus-visible:ring-orange-400 focus-visible:ring-offset-2"
                               style={{ backgroundColor: "#DA720F" }}
                             >
