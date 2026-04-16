@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "6Z7VyiAES2_uuqzONaLjb"
+uri = "file://DealPad_Architecture_Document.md"
+type = "text"
+title = "DealPad Architecture & Technical Decision Record"
