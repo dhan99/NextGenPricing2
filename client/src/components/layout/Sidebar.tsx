@@ -14,7 +14,7 @@ export function Sidebar() {
 
   const navigation = [
     { name: "Dashboard", href: "/", icon: LayoutDashboard, show: true },
-    { name: "Deals", href: "/deals", icon: FileText, show: showDeals },
+    { name: "Deals", href: "/deals", icon: FileText, show: true },
     { name: "Architecture", href: "/architecture", icon: Layers, show: true },
     { name: "Architecture-I", href: "/architecture-i", icon: Network, show: true },
   ];
