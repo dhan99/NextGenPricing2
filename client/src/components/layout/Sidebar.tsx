@@ -36,15 +36,13 @@ export function Sidebar() {
   return (
     <aside className="w-64 bg-sidebar-bg min-h-screen flex flex-col border-r border-sidebar-accent">
       <Link href="/">
-        <div className="px-6 py-5 border-b border-sidebar-accent cursor-pointer hover:bg-sidebar-accent/50 transition-colors">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
-              <span className="text-white font-bold text-sm">D</span>
-            </div>
-            <div>
-              <h1 className="text-sidebar-fg font-semibold text-lg tracking-tight">DealPad</h1>
-              <p className="text-sidebar-muted text-xs">Pricing & Scoping</p>
-            </div>
+        <div className="px-5 py-5 border-b border-sidebar-accent cursor-pointer hover:bg-sidebar-accent/50 transition-colors">
+          <div className="bg-white rounded-lg px-3 py-2 flex items-center justify-center mb-3">
+            <img src="/armanino-logo.svg" alt="Armanino" className="h-6 w-auto" />
+          </div>
+          <div className="px-1">
+            <h1 className="text-sidebar-fg font-semibold text-base tracking-tight">DealPad</h1>
+            <p className="text-sidebar-muted text-xs">Pricing & Scoping</p>
           </div>
         </div>
       </Link>

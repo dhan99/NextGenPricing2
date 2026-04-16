@@ -54,13 +54,12 @@ export function Login() {
         <div className="absolute inset-0 opacity-[0.03]" style={{ backgroundImage: "radial-gradient(circle at 1px 1px, #DA720F 1px, transparent 0)", backgroundSize: "32px 32px" }} />
 
         <div className="relative z-10 flex flex-col justify-between p-12 lg:p-16 w-full">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: "#DA720F" }}>
-              <span className="text-white font-bold text-lg">D</span>
-            </div>
+          <div className="flex items-center gap-4">
+            <img src="/armanino-logo.svg" alt="Armanino" className="h-10 w-auto" />
+            <div className="h-10 w-px bg-stone-300" />
             <div>
               <h1 className="text-xl font-bold text-stone-900 tracking-tight">DealPad</h1>
-              <p className="text-xs text-stone-500">by Armanino LLP</p>
+              <p className="text-xs text-stone-500">Pricing & Scoping 2.0</p>
             </div>
           </div>
 
