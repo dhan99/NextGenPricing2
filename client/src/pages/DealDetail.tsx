@@ -388,7 +388,14 @@ function ScopeStep({ deal }: { deal: any }) {
 
   const addedIds = new Set((scopeItems || []).map((si: any) => si.scopeItemId));
 
+  const [scopeError, setScopeError] = useState("");
+
   const runEstimation = () => {
+    if ((scopeItems || []).length === 0) {
+      setScopeError("Add at least one scope item before estimating effort.");
+      return;
+    }
+    setScopeError("");
     setHasEstimated(true);
     estimation.mutate({
       scopeItems: (scopeItems || []).map((si: any) => ({ ...si.scopeItem, defaultHours: si.adjustedHours || si.scopeItem?.defaultHours })),
@@ -411,6 +418,9 @@ function ScopeStep({ deal }: { deal: any }) {
     }
     if (hasEstimated && scopeItemCount === 0) {
       estimation.reset();
+    }
+    if (scopeItemCount > 0) {
+      setScopeError("");
     }
   }, [scopeItemCount]);
 
@@ -482,10 +492,16 @@ function ScopeStep({ deal }: { deal: any }) {
             <Sparkles className="w-5 h-5 text-primary" />
             <h3 className="font-semibold text-foreground">AI Effort Estimation</h3>
           </div>
-          <button onClick={runEstimation} disabled={estimation.isPending || (scopeItems || []).length === 0} className="btn-primary w-full mb-4">
+          <button onClick={runEstimation} disabled={estimation.isPending} className="btn-primary w-full mb-4">
             {estimation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
             {estimation.isPending ? "Estimating..." : "Estimate Effort"}
           </button>
+          {scopeError && (
+            <div className="flex items-start gap-2 px-3 py-2.5 mb-4 rounded-lg bg-red-50 border border-red-200 text-red-700">
+              <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+              <p className="text-sm">{scopeError}</p>
+            </div>
+          )}
           {estimation.data && (
             <div className="space-y-4">
               <p className="text-sm text-foreground leading-relaxed">{estimation.data.narrative}</p>
