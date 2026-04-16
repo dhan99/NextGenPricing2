@@ -114,7 +114,12 @@ export function useSubmitApproval() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ dealId, data }: { dealId: number; data: any }) => fetchApi(`/api/deals/${dealId}/approvals`, { method: "POST", body: JSON.stringify(data) }),
-    onSuccess: (_, { dealId }) => qc.invalidateQueries({ queryKey: ["deal-approvals", dealId] }),
+    onSuccess: (_, { dealId }) => {
+      qc.invalidateQueries({ queryKey: ["deal-approvals", dealId] });
+      qc.invalidateQueries({ queryKey: ["deal", dealId] });
+      qc.invalidateQueries({ queryKey: ["deals"] });
+      qc.invalidateQueries({ queryKey: ["dashboard"] });
+    },
   });
 }
 
@@ -122,7 +127,11 @@ export function useUpdateApproval() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id, data }: { id: number; data: any }) => fetchApi(`/api/approvals/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["deal-approvals"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["deal-approvals"] });
+      qc.invalidateQueries({ queryKey: ["deals"] });
+      qc.invalidateQueries({ queryKey: ["dashboard"] });
+    },
   });
 }
 

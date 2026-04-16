@@ -10,7 +10,9 @@ import { useLocation } from "wouter";
 export function DealsList() {
   const { data: deals, isLoading } = useDeals();
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
+  const urlParams = new URLSearchParams(window.location.search);
+  const initialFilter = urlParams.get("status") || "all";
+  const [statusFilter, setStatusFilter] = useState(initialFilter);
   const [viewMode, setViewMode] = useState<"table" | "card">("table");
 
   const filtered = (deals || []).filter((d: any) => {

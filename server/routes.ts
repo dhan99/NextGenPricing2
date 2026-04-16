@@ -566,10 +566,21 @@ export function registerRoutes(app: Express) {
   });
 
   app.post("/api/deals/:dealId/approvals", async (req: Request, res: Response) => {
+    const dealId = parseInt(req.params.dealId);
     const [approval] = await db.insert(approvals).values({
-      dealId: parseInt(req.params.dealId),
+      dealId,
       ...req.body,
     }).returning();
+
+    await db.update(deals).set({ status: "submitted" }).where(eq(deals.id, dealId));
+
+    await db.insert(activityLog).values({
+      dealId,
+      action: "approval_submitted",
+      description: `Deal submitted for approval to ${req.body.approverName || "reviewer"}`,
+      userName: req.body.submittedBy || "System",
+    });
+
     res.status(201).json(approval);
   });
 
@@ -578,6 +589,17 @@ export function registerRoutes(app: Express) {
       ...req.body,
       decidedAt: new Date(),
     }).where(eq(approvals.id, parseInt(req.params.id))).returning();
+
+    if (updated && updated.dealId && (req.body.status === "approved" || req.body.status === "rejected")) {
+      await db.update(deals).set({ status: req.body.status }).where(eq(deals.id, updated.dealId));
+      await db.insert(activityLog).values({
+        dealId: updated.dealId,
+        action: `deal_${req.body.status}`,
+        description: `Deal ${req.body.status} by ${updated.approverName || "reviewer"}`,
+        userName: updated.approverName || "System",
+      });
+    }
+
     res.json(updated);
   });
 
