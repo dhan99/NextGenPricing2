@@ -1,7 +1,7 @@
 import { useDashboardSummary, useDeals, useActivity } from "@/hooks/use-api";
 import { formatCurrency, formatPercent, getStatusColor, getStatusLabel } from "@/lib/utils";
 import { Link } from "wouter";
-import { TrendingUp, DollarSign, Clock, AlertCircle, ArrowRight, FileText, Activity, ShieldCheck, Layers, Network, BookOpen, BarChart3, Shield, Eye, Pencil, CheckCircle, Sparkles } from "lucide-react";
+import { TrendingUp, DollarSign, Clock, AlertCircle, ArrowRight, FileText, Activity, ShieldCheck, Layers, Network, BookOpen, BarChart3, Shield, Eye, CheckCircle } from "lucide-react";
 import { useAuth, type PersonaRole } from "@/context/AuthContext";
 
 const ROLE_ACCENT: Record<PersonaRole, { bg: string; border: string; text: string; badge: string; gradient: string }> = {
@@ -34,12 +34,10 @@ const ROLE_ACTIONS: Record<PersonaRole, QuickAction[]> = {
   pdl: [
     { label: "New Deal", href: "/deals/new", icon: FileText, description: "Start a new pricing engagement" },
     { label: "My Deals", href: "/deals", icon: Layers, description: "View and manage all your deals" },
-    { label: "Architecture", href: "/architecture-i", icon: Network, description: "Interactive system diagram" },
   ],
   sll: [
     { label: "Review Deals", href: "/deals", icon: CheckCircle, description: "Deals pending your review" },
     { label: "Pipeline", href: "/deals", icon: BarChart3, description: "Service line pipeline view" },
-    { label: "Architecture", href: "/architecture-i", icon: Network, description: "System architecture overview" },
   ],
   po: [
     { label: "Rate Cards", href: "/admin/rate-cards", icon: DollarSign, description: "Manage billing rate cards" },
@@ -49,16 +47,13 @@ const ROLE_ACTIONS: Record<PersonaRole, QuickAction[]> = {
   fin: [
     { label: "View Deals", href: "/deals", icon: BarChart3, description: "Analyze deal margins" },
     { label: "Pipeline", href: "/deals", icon: TrendingUp, description: "Financial pipeline metrics" },
-    { label: "Architecture", href: "/architecture", icon: Layers, description: "System documentation" },
   ],
   qrm: [
     { label: "Risk Review", href: "/deals", icon: Shield, description: "Review deal risk profiles" },
     { label: "Compliance", href: "/deals", icon: ShieldCheck, description: "Audit compliance status" },
-    { label: "Architecture", href: "/architecture", icon: Layers, description: "Security architecture" },
   ],
   it: [
-    { label: "Architecture", href: "/architecture-i", icon: Network, description: "Interactive system diagram" },
-    { label: "Static View", href: "/architecture", icon: Layers, description: "Architecture documentation" },
+    { label: "System Status", href: "/", icon: CheckCircle, description: "View system health overview" },
   ],
 };
 
@@ -106,9 +101,9 @@ export function Dashboard() {
     ],
     it: [
       { label: "Active Deals", value: String(summary?.totalDeals ?? "--"), icon: FileText },
-      { label: "Integrations", value: "5", icon: Network, href: "/architecture-i" },
-      { label: "System Health", value: "99.9%", icon: CheckCircle, href: "/architecture-i" },
-      { label: "API Endpoints", value: "12", icon: Layers, href: "/architecture" },
+      { label: "Integrations", value: "5", icon: Network },
+      { label: "System Health", value: "99.9%", icon: CheckCircle },
+      { label: "API Endpoints", value: "12", icon: Layers },
     ],
   };
 
