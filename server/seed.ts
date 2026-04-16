@@ -53,7 +53,7 @@ export async function seedDatabase() {
     { code: "CLD-001", name: "Cloud Infrastructure", category: "Cloud", description: "Cloud infrastructure setup and optimization", defaultHours: "80", sortOrder: 15 },
   ]).returning();
 
-  const [deal1] = await db.insert(deals).values([
+  const allDeals = await db.insert(deals).values([
     {
       dealNumber: "DL-2026-001",
       title: "ERP Modernization - Phase 1",
@@ -120,6 +120,10 @@ export async function seedDatabase() {
     },
   ]).returning();
 
+  const deal1 = allDeals[0];
+  const deal2 = allDeals[1];
+  const deal3 = allDeals[2];
+
   await db.insert(dealScopeItems).values([
     { dealId: deal1.id, scopeItemId: scopeItems[0].id, quantity: 1, adjustedHours: "140", complexityMultiplier: "1.2" },
     { dealId: deal1.id, scopeItemId: scopeItems[3].id, quantity: 1, adjustedHours: "280", complexityMultiplier: "1.2" },
@@ -167,12 +171,20 @@ export async function seedDatabase() {
     },
   ]);
 
+  const standardPrompts = [
+    { question: "How many geographic regions are involved?", category: "Complexity", sortOrder: 1, options: ["1 region|1.0", "2 regions|1.1", "3+ regions|1.2"] },
+    { question: "Are there regulatory/compliance requirements?", category: "Compliance", sortOrder: 2, options: ["None|1.0", "Standard compliance|1.05", "SOX/HIPAA compliance|1.15", "Multi-framework|1.25"] },
+    { question: "What is the expected data volume?", category: "Complexity", sortOrder: 3, options: ["Small (<100K records)|0.9", "Medium (100K-1M)|1.0", "Large (1M-10M)|1.1", "Very Large (10M+)|1.2"] },
+    { question: "How many integrations are required?", category: "Integration", sortOrder: 4, options: ["None|1.0", "1-2 integrations|1.05", "3-4 integrations|1.1", "5-8 integrations|1.2", "9+ integrations|1.3"] },
+    { question: "Is there an existing system being replaced?", category: "Migration", sortOrder: 5, options: ["No (greenfield)|0.95", "Yes - modern system|1.05", "Yes - legacy system|1.1", "Yes - multiple systems|1.2"] },
+    { question: "What is the client's technical maturity?", category: "Client", sortOrder: 6, options: ["High maturity|0.9", "Moderate maturity|1.0", "Low maturity|1.1", "Very low maturity|1.2"] },
+    { question: "Is there a hard deadline or external dependency?", category: "Timeline", sortOrder: 7, options: ["Flexible timeline|0.95", "Preferred deadline|1.0", "Hard deadline|1.1", "Regulatory deadline|1.2"] },
+  ];
+
   await db.insert(promptResponses).values([
-    { dealId: deal1.id, question: "How many geographic regions are involved?", answer: "2 regions", category: "Complexity", impactMultiplier: "1.1", sortOrder: 1 },
-    { dealId: deal1.id, question: "Are there regulatory/compliance requirements?", answer: "Yes - SOX compliance", category: "Compliance", impactMultiplier: "1.15", sortOrder: 2 },
-    { dealId: deal1.id, question: "What is the expected data volume?", answer: "Large (10M+ records)", category: "Complexity", impactMultiplier: "1.1", sortOrder: 3 },
-    { dealId: deal1.id, question: "How many integrations are required?", answer: "5-8 integrations", category: "Integration", impactMultiplier: "1.2", sortOrder: 4 },
-    { dealId: deal1.id, question: "Is there an existing system being replaced?", answer: "Yes - legacy ERP", category: "Migration", impactMultiplier: "1.1", sortOrder: 5 },
+    ...standardPrompts.map((p) => ({ dealId: deal1.id, question: p.question, answer: p.sortOrder <= 5 ? p.options[p.sortOrder === 1 ? 1 : p.sortOrder === 2 ? 2 : p.sortOrder === 3 ? 3 : p.sortOrder === 4 ? 3 : 2].split("|")[0] : null, category: p.category, impactMultiplier: p.sortOrder <= 5 ? p.options[p.sortOrder === 1 ? 1 : p.sortOrder === 2 ? 2 : p.sortOrder === 3 ? 3 : p.sortOrder === 4 ? 3 : 2].split("|")[1] : "1.0", sortOrder: p.sortOrder })),
+    ...standardPrompts.map((p) => ({ dealId: deal2.id, question: p.question, answer: null, category: p.category, impactMultiplier: "1.0", sortOrder: p.sortOrder })),
+    ...standardPrompts.map((p) => ({ dealId: deal3.id, question: p.question, answer: p.sortOrder <= 3 ? p.options[1].split("|")[0] : null, category: p.category, impactMultiplier: p.sortOrder <= 3 ? p.options[1].split("|")[1] : "1.0", sortOrder: p.sortOrder })),
   ]);
 
   await db.insert(activityLog).values([

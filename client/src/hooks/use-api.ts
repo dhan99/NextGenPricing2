@@ -117,6 +117,15 @@ export function useDealPrompts(dealId: number) {
   return useQuery({ queryKey: ["deal-prompts", dealId], queryFn: () => fetchApi(`/api/deals/${dealId}/prompts`), enabled: !!dealId });
 }
 
+export function useUpdatePrompt() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ dealId, promptId, answer, impactMultiplier }: { dealId: number; promptId: number; answer: string; impactMultiplier: string }) =>
+      fetchApi(`/api/deals/${dealId}/prompts/${promptId}`, { method: "PATCH", body: JSON.stringify({ answer, impactMultiplier }) }),
+    onSuccess: (_, { dealId }) => { qc.invalidateQueries({ queryKey: ["deal-prompts", dealId] }); },
+  });
+}
+
 export function useActivity() {
   return useQuery({ queryKey: ["activity"], queryFn: () => fetchApi("/api/activity") });
 }

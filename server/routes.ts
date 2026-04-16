@@ -324,6 +324,15 @@ export function registerRoutes(app: Express) {
     res.status(201).json(prompt);
   });
 
+  app.patch("/api/deals/:dealId/prompts/:id", async (req: Request, res: Response) => {
+    const [updated] = await db.update(promptResponses)
+      .set({ answer: req.body.answer, impactMultiplier: req.body.impactMultiplier })
+      .where(eq(promptResponses.id, parseInt(req.params.id)))
+      .returning();
+    if (!updated) return res.status(404).json({ error: "Prompt not found" });
+    res.json(updated);
+  });
+
   // ========== AI ENDPOINTS ==========
 
   app.post("/api/ai/deal-similarity", async (req: Request, res: Response) => {

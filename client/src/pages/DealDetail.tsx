@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRoute } from "wouter";
-import { useDeal, useUpdateDeal, useScopeCatalog, useDealScopeItems, useAddScopeItem, useRemoveScopeItem, useRoles, useDealPricing, useUpdatePricingLine, useDealScenarios, useDealApprovals, useSubmitApproval, useDealPrompts, useCloneDeal, useAIDealSimilarity, useAIEffortEstimation, useAIMarginAdvisor, useAIScenarioRecommendation, useAIRiskSummary } from "@/hooks/use-api";
+import { useDeal, useUpdateDeal, useScopeCatalog, useDealScopeItems, useAddScopeItem, useRemoveScopeItem, useRoles, useDealPricing, useUpdatePricingLine, useDealScenarios, useDealApprovals, useSubmitApproval, useDealPrompts, useUpdatePrompt, useCloneDeal, useAIDealSimilarity, useAIEffortEstimation, useAIMarginAdvisor, useAIScenarioRecommendation, useAIRiskSummary } from "@/hooks/use-api";
 import { formatCurrency, formatPercent, formatNumber, getStatusColor, getStatusLabel, cn } from "@/lib/utils";
 import { ArrowLeft, Check, ChevronRight, Sparkles, AlertTriangle, TrendingUp, Target, FileText, Shield, CheckCircle, XCircle, Clock, Loader2, Plus, Trash2, Lightbulb, Copy, RefreshCw, Pencil, Save } from "lucide-react";
 import { Link, useLocation } from "wouter";
@@ -529,63 +529,127 @@ function ScopeStep({ deal }: { deal: any }) {
   );
 }
 
+const PROMPT_OPTIONS: Record<string, string[]> = {
+  "How many geographic regions are involved?": ["1 region|1.0", "2 regions|1.1", "3+ regions|1.2"],
+  "Are there regulatory/compliance requirements?": ["None|1.0", "Standard compliance|1.05", "SOX/HIPAA compliance|1.15", "Multi-framework|1.25"],
+  "What is the expected data volume?": ["Small (<100K records)|0.9", "Medium (100K-1M)|1.0", "Large (1M-10M)|1.1", "Very Large (10M+)|1.2"],
+  "How many integrations are required?": ["None|1.0", "1-2 integrations|1.05", "3-4 integrations|1.1", "5-8 integrations|1.2", "9+ integrations|1.3"],
+  "Is there an existing system being replaced?": ["No (greenfield)|0.95", "Yes - modern system|1.05", "Yes - legacy system|1.1", "Yes - multiple systems|1.2"],
+  "What is the client's technical maturity?": ["High maturity|0.9", "Moderate maturity|1.0", "Low maturity|1.1", "Very low maturity|1.2"],
+  "Is there a hard deadline or external dependency?": ["Flexible timeline|0.95", "Preferred deadline|1.0", "Hard deadline|1.1", "Regulatory deadline|1.2"],
+};
+
 function AssumptionsStep({ deal }: { deal: any }) {
-  const { data: prompts } = useDealPrompts(deal.id);
+  const { data: prompts, refetch } = useDealPrompts(deal.id);
+  const updatePrompt = useUpdatePrompt();
+
+  const handleAnswer = (prompt: any, optionStr: string) => {
+    const [answer, multiplier] = optionStr.split("|");
+    updatePrompt.mutate({ dealId: deal.id, promptId: prompt.id, answer, impactMultiplier: multiplier });
+  };
+
+  const items = prompts || deal.promptResponses || [];
+  const answeredCount = items.filter((p: any) => p.answer).length;
+  const totalMultiplier = items.reduce((m: number, p: any) => m * parseFloat(p.impactMultiplier || "1"), 1);
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
       <div className="lg:col-span-2">
         <div className="card p-6">
-          <h2 className="text-lg font-semibold text-foreground mb-4">Complexity & Scope Prompts</h2>
-          <p className="text-sm text-muted-foreground mb-6">These questions drive effort multipliers and adjust the scope estimation based on project-specific factors.</p>
+          <div className="flex items-center justify-between mb-2">
+            <h2 className="text-lg font-semibold text-foreground">Complexity & Scope Prompts</h2>
+            <span className="text-xs font-medium text-muted-foreground">{answeredCount} of {items.length} answered</span>
+          </div>
+          <p className="text-sm text-muted-foreground mb-6">Answer these questions to adjust effort multipliers. Each response fine-tunes the scope estimation based on project-specific factors.</p>
           <div className="space-y-4">
-            {(prompts || deal.promptResponses || []).map((p: any) => (
-              <div key={p.id} className="p-4 border border-border rounded-lg">
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <p className="text-sm font-medium text-foreground">{p.question}</p>
-                    <div className="flex items-center gap-2 mt-2">
-                      <span className="badge bg-secondary text-secondary-foreground">{p.category}</span>
-                      <span className="text-sm text-foreground font-medium">{p.answer || "Not answered"}</span>
+            {items.map((p: any) => {
+              const options = PROMPT_OPTIONS[p.question] || [];
+              return (
+                <div key={p.id} className={cn("p-4 rounded-lg border-2 transition-colors", p.answer ? "border-border bg-card" : "border-dashed border-primary/30 bg-primary/5")}>
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-stone-100 text-stone-500">{p.category}</span>
+                        {!p.answer && <span className="text-[10px] font-medium text-primary">Needs answer</span>}
+                      </div>
+                      <p className="text-sm font-medium text-foreground mb-3">{p.question}</p>
+                      {options.length > 0 ? (
+                        <div className="flex flex-wrap gap-2">
+                          {options.map((opt) => {
+                            const [label, mult] = opt.split("|");
+                            const isSelected = p.answer === label;
+                            return (
+                              <button
+                                key={label}
+                                onClick={() => handleAnswer(p, opt)}
+                                disabled={updatePrompt.isPending}
+                                className={cn(
+                                  "px-3 py-1.5 text-xs font-medium rounded-lg border transition-all",
+                                  isSelected
+                                    ? "bg-primary text-primary-foreground border-primary shadow-sm"
+                                    : "bg-card text-foreground border-border hover:border-primary/50 hover:bg-primary/5"
+                                )}
+                              >
+                                {label}
+                                <span className={cn("ml-1.5 opacity-60", isSelected ? "text-primary-foreground" : "")}>{mult}x</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <p className="text-sm text-foreground">{p.answer || "Not answered"}</p>
+                      )}
+                    </div>
+                    <div className="text-right shrink-0">
+                      <p className="text-xs text-muted-foreground">Impact</p>
+                      <p className={cn("text-lg font-bold", parseFloat(p.impactMultiplier) > 1 ? "text-amber-600" : parseFloat(p.impactMultiplier) < 1 ? "text-emerald-600" : "text-muted-foreground")}>{parseFloat(p.impactMultiplier).toFixed(2)}x</p>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <p className="text-xs text-muted-foreground">Impact</p>
-                    <p className={cn("text-sm font-bold", parseFloat(p.impactMultiplier) > 1 ? "text-warning" : "text-success")}>{p.impactMultiplier}x</p>
-                  </div>
                 </div>
-              </div>
-            ))}
-            {(!prompts || prompts.length === 0) && (!deal.promptResponses || deal.promptResponses.length === 0) && (
+              );
+            })}
+            {items.length === 0 && (
               <p className="text-sm text-muted-foreground py-8 text-center">No prompt responses configured for this deal.</p>
             )}
           </div>
         </div>
       </div>
 
-      <div>
-        <div className="card p-6 bg-accent/30">
+      <div className="space-y-6">
+        <div className="card p-6 border-primary/20 bg-primary/5">
           <div className="flex items-center gap-2 mb-4">
-            <Target className="w-5 h-5 text-accent-foreground" />
+            <Target className="w-5 h-5 text-primary" />
             <h3 className="font-semibold text-foreground">Impact Summary</h3>
           </div>
-          {(() => {
-            const items = prompts || deal.promptResponses || [];
-            const totalMultiplier = items.reduce((m: number, p: any) => m * parseFloat(p.impactMultiplier || "1"), 1);
-            return (
-              <div className="space-y-3">
-                <div className="bg-card rounded-lg p-3">
-                  <p className="text-xs text-muted-foreground">Combined Multiplier</p>
-                  <p className="text-2xl font-bold text-foreground">{totalMultiplier.toFixed(2)}x</p>
-                </div>
-                <div className="bg-card rounded-lg p-3">
-                  <p className="text-xs text-muted-foreground">Factors Applied</p>
-                  <p className="text-2xl font-bold text-foreground">{items.length}</p>
-                </div>
-                <p className="text-xs text-muted-foreground">Each prompt response adjusts the baseline effort estimation. Higher multipliers increase estimated hours.</p>
+          <div className="space-y-3">
+            <div className="bg-card rounded-lg p-4">
+              <p className="text-xs text-muted-foreground">Combined Multiplier</p>
+              <p className={cn("text-3xl font-bold", totalMultiplier > 1.15 ? "text-amber-600" : totalMultiplier > 1 ? "text-foreground" : "text-emerald-600")}>{totalMultiplier.toFixed(2)}x</p>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="bg-card rounded-lg p-3">
+                <p className="text-xs text-muted-foreground">Answered</p>
+                <p className="text-xl font-bold text-foreground">{answeredCount}<span className="text-sm font-normal text-muted-foreground">/{items.length}</span></p>
               </div>
-            );
-          })()}
+              <div className="bg-card rounded-lg p-3">
+                <p className="text-xs text-muted-foreground">Unanswered</p>
+                <p className="text-xl font-bold text-foreground">{items.length - answeredCount}</p>
+              </div>
+            </div>
+            {answeredCount < items.length && (
+              <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-amber-50 border border-amber-200 text-amber-700">
+                <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+                <p className="text-xs">Answer all prompts for the most accurate effort estimation.</p>
+              </div>
+            )}
+            {answeredCount === items.length && items.length > 0 && (
+              <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700">
+                <CheckCircle className="w-4 h-4 mt-0.5 shrink-0" />
+                <p className="text-xs">All complexity factors answered. Estimation will use {totalMultiplier.toFixed(2)}x adjustment.</p>
+              </div>
+            )}
+            <p className="text-xs text-muted-foreground leading-relaxed">Each response adjusts the baseline effort estimation. Multipliers above 1.0x increase hours; below 1.0x decrease them.</p>
+          </div>
         </div>
       </div>
     </div>
