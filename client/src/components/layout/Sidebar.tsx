@@ -34,7 +34,7 @@ export function Sidebar() {
   };
 
   return (
-    <aside className="w-64 bg-sidebar-bg min-h-screen flex flex-col border-r border-sidebar-accent">
+    <aside className="w-64 bg-sidebar-bg h-screen sticky top-0 flex flex-col border-r border-sidebar-accent">
       <Link href="/">
         <div className="px-6 py-6 border-b border-sidebar-accent cursor-pointer flex items-center justify-center" style={{ backgroundColor: "#fef3e7" }}>
           <img src="/armanino-logo.svg" alt="Armanino" className="h-8 w-auto" />
