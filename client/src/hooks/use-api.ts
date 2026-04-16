@@ -161,6 +161,19 @@ export function useCloneDeal() {
   });
 }
 
+export function useRateAdjust() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ dealId, factor, userName }: { dealId: number; factor: number; userName?: string }) =>
+      fetchApi(`/api/deals/${dealId}/rate-adjust`, { method: "POST", body: JSON.stringify({ factor, userName }) }),
+    onSuccess: (_, { dealId }) => {
+      qc.invalidateQueries({ queryKey: ["deal", dealId] });
+      qc.invalidateQueries({ queryKey: ["deal-pricing", dealId] });
+      qc.invalidateQueries({ queryKey: ["deals"] });
+    },
+  });
+}
+
 export function useAIDealSimilarity() {
   return useMutation({ mutationFn: (data: any) => fetchApi("/api/ai/deal-similarity", { method: "POST", body: JSON.stringify(data) }) });
 }

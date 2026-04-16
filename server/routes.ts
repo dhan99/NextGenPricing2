@@ -302,6 +302,46 @@ export function registerRoutes(app: Express) {
     res.status(201).json(result);
   });
 
+  app.post("/api/deals/:id/rate-adjust", async (req: Request, res: Response) => {
+    const dealId = parseInt(req.params.id);
+    const factor = parseFloat(req.body.factor);
+    if (!factor || factor <= 0) return res.status(400).json({ error: "Invalid factor" });
+
+    const lines = await db.select().from(pricingLines).where(eq(pricingLines.dealId, dealId));
+    for (const line of lines) {
+      const newRate = parseFloat(line.rate) * factor;
+      const hours = parseFloat(line.hours || "0");
+      const costRate = parseFloat(line.costRate || "0");
+      await db.update(pricingLines).set({
+        rate: newRate.toFixed(2),
+        fee: (hours * newRate).toFixed(2),
+        cost: (hours * costRate).toFixed(2),
+        margin: (hours * (newRate - costRate)).toFixed(2),
+      }).where(eq(pricingLines.id, line.id));
+    }
+
+    const updated = await db.select().from(pricingLines).where(eq(pricingLines.dealId, dealId));
+    const calcFee = updated.reduce((s, l) => s + parseFloat(l.fee || "0"), 0);
+    const calcCost = updated.reduce((s, l) => s + parseFloat(l.cost || "0"), 0);
+    const calcHours = updated.reduce((s, l) => s + parseFloat(l.hours || "0"), 0);
+    await db.update(deals).set({
+      totalFee: String(calcFee),
+      totalCost: String(calcCost),
+      totalHours: String(calcHours),
+      marginPercent: calcFee > 0 ? String(((calcFee - calcCost) / calcFee * 100).toFixed(1)) : "0",
+      blendedRate: calcHours > 0 ? String((calcFee / calcHours).toFixed(2)) : "0",
+    }).where(eq(deals.id, dealId));
+
+    await db.insert(activityLog).values({
+      dealId,
+      action: "rate_adjusted",
+      description: `Quick rate adjustment applied: ${((factor - 1) * 100).toFixed(1)}%`,
+      userName: req.body.userName || "System",
+    });
+
+    res.json({ success: true, factor, totalFee: calcFee, totalCost: calcCost, totalHours: calcHours });
+  });
+
   // ========== SCOPE CATALOG ==========
   app.get("/api/scope-catalog", async (_req: Request, res: Response) => {
     const result = await db.select().from(scopeCatalog).orderBy(scopeCatalog.sortOrder);

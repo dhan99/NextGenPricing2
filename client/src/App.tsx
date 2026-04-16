@@ -5,6 +5,7 @@ import { Dashboard } from "./pages/Dashboard";
 import { DealsList } from "./pages/DealsList";
 import { NewDeal } from "./pages/NewDeal";
 import { DealDetail } from "./pages/DealDetail";
+import { RenewalLeadsheet } from "./pages/RenewalLeadsheet";
 import { RateCards } from "./pages/RateCards";
 import { ScopeCatalogAdmin } from "./pages/ScopeCatalogAdmin";
 import { Architecture } from "./pages/Architecture";
@@ -43,6 +44,9 @@ function AuthenticatedApp() {
         </Route>
         <Route path="/deals/new">
           {hasPermission("createDeals") ? <NewDeal /> : <NoAccess feature="deal creation" />}
+        </Route>
+        <Route path="/deals/:id/renewal-leadsheet">
+          {hasPermission("viewDeals") ? <RenewalLeadsheet /> : <NoAccess feature="renewal leadsheet" />}
         </Route>
         <Route path="/deals/:id">
           {(params) => hasPermission("viewDeals") ? <DealDetail /> : <NoAccess feature="deal details" />}
