@@ -144,18 +144,22 @@ export function Dashboard() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         {kpis.map((kpi) => {
           const content = (
-            <div className={`card p-5 transition-all ${kpi.href ? "hover:shadow-md hover:border-primary/30 cursor-pointer" : ""}`}>
+            <div className={`card p-5 h-full flex flex-col transition-all ${kpi.href ? "hover:shadow-md hover:border-primary/30 cursor-pointer" : ""}`}>
               <div className="flex items-center justify-between mb-3">
                 <span className="text-sm text-muted-foreground font-medium">{kpi.label}</span>
                 <kpi.icon className={`w-5 h-5 ${accent.text}`} />
               </div>
               <p className="text-2xl font-bold text-foreground">{kpi.value}</p>
-              {kpi.href && (
-                <div className="flex items-center gap-1 mt-2">
-                  <span className={`text-xs font-medium ${accent.text}`}>View details</span>
-                  <ArrowRight className={`w-3 h-3 ${accent.text}`} />
-                </div>
-              )}
+              <div className="flex items-center gap-1 mt-auto pt-2">
+                {kpi.href ? (
+                  <>
+                    <span className={`text-xs font-medium ${accent.text}`}>View details</span>
+                    <ArrowRight className={`w-3 h-3 ${accent.text}`} />
+                  </>
+                ) : (
+                  <span className="text-xs text-transparent select-none">-</span>
+                )}
+              </div>
             </div>
           );
           return kpi.href ? (
