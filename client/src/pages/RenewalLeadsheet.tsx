@@ -56,6 +56,7 @@ export function RenewalLeadsheet() {
   const submitApproval = useSubmitApproval();
   const [customPct, setCustomPct] = useState("");
   const [appliedPct, setAppliedPct] = useState<number | null>(null);
+  const [cumulativeFactor, setCumulativeFactor] = useState(1);
 
   // Aggregate pricing totals from pricing-lines (more accurate than deal cache)
   const cyTotals = useMemo(() => {
@@ -153,6 +154,16 @@ export function RenewalLeadsheet() {
     const factor = 1 + pct / 100;
     await rateAdjust.mutateAsync({ dealId, factor, userName: persona?.name });
     setAppliedPct(pct);
+    setCumulativeFactor((c) => c * factor);
+  };
+
+  const resetAdjustments = async () => {
+    if (cumulativeFactor === 1) return;
+    const inverse = 1 / cumulativeFactor;
+    await rateAdjust.mutateAsync({ dealId, factor: inverse, userName: persona?.name });
+    setCumulativeFactor(1);
+    setAppliedPct(null);
+    setCustomPct("");
   };
 
   const handleSubmitApproval = async () => {
@@ -259,10 +270,28 @@ export function RenewalLeadsheet() {
       {/* Quick Rate Adjustment */}
       <div className="card p-5">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-sm font-semibold text-foreground">Quick Rate Adjustment</h2>
-          {appliedPct !== null && (
-            <span className="text-xs text-emerald-700 font-medium">Last applied: {appliedPct >= 0 ? "+" : ""}{appliedPct}%</span>
-          )}
+          <div className="flex items-center gap-3">
+            <h2 className="text-sm font-semibold text-foreground">Quick Rate Adjustment</h2>
+            {cumulativeFactor !== 1 && (
+              <span className="text-xs text-muted-foreground">
+                Net change: <span className="font-semibold text-foreground">{((cumulativeFactor - 1) * 100) >= 0 ? "+" : ""}{((cumulativeFactor - 1) * 100).toFixed(2)}%</span>
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-3">
+            {appliedPct !== null && (
+              <span className="text-xs text-emerald-700 font-medium">Last applied: {appliedPct >= 0 ? "+" : ""}{appliedPct}%</span>
+            )}
+            <button
+              type="button"
+              onClick={resetAdjustments}
+              disabled={cumulativeFactor === 1 || rateAdjust.isPending}
+              className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-md border border-stone-300 text-foreground hover:bg-stone-50 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              Reset
+            </button>
+          </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {[3, 4.2, 5].map((p) => {
