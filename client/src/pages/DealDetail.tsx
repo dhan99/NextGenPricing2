@@ -29,8 +29,6 @@ export function DealDetail() {
   const { data: deal, isLoading } = useDeal(dealId);
   const [currentStep, setCurrentStep] = useState(1);
   const { hasPermission, persona } = useAuth();
-  const cloneDeal = useCloneDeal();
-  const [, navigate] = useLocation();
   const qc = useQueryClient();
 
   const navigateToStep = useCallback((step: number) => {
