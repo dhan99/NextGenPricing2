@@ -164,6 +164,8 @@ async function recalcPricingFromScope(dealId: number) {
 }
 
 import { registerDynamicsRoutes, autoPushDeal } from "./dynamics";
+import { autoPushWorkdayProject } from "./workday";
+import { autoPushIntappOutcome } from "./intapp";
 import {
   registerIntappRoutes,
   onDealSubmittedTrigger,
@@ -1425,12 +1427,24 @@ export function registerRoutes(app: Express) {
       }
     }
 
-    const isFinal = next === "approved" || next === "rejected";
+    // Gate fan-out on an actual status TRANSITION (not just "current value happens to be final").
+    // Without this, repeated PATCHes to an already-approved row would re-fire pushes.
+    const isTransition = !!next && next !== existing.status;
+    const isFinal = isTransition && (next === "approved" || next === "rejected");
     const patch: any = { ...req.body };
     if (isFinal) patch.decidedAt = new Date();
 
+    // Compare-and-set: only update the row if its status is still what we read above.
+    // This ensures concurrent finalization requests can't both succeed and double-fire pushes.
     const [updated] = await db.update(approvals).set(patch)
-      .where(eq(approvals.id, id)).returning();
+      .where(and(eq(approvals.id, id), eq(approvals.status, existing.status)))
+      .returning();
+    if (!updated) {
+      return res.status(409).json({
+        error: "approval_state_changed",
+        message: "Approval was modified concurrently. Reload and try again.",
+      });
+    }
 
     if (updated && updated.dealId) {
       if (isFinal) {
@@ -1441,7 +1455,12 @@ export function registerRoutes(app: Express) {
           description: `Deal ${req.body.status} by ${updated.approverName || "reviewer"}`,
           userName: updated.approverName || "System",
         });
+        // Bi-directional fan-out: push outcome back to all integration platforms.
         autoPushDeal(updated.dealId, ["status"], updated.approverName || undefined).catch(() => {});
+        autoPushIntappOutcome(updated.dealId, req.body.status as any, updated.approverName || undefined).catch(() => {});
+        if (req.body.status === "approved") {
+          autoPushWorkdayProject(updated.dealId, "approval", updated.approverName || undefined).catch(() => {});
+        }
       } else if (req.body.status === "pending_bu_approval") {
         await db.insert(activityLog).values({
           dealId: updated.dealId,

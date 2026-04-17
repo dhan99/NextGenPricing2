@@ -69,6 +69,13 @@ shared/              - Shared code
 ## Database Tables
 clients, deals, scope_catalog, deal_scope_items, roles, rate_cards, rate_card_entries, pricing_lines, scenarios, approvals, prompt_responses, activity_log, change_orders
 
+## Bi-Directional Integrations (simulated, pilot-grade)
+All four platforms now push outcomes back from DealPad in addition to inbound sync. Auto-push fires on final approval transitions (approved/rejected) in `server/routes.ts`.
+- **Dynamics 365** (`server/dynamics.ts`): `autoPushDeal()` syncs status/owner/amount on changes.
+- **Workday** (`server/workday.ts`): `pushProject()` + `autoPushWorkdayProject()` create a project record on approval and increment cost-center `committed`. Idempotent via activity_log event guard. Route: `POST /api/workday/deals/:id/push`.
+- **Intapp Risk** (`server/intapp.ts`): `pushOutcome()` + `pushMitigation()` + `autoPushIntappOutcome()` fire on deal approval/rejection and on mitigation resolve/waive/reject. Routes: `POST /api/intapp/screenings/:id/push-outcome`, `POST /api/intapp/mitigations/:id/push`.
+- **Conga CLM** (`server/conga.ts`): `pushDelivery()` delivers letters via email/esign/portal and flips `engagement_letters.status` to `delivered`. Route: `POST /api/conga/letters/:id/deliver`.
+
 ## Workflows
 - Backend Server: `npx tsx server/index.ts` (port 3001)
 - DealPad Frontend: `npx vite --host 0.0.0.0 --port 5000` (port 5000, proxies /api to 3001)

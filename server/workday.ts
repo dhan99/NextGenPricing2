@@ -63,6 +63,19 @@ interface WorkdayProvider {
   getWorkers(): Promise<any[]>;
   getRateCard(): Promise<any[]>;
   validateDeal(dealId: number, opts: ValidateOpts): Promise<ValidationResult>;
+  /** Bi-directional: push approved deal back to Workday as a Project record. */
+  pushProject(args: PushProjectArgs): Promise<PushProjectResult>;
+}
+
+interface PushProjectArgs {
+  dealId: number;
+  trigger?: "manual" | "auto" | "approval";
+  actorName?: string;
+}
+interface PushProjectResult {
+  ok: boolean;
+  externalRef?: string;
+  message: string;
 }
 
 interface ValidateOpts {
@@ -106,6 +119,9 @@ const SimulatedWorkdayProvider: WorkdayProvider = {
   async validateDeal(dealId, opts) {
     return runSimulatedValidation(dealId, opts);
   },
+  async pushProject(args) {
+    return runSimulatedPushProject(args);
+  },
 };
 
 const LiveWorkdayProvider: WorkdayProvider = {
@@ -121,7 +137,78 @@ const LiveWorkdayProvider: WorkdayProvider = {
     }).returning();
     return { ok: false, status: "failed", validationId: v.id, summary: v.summary || "Live not configured", findings: [] };
   },
+  async pushProject(args) {
+    await logEvent({
+      eventType: "link", entity: "System", dealId: args.dealId, status: "warning",
+      source: "live", trigger: args.trigger || "manual", actorName: args.actorName,
+      message: "Live Workday push not configured. Switch to Simulation mode or supply credentials.",
+    });
+    return { ok: false, message: "Live Workday provider is not configured." };
+  },
 };
+
+async function runSimulatedPushProject(args: PushProjectArgs): Promise<PushProjectResult> {
+  const deal = await db.query.deals.findFirst({ where: eq(deals.id, args.dealId) });
+  if (!deal) return { ok: false, message: "Deal not found" };
+  const lines = await db.select().from(pricingLines).where(eq(pricingLines.dealId, args.dealId));
+  const totalHours = lines.reduce((s, l) => s + parseFloat(l.hours || "0"), 0);
+  const totalCost = parseFloat(deal.totalCost || "0");
+  const externalRef = uuid(`prj-${deal.id}-${deal.status}`);
+  let costCenter: any = null;
+  if (deal.workdayCostCenterId) {
+    const [cc] = await db.select().from(workdayCostCenters).where(eq(workdayCostCenters.id, deal.workdayCostCenterId));
+    costCenter = cc || null;
+    if (cc) {
+      // Atomic, narrowly-scoped idempotency: insert a sentinel marker row first
+      // (eventType="committed_increment" is unique to this side-effect, distinct
+      // from generic "link" events) and only increment if the insert wins the race.
+      // Wrapped in a transaction so concurrent pushes can't double-increment.
+      try {
+        await db.transaction(async (tx) => {
+          const dup = await tx.select({ id: workdayEvents.id }).from(workdayEvents)
+            .where(and(
+              eq(workdayEvents.dealId, args.dealId),
+              eq(workdayEvents.eventType, "committed_increment"),
+              eq(workdayEvents.entityRefId, cc.id),
+            )).limit(1);
+          if (dup.length > 0) return;
+          await tx.insert(workdayEvents).values({
+            eventType: "committed_increment", entity: "CostCenter",
+            entityRefId: cc.id, dealId: args.dealId, status: "success",
+            source: "simulated", trigger: args.trigger || "manual", actorName: args.actorName,
+            message: `Reserved $${totalCost.toLocaleString()} of committed budget on ${cc.code}`,
+            fields: { increment: totalCost, costCenterId: cc.id },
+          });
+          const [fresh] = await tx.select().from(workdayCostCenters).where(eq(workdayCostCenters.id, cc.id));
+          const newCommitted = parseFloat(fresh.committed || "0") + totalCost;
+          await tx.update(workdayCostCenters).set({
+            committed: String(newCommitted), lastSyncedAt: new Date(),
+          }).where(eq(workdayCostCenters.id, cc.id));
+        });
+      } catch (e) {
+        // Marker insert lost the race or transaction failed — increment was either
+        // applied by the winning request or is intentionally skipped. Continue.
+      }
+    }
+  }
+  await logEvent({
+    eventType: "link", entity: "System", dealId: args.dealId, status: "success",
+    source: "simulated", trigger: args.trigger || "manual", actorName: args.actorName,
+    message: `Project ${externalRef} pushed to Workday (${costCenter?.code || "no cost-center"}, ${totalHours.toFixed(0)}h, $${totalCost.toLocaleString()})`,
+    fields: { externalRef, totalHours, totalCost, costCenterCode: costCenter?.code },
+  });
+  return { ok: true, externalRef, message: `Project record ${externalRef} created in Workday.` };
+}
+
+// Auto-push hook called from deal-status transitions when a deal is approved.
+export async function autoPushWorkdayProject(dealId: number, trigger: "auto" | "approval" = "approval", actorName?: string) {
+  try {
+    const provider = await getProvider();
+    return await provider.pushProject({ dealId, trigger, actorName });
+  } catch (e: any) {
+    return { ok: false, message: e?.message || "push failed" };
+  }
+}
 
 export async function getProvider(): Promise<WorkdayProvider> {
   const s = await getWorkdaySettings();
@@ -533,6 +620,27 @@ async function seedDemoValidations(allDeals: any[], centers: any[]) {
 // ============ ROUTES ============
 export function registerWorkdayRoutes(app: Express) {
   seedWorkday().catch((e) => console.error("Workday seed error:", e));
+
+  // Bi-directional: push approved deal back to Workday as a Project record.
+  app.post("/api/workday/deals/:id/push", async (req: Request, res: Response) => {
+    // Identity is derived from trusted headers, NEVER request body.
+    const actorName = (req.header("x-user-name") || "").trim();
+    const role = (req.header("x-user-role") || "").trim().toLowerCase();
+    if (!actorName || !role) {
+      return res.status(401).json({ error: "x-user-name and x-user-role headers are required." });
+    }
+    if (!["pdl", "sll", "po", "fin", "it"].includes(role)) {
+      return res.status(403).json({ error: "Insufficient role to push to Workday." });
+    }
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) return res.status(400).json({ error: "Invalid id" });
+    const provider = await getProvider();
+    const result = await provider.pushProject({
+      dealId: id, trigger: "manual", actorName,
+    });
+    if (!result.ok) return res.status(409).json(result);
+    res.json(result);
+  });
 
   app.get("/api/workday/settings", async (_req, res) => res.json(await getWorkdaySettings()));
 

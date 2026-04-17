@@ -53,6 +53,30 @@ export interface IntappProvider {
   getScreening(externalRef: string): Promise<IntappScreeningResponse | null>;
   /** Re-run a screening using the same payload (used by nightly batch + manual recheck). */
   recheck(req: IntappScreeningRequest): Promise<IntappScreeningResponse>;
+  /** Bi-directional: push final approval/rejection decision back to Intapp Risk so the matter is closed. */
+  pushOutcome(args: PushOutcomeArgs): Promise<PushBackResult>;
+  /** Bi-directional: push a mitigation/clearance decision back to Intapp Risk. */
+  pushMitigation(args: PushMitigationArgs): Promise<PushBackResult>;
+}
+
+export interface PushOutcomeArgs {
+  screeningId: number;
+  externalRef?: string | null;
+  decision: "approved" | "rejected" | "withdrawn";
+  actorName?: string | null;
+  notes?: string | null;
+}
+export interface PushMitigationArgs {
+  mitigationId: number;
+  screeningExternalRef?: string | null;
+  status: "accepted" | "waived" | "remediated" | "rejected";
+  resolvedBy?: string | null;
+  notes?: string | null;
+}
+export interface PushBackResult {
+  ok: boolean;
+  externalRef?: string;
+  message: string;
 }
 
 // ====================================================================
@@ -74,6 +98,16 @@ class SimulatedIntappProvider implements IntappProvider {
 
   async getScreening(_externalRef: string) { return null; }
   async recheck(req: IntappScreeningRequest) { return this.screenDeal(req); }
+
+  async pushOutcome(args: PushOutcomeArgs): Promise<PushBackResult> {
+    const ref = `OUT-${args.externalRef || args.screeningId}-${args.decision.toUpperCase().slice(0, 3)}`;
+    return { ok: true, externalRef: ref, message: `Screening outcome '${args.decision}' pushed to Intapp Risk (${ref}).` };
+  }
+
+  async pushMitigation(args: PushMitigationArgs): Promise<PushBackResult> {
+    const ref = `MIT-${args.screeningExternalRef || args.mitigationId}-${args.status.toUpperCase().slice(0, 3)}`;
+    return { ok: true, externalRef: ref, message: `Mitigation '${args.status}' acknowledged by Intapp Risk (${ref}).` };
+  }
 
   async screenDeal(req: IntappScreeningRequest): Promise<IntappScreeningResponse> {
     const { payload } = req;
@@ -211,6 +245,12 @@ class LiveIntappProvider implements IntappProvider {
   async screenDeal(_req: IntappScreeningRequest): Promise<IntappScreeningResponse> { return this.notReady(); }
   async getScreening(_externalRef: string): Promise<IntappScreeningResponse | null> { return this.notReady(); }
   async recheck(_req: IntappScreeningRequest): Promise<IntappScreeningResponse> { return this.notReady(); }
+  async pushOutcome(_args: PushOutcomeArgs): Promise<PushBackResult> {
+    return { ok: false, message: "Live Intapp provider not configured. pushOutcome → POST /matters/{ref}/decision will activate when INTAPP_API_TOKEN is set." };
+  }
+  async pushMitigation(_args: PushMitigationArgs): Promise<PushBackResult> {
+    return { ok: false, message: "Live Intapp provider not configured. pushMitigation → POST /matters/{ref}/mitigations/{id} will activate when INTAPP_API_TOKEN is set." };
+  }
 }
 
 // ====================================================================
@@ -774,6 +814,78 @@ export async function onClientChangedTrigger(clientId: number, actor?: string) {
  * every tick so the cadence reflects the current config.
  */
 let nightlyTimerStarted = false;
+// ====================================================================
+// BI-DIRECTIONAL PUSH-BACK to Intapp Risk
+// ====================================================================
+async function runPushOutcome(
+  screeningId: number, decision: "approved" | "rejected" | "withdrawn",
+  actorName?: string | null, notes?: string | null,
+): Promise<PushBackResult> {
+  const [s] = await db.select().from(intappScreenings).where(eq(intappScreenings.id, screeningId));
+  if (!s) return { ok: false, message: "Screening not found" };
+  const provider = await getProvider();
+  let result: PushBackResult;
+  try {
+    result = await provider.pushOutcome({
+      screeningId, externalRef: s.externalRef, decision, actorName, notes,
+    });
+  } catch (e: any) {
+    result = { ok: false, message: e?.message || "pushOutcome failed" };
+  }
+  await logEvent({
+    dealId: s.dealId, screeningId,
+    eventType: "outcome_pushed",
+    actorName, source: provider.mode,
+    message: result.message,
+    metadata: { decision, externalRef: result.externalRef, ok: result.ok },
+  });
+  return result;
+}
+
+async function runPushMitigation(mitigationId: number, actorName?: string | null): Promise<PushBackResult> {
+  const [m] = await db.select().from(intappMitigations).where(eq(intappMitigations.id, mitigationId));
+  if (!m) return { ok: false, message: "Mitigation not found" };
+  const [s] = await db.select().from(intappScreenings).where(eq(intappScreenings.id, m.screeningId));
+  const status: PushMitigationArgs["status"] =
+    m.status === "resolved" || m.status === "completed" ? "accepted"
+    : m.status === "waived" ? "waived"
+    : m.status === "rejected" ? "rejected" : "remediated";
+  const provider = await getProvider();
+  let result: PushBackResult;
+  try {
+    result = await provider.pushMitigation({
+      mitigationId, screeningExternalRef: s?.externalRef, status,
+      resolvedBy: m.resolvedBy || actorName, notes: m.notes,
+    });
+  } catch (e: any) {
+    result = { ok: false, message: e?.message || "pushMitigation failed" };
+  }
+  await logEvent({
+    dealId: s?.dealId, screeningId: m.screeningId,
+    eventType: "mitigation_pushed",
+    actorName, source: provider.mode,
+    message: result.message,
+    metadata: { mitigationId, status, externalRef: result.externalRef, ok: result.ok },
+  });
+  return result;
+}
+
+/** Auto-push hook called from deal-status transitions (approved / rejected). */
+export async function autoPushIntappOutcome(
+  dealId: number, decision: "approved" | "rejected" | "withdrawn", actorName?: string,
+) {
+  const [s] = await db.select().from(intappScreenings)
+    .where(eq(intappScreenings.dealId, dealId))
+    .orderBy(desc(intappScreenings.requestedAt))
+    .limit(1);
+  if (!s) return { ok: false, message: "No screening found for deal." };
+  return runPushOutcome(s.id, decision, actorName);
+}
+
+async function autoPushMitigation(mitigationId: number, actorName?: string) {
+  return runPushMitigation(mitigationId, actorName);
+}
+
 export function startNightlyRescreenLoop() {
   if (nightlyTimerStarted) return;
   nightlyTimerStarted = true;
@@ -1111,8 +1223,36 @@ export function registerIntappRoutes(app: Express) {
         metadata: { mitigationId: mitId, status: patch.status },
       });
       await reconcileMitigationStatus(updated.screeningId);
+      // Bi-directional auto-push: notify Intapp Risk that this mitigation has been resolved.
+      if (patch.status === "resolved" || patch.status === "completed" || patch.status === "waived" || patch.status === "rejected") {
+        autoPushMitigation(mitId, id.name).catch(() => {});
+      }
     }
     res.json(updated);
+  });
+
+  // Bi-directional: explicitly push a mitigation decision back to Intapp.
+  app.post("/api/intapp/mitigations/:id/push", async (req: Request, res: Response) => {
+    const id = requireRoles(req, res, ["qrm", "pdl", "sll"]);
+    if (!id) return;
+    const mitId = parseInt(req.params.id);
+    const result = await runPushMitigation(mitId, id.name);
+    if (!result.ok) return res.status(409).json(result);
+    res.json(result);
+  });
+
+  // Bi-directional: explicitly push the screening outcome (approved/rejected) back to Intapp.
+  app.post("/api/intapp/screenings/:id/push-outcome", async (req: Request, res: Response) => {
+    const id = requireRoles(req, res, ["qrm", "pdl", "sll", "fin"]);
+    if (!id) return;
+    const sid = parseInt(req.params.id);
+    const decision = String(req.body?.decision || "").toLowerCase();
+    if (!["approved", "rejected", "withdrawn"].includes(decision)) {
+      return res.status(400).json({ error: "decision must be 'approved' | 'rejected' | 'withdrawn'" });
+    }
+    const result = await runPushOutcome(sid, decision as any, id.name, req.body?.notes);
+    if (!result.ok) return res.status(409).json(result);
+    res.json(result);
   });
 
   // -------- Override (QRM-only). Identity comes from headers, NEVER request body. --------

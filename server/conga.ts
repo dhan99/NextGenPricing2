@@ -41,6 +41,23 @@ export interface CongaProvider {
   listTemplates(): Promise<CongaTemplateMeta[]>;
   generateLetter(req: CongaGenerateRequest): Promise<CongaGenerateResponse>;
   getDocument(externalRef: string): Promise<string | null>;
+  /** Bi-directional: push generated letter into Conga document storage / e-sign pipeline. */
+  pushDelivery(req: CongaDeliverRequest): Promise<CongaDeliverResponse>;
+}
+
+export interface CongaDeliverRequest {
+  letterId: number;
+  externalRef: string | null;
+  recipientEmail?: string | null;
+  recipientName?: string | null;
+  channel?: "email" | "esign" | "portal";
+  triggeredBy?: string | null;
+}
+export interface CongaDeliverResponse {
+  ok: boolean;
+  source: "simulated" | "live";
+  deliveryRef?: string;
+  message: string;
 }
 
 
@@ -313,6 +330,17 @@ class SimulatedCongaProvider implements CongaProvider {
       parameters,
     };
   }
+
+  async pushDelivery(req: CongaDeliverRequest): Promise<CongaDeliverResponse> {
+    const channel = req.channel || "email";
+    const deliveryRef = `SIM-DELIV-${(req.letterId * 16777619 + Date.now()) >>> 0}`.slice(0, 24);
+    return {
+      ok: true,
+      source: "simulated",
+      deliveryRef,
+      message: `Letter ${req.externalRef || "#" + req.letterId} queued for ${channel} delivery to ${req.recipientName || req.recipientEmail || "client"} (${deliveryRef}).`,
+    };
+  }
 }
 
 // ====================================================================
@@ -339,6 +367,13 @@ class LiveCongaProvider implements CongaProvider {
   async listTemplates(): Promise<CongaTemplateMeta[]> { return this.notReady(); }
   async generateLetter(_req: CongaGenerateRequest): Promise<CongaGenerateResponse> { return this.notReady(); }
   async getDocument(_externalRef: string): Promise<string | null> { return this.notReady(); }
+  async pushDelivery(_req: CongaDeliverRequest): Promise<CongaDeliverResponse> {
+    return {
+      ok: false,
+      source: "live",
+      message: "Live Conga delivery not configured. POST /api/composer/v1/documents/{ref}/deliver activates with CONGA_API_KEY.",
+    };
+  }
 }
 
 // ====================================================================
@@ -565,6 +600,45 @@ export function registerCongaRoutes(app: Express) {
       }).returning();
       res.status(502).json({ error: e?.message || "Letter generation failed", letterId: row.id });
     }
+  });
+
+  // Bi-directional: push (deliver) a generated letter back to Conga's
+  // delivery / e-sign pipeline. Updates engagement_letters.status to "delivered".
+  app.post("/api/conga/letters/:id/deliver", async (req, res) => {
+    // Identity from trusted headers, NEVER request body. Only roles that own the
+    // engagement-letter delivery flow may trigger an external send.
+    const actorName = ((req.headers["x-user-name"] as string) || "").trim();
+    const role = ((req.headers["x-user-role"] as string) || "").trim().toLowerCase();
+    if (!actorName || !role) {
+      return res.status(401).json({ error: "x-user-name and x-user-role headers are required." });
+    }
+    if (!["pdl", "sll", "po", "qrm", "it"].includes(role)) {
+      return res.status(403).json({ error: "Insufficient role to deliver engagement letters." });
+    }
+    const id = parseInt(req.params.id);
+    if (Number.isNaN(id)) return res.status(400).json({ error: "Invalid id" });
+    const [letter] = await db.select().from(engagementLetters).where(eq(engagementLetters.id, id));
+    if (!letter) return res.status(404).json({ error: "Letter not found" });
+    if (letter.status === "failed") return res.status(409).json({ error: "Cannot deliver a failed letter." });
+
+    const provider = await getProvider();
+    let result: CongaDeliverResponse;
+    try {
+      result = await provider.pushDelivery({
+        letterId: id,
+        externalRef: letter.externalRef,
+        recipientEmail: req.body?.recipientEmail || null,
+        recipientName: req.body?.recipientName || null,
+        channel: req.body?.channel || "email",
+        triggeredBy: actorName,
+      });
+    } catch (e: any) {
+      result = { ok: false, source: provider.mode, message: e?.message || "delivery failed" };
+    }
+    if (result.ok) {
+      await db.update(engagementLetters).set({ status: "delivered" }).where(eq(engagementLetters.id, id));
+    }
+    res.status(result.ok ? 200 : 502).json(result);
   });
 
   // Download a previously-generated letter as application/pdf. The stored
