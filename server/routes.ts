@@ -1214,7 +1214,7 @@ export function registerRoutes(app: Express) {
   });
 
   app.post("/api/ai/effort-estimation", async (req: Request, res: Response) => {
-    const { scopeItems: items, complexity, prompts } = req.body;
+    const { scopeItems: items, complexity, prompts, startDate, endDate } = req.body;
     const complexityMultipliers: Record<string, number> = { low: 0.8, medium: 1.0, high: 1.2, very_high: 1.5 };
     const baseMultiplier = complexityMultipliers[complexity] || 1.0;
 
@@ -1233,15 +1233,41 @@ export function registerRoutes(app: Express) {
 
     const totalHours = estimatedItems.reduce((sum: number, i: any) => sum + i.estimatedHours, 0);
 
-    const roleDistribution = [
-      { role: "Partner", percentage: 7, hours: Math.round(totalHours * 0.07) },
-      { role: "Managing Director", percentage: 10, hours: Math.round(totalHours * 0.10) },
-      { role: "Senior Manager", percentage: 17, hours: Math.round(totalHours * 0.17) },
-      { role: "Manager", percentage: 20, hours: Math.round(totalHours * 0.20) },
-      { role: "Senior Consultant", percentage: 26, hours: Math.round(totalHours * 0.26) },
-      { role: "Consultant", percentage: 13, hours: Math.round(totalHours * 0.13) },
-      { role: "Analyst", percentage: 7, hours: Math.round(totalHours * 0.07) },
+    // Compute project duration in weeks from deal dates (fallback: 12 weeks)
+    let projectWeeks = 12;
+    let weeksSource: "dates" | "default" = "default";
+    if (startDate && endDate) {
+      const ms = new Date(endDate).getTime() - new Date(startDate).getTime();
+      const w = ms / (1000 * 60 * 60 * 24 * 7);
+      if (Number.isFinite(w) && w >= 1) {
+        projectWeeks = Math.round(w);
+        weeksSource = "dates";
+      }
+    }
+    // Standard billable capacity: 32 hrs/week per FTE (80% utilization on 40hr week)
+    const billableHrsPerFTEPerWeek = 32;
+    const fteCapacity = projectWeeks * billableHrsPerFTEPerWeek;
+
+    const distribution: Array<{ role: string; percentage: number }> = [
+      { role: "Partner", percentage: 7 },
+      { role: "Managing Director", percentage: 10 },
+      { role: "Senior Manager", percentage: 17 },
+      { role: "Manager", percentage: 20 },
+      { role: "Senior Consultant", percentage: 26 },
+      { role: "Consultant", percentage: 13 },
+      { role: "Analyst", percentage: 7 },
     ];
+
+    const roleDistribution = distribution.map(r => {
+      const hours = Math.round(totalHours * (r.percentage / 100));
+      // Headcount = hours / FTE capacity; round up to whole resources, min 0 (skip if <0.05 FTE)
+      const fteRaw = fteCapacity > 0 ? hours / fteCapacity : 0;
+      const headcount = fteRaw < 0.05 ? 0 : Math.max(1, Math.ceil(fteRaw));
+      return { ...r, hours, headcount, fte: parseFloat(fteRaw.toFixed(2)) };
+    });
+
+    const totalHeadcount = roleDistribution.reduce((s, r) => s + r.headcount, 0);
+    const totalFTE = parseFloat(roleDistribution.reduce((s, r) => s + r.fte, 0).toFixed(2));
 
     res.json({
       estimatedItems,
@@ -1250,7 +1276,12 @@ export function registerRoutes(app: Express) {
       promptMultiplier: promptMultiplier.toFixed(2),
       totalMultiplier: totalMultiplier.toFixed(2),
       roleDistribution,
-      narrative: `Based on ${complexity} complexity with ${(prompts || []).length} scope factors applied, we estimate ${totalHours} total hours across ${estimatedItems.length} scope areas. The complexity and contextual factors result in a ${totalMultiplier.toFixed(1)}x adjustment from baseline estimates. Similar projects have averaged ${Math.round(totalHours * 0.95)}-${Math.round(totalHours * 1.05)} hours.`,
+      projectWeeks,
+      weeksSource,
+      billableHrsPerFTEPerWeek,
+      totalHeadcount,
+      totalFTE,
+      narrative: `Based on ${complexity} complexity with ${(prompts || []).length} scope factors applied, we estimate ${totalHours} total hours across ${estimatedItems.length} scope areas. Over ${projectWeeks} weeks${weeksSource === "default" ? " (default — set deal start/end dates for a tighter estimate)" : ""}, that maps to ~${totalFTE} FTE (${totalHeadcount} named resources at standard ${billableHrsPerFTEPerWeek} billable hrs/wk).`,
     });
   });
 

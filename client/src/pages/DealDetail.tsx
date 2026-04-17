@@ -429,6 +429,8 @@ function ScopeStep({ deal }: { deal: any }) {
       scopeItems: (scopeItems || []).map((si: any) => ({ ...si.scopeItem, defaultHours: si.adjustedHours || si.scopeItem?.defaultHours })),
       complexity: deal.complexity,
       prompts: deal.promptResponses || [],
+      startDate: deal.startDate,
+      endDate: deal.endDate,
     });
   };
 
@@ -440,6 +442,8 @@ function ScopeStep({ deal }: { deal: any }) {
           scopeItems: (scopeItems || []).map((si: any) => ({ ...si.scopeItem, defaultHours: si.adjustedHours || si.scopeItem?.defaultHours })),
           complexity: deal.complexity,
           prompts: deal.promptResponses || [],
+          startDate: deal.startDate,
+          endDate: deal.endDate,
         });
       }, 400);
       return () => clearTimeout(timer);
@@ -675,10 +679,22 @@ function ScopeStep({ deal }: { deal: any }) {
           {estimation.data && (
             <div className="space-y-3">
               <p className="text-xs text-foreground leading-relaxed">{estimation.data.narrative}</p>
-              <div>
-                <p className="text-xs font-semibold text-foreground mb-1.5">Recommended Total Hours</p>
-                <p className="text-2xl font-bold text-foreground">{estimation.data.totalHours?.toLocaleString()} hrs</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <p className="text-xs font-semibold text-foreground mb-1.5">Total Hours</p>
+                  <p className="text-2xl font-bold text-foreground">{estimation.data.totalHours?.toLocaleString()}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold text-foreground mb-1.5">Suggested Resources</p>
+                  <p className="text-2xl font-bold text-foreground">{estimation.data.totalHeadcount ?? "—"}</p>
+                  <p className="text-[11px] text-muted-foreground">~{estimation.data.totalFTE} FTE · {estimation.data.projectWeeks} wks</p>
+                </div>
               </div>
+              {estimation.data.weeksSource === "default" && (
+                <p className="text-[11px] text-amber-700 bg-amber-100/60 rounded px-2 py-1">
+                  Using 12-week default. Set start/end dates on Setup for a tighter resource estimate.
+                </p>
+              )}
               {estimation.data.comparableDeals && estimation.data.comparableDeals.length > 0 && (
                 <div>
                   <p className="text-xs font-semibold text-foreground mb-1.5">Comparable Deals</p>
