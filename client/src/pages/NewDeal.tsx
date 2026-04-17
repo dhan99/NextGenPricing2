@@ -147,6 +147,7 @@ export function NewDeal() {
                 {(eligibleOpps as any[]).map((o: any) => (
                   <option key={o.id} value={o.id}>
                     {o.opportunityNumber} — {o.name} · {o.stage} · ${(o.estimatedValue / 1000).toFixed(0)}K
+                    {o.syncStatus === "queued" ? " · not yet imported" : ""}
                   </option>
                 ))}
               </select>
