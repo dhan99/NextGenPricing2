@@ -1,12 +1,12 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRoute } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
-import { useDeal, useUpdateDeal, useScopeCatalog, useScopeTemplates, useApplyScopeTemplate, useDealScopeItems, useAddScopeItem, useRemoveScopeItem, useRoles, useDealPricing, useUpdatePricingLine, useDealScenarios, useSelectScenario, useDealApprovals, useSubmitApproval, useUpdateApproval, useDealPrompts, useUpdatePrompt, useCloneDeal, useAIDealSimilarity, useAIEffortEstimation, useAIMarginAdvisor, useAIScenarioRecommendation, useAIRiskSummary, useDealIntappScreening, useRunIntappScreening, useIntappOverride, useAddIntappMitigation, useUpdateIntappMitigation, useWorkdayLatestValidation, useWorkdayCostCenters, useRunWorkdayValidation, useLinkWorkdayCostCenter, useOverrideWorkdayValidation } from "@/hooks/use-api";
+import { useDeal, useUpdateDeal, useScopeCatalog, useScopeTemplates, useApplyScopeTemplate, useDealScopeItems, useAddScopeItem, useRemoveScopeItem, useRoles, useDealPricing, useUpdatePricingLine, useDealScenarios, useSelectScenario, useDealApprovals, useSubmitApproval, useUpdateApproval, useDealPrompts, useUpdatePrompt, useAIDealSimilarity, useAIEffortEstimation, useAIMarginAdvisor, useAIScenarioRecommendation, useAIRiskSummary, useDealIntappScreening, useRunIntappScreening, useIntappOverride, useAddIntappMitigation, useUpdateIntappMitigation, useWorkdayLatestValidation, useWorkdayCostCenters, useRunWorkdayValidation, useLinkWorkdayCostCenter, useOverrideWorkdayValidation } from "@/hooks/use-api";
 import { ResultBadge as IntappResultBadge, RiskBadge as IntappRiskBadge, SourceBadge as IntappSourceBadge } from "./Intapp";
 import { ShieldAlert, ShieldCheck, Unlock } from "lucide-react";
 import { formatCurrency, formatPercent, formatNumber, getStatusColor, getStatusLabel, cn } from "@/lib/utils";
-import { ArrowLeft, Check, ChevronRight, Sparkles, AlertTriangle, TrendingUp, Target, FileText, Shield, CheckCircle, XCircle, Clock, Loader2, Plus, Trash2, Lightbulb, Copy, RefreshCw, Pencil, Save, GitBranch } from "lucide-react";
-import { Link, useLocation } from "wouter";
+import { ArrowLeft, Check, ChevronRight, Sparkles, AlertTriangle, TrendingUp, Target, FileText, Shield, CheckCircle, XCircle, Clock, Loader2, Plus, Trash2, Lightbulb, RefreshCw, Pencil, Save, GitBranch } from "lucide-react";
+import { Link } from "wouter";
 import { useAuth } from "@/context/AuthContext";
 import { AskDealPadAI } from "@/components/AskDealPadAI";
 
@@ -67,26 +67,6 @@ export function DealDetail() {
             </div>
           </div>
           <div className="flex items-center gap-4">
-            {hasPermission("createDeals") && (
-              <div className="flex items-center gap-2 mr-2">
-                <button
-                  onClick={() => cloneDeal.mutate({ dealId: deal.id, mode: "clone", pdlName: persona?.name }, { onSuccess: (d: any) => navigate(`/deals/${d.id}`) })}
-                  disabled={cloneDeal.isPending}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-all"
-                >
-                  <Copy className="w-3.5 h-3.5" />
-                  Clone
-                </button>
-                <button
-                  onClick={() => cloneDeal.mutate({ dealId: deal.id, mode: "renewal", pdlName: persona?.name }, { onSuccess: (d: any) => navigate(`/deals/${d.id}`) })}
-                  disabled={cloneDeal.isPending}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-all"
-                >
-                  <RefreshCw className="w-3.5 h-3.5" />
-                  Renew
-                </button>
-              </div>
-            )}
             <div className="flex items-center gap-6 text-right">
               <div><p className="text-xs text-muted-foreground">Total Fee</p><p className="text-lg font-bold text-foreground">{formatCurrency(deal.totalFee || 0)}</p></div>
               <div><p className="text-xs text-muted-foreground">Margin</p><p className="text-lg font-bold text-foreground">{formatPercent(deal.marginPercent || 0)}</p></div>
