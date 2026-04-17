@@ -1,6 +1,42 @@
 import { db } from "./db";
-import { clients, deals, scopeCatalog, roles, rateCards, rateCardEntries, dealScopeItems, pricingLines, scenarios, approvals, promptResponses, activityLog } from "../shared/schema";
+import { clients, deals, scopeCatalog, roles, rateCards, rateCardEntries, dealScopeItems, pricingLines, scenarios, approvals, promptResponses, activityLog, promptSets, promptSetItems } from "../shared/schema";
 import { sql } from "drizzle-orm";
+
+// Idempotent: ensures at least one published cross-service prompt set exists so
+// the prompt-resolution code has a default to fall back on. Runs every startup.
+export async function seedDefaultPromptSet() {
+  const existing = await db.select({ id: promptSets.id }).from(promptSets).limit(1);
+  if (existing.length > 0) return;
+  const [set] = await db.insert(promptSets).values({
+    name: "Cross-Service Default — v1",
+    businessUnit: null,
+    serviceLine: null,
+    version: 1,
+    status: "published",
+    notes: "Baseline complexity drivers used when no service-line-specific set is published.",
+    publishedAt: new Date(),
+    publishedBy: "System",
+    createdBy: "System",
+  }).returning();
+  const items = [
+    { question: "How many geographic regions are involved?", category: "Complexity", sortOrder: 1, options: [{ label: "1 region", multiplier: "1.00" }, { label: "2 regions", multiplier: "1.10" }, { label: "3+ regions", multiplier: "1.20" }] },
+    { question: "Are there regulatory/compliance requirements?", category: "Compliance", sortOrder: 2, options: [{ label: "None", multiplier: "1.00" }, { label: "Standard compliance", multiplier: "1.05" }, { label: "SOX/HIPAA compliance", multiplier: "1.15" }, { label: "Multi-framework", multiplier: "1.25" }] },
+    { question: "What is the expected data volume?", category: "Complexity", sortOrder: 3, options: [{ label: "Small (<100K records)", multiplier: "0.90" }, { label: "Medium (100K-1M)", multiplier: "1.00" }, { label: "Large (1M-10M)", multiplier: "1.10" }, { label: "Very Large (10M+)", multiplier: "1.20" }] },
+    { question: "How many integrations are required?", category: "Integration", sortOrder: 4, options: [{ label: "None", multiplier: "1.00" }, { label: "1-2 integrations", multiplier: "1.05" }, { label: "3-4 integrations", multiplier: "1.10" }, { label: "5-8 integrations", multiplier: "1.20" }, { label: "9+ integrations", multiplier: "1.30" }] },
+    { question: "Is there an existing system being replaced?", category: "Migration", sortOrder: 5, options: [{ label: "No (greenfield)", multiplier: "0.95" }, { label: "Yes - modern system", multiplier: "1.05" }, { label: "Yes - legacy system", multiplier: "1.10" }, { label: "Yes - multiple systems", multiplier: "1.20" }] },
+    { question: "What is the client's technical maturity?", category: "Client", sortOrder: 6, options: [{ label: "High maturity", multiplier: "0.90" }, { label: "Moderate maturity", multiplier: "1.00" }, { label: "Low maturity", multiplier: "1.10" }, { label: "Very low maturity", multiplier: "1.20" }] },
+    { question: "Is there a hard deadline or external dependency?", category: "Timeline", sortOrder: 7, options: [{ label: "Flexible timeline", multiplier: "0.95" }, { label: "Preferred deadline", multiplier: "1.00" }, { label: "Hard deadline", multiplier: "1.10" }, { label: "Regulatory deadline", multiplier: "1.20" }] },
+  ];
+  await db.insert(promptSetItems).values(items.map(it => ({
+    promptSetId: set.id,
+    question: it.question,
+    category: it.category,
+    helpText: null,
+    options: it.options as any,
+    sortOrder: it.sortOrder,
+    enabled: true,
+  })));
+}
 
 export async function seedDatabase() {
   const existingClients = await db.select().from(clients).limit(1);

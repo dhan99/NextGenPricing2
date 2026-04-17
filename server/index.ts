@@ -2,7 +2,7 @@ import express from "express";
 import cors from "cors";
 import path from "path";
 import { registerRoutes } from "./routes";
-import { seedDatabase } from "./seed";
+import { seedDatabase, seedDefaultPromptSet } from "./seed";
 import { db } from "./db";
 import { sql } from "drizzle-orm";
 import * as schema from "../shared/schema";
@@ -212,6 +212,40 @@ async function pushSchema() {
       impact_multiplier DECIMAL(4,2) DEFAULT 1.0,
       sort_order INTEGER DEFAULT 0
     );
+
+    CREATE TABLE IF NOT EXISTS prompt_sets (
+      id SERIAL PRIMARY KEY,
+      name TEXT NOT NULL,
+      business_unit TEXT,
+      service_line TEXT,
+      version INTEGER NOT NULL DEFAULT 1,
+      status TEXT NOT NULL DEFAULT 'draft',
+      notes TEXT,
+      published_at TIMESTAMP,
+      published_by TEXT,
+      archived_at TIMESTAMP,
+      archived_by TEXT,
+      created_by TEXT,
+      created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+      updated_at TIMESTAMP DEFAULT NOW() NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS prompt_set_items (
+      id SERIAL PRIMARY KEY,
+      prompt_set_id INTEGER REFERENCES prompt_sets(id) ON DELETE CASCADE NOT NULL,
+      question TEXT NOT NULL,
+      category TEXT,
+      help_text TEXT,
+      options JSONB NOT NULL,
+      sort_order INTEGER DEFAULT 0,
+      enabled BOOLEAN DEFAULT TRUE
+    );
+
+    -- Enforce "at most one published set per (BU, ServiceLine)" tuple at the DB level.
+    -- Uses COALESCE so NULL BU/SL (cross-service or cross-BU defaults) are also unique.
+    CREATE UNIQUE INDEX IF NOT EXISTS uq_prompt_sets_published_tuple
+      ON prompt_sets (COALESCE(business_unit, ''), COALESCE(service_line, ''))
+      WHERE status = 'published';
 
     CREATE TABLE IF NOT EXISTS activity_log (
       id SERIAL PRIMARY KEY,
@@ -574,6 +608,9 @@ async function start() {
 
     await seedDatabase();
     console.log("Database seeded");
+
+    await seedDefaultPromptSet();
+    console.log("Default prompt set ready");
   } catch (err) {
     console.error("Database initialization error:", err);
   }

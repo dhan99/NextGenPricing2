@@ -1,5 +1,5 @@
 import { useLocation, Link } from "wouter";
-import { LayoutDashboard, FileText, Settings, ChevronDown, BookOpen, DollarSign, Layers, LogOut, Shield, BarChart3, Database, ShieldAlert, Briefcase } from "lucide-react";
+import { LayoutDashboard, FileText, Settings, ChevronDown, BookOpen, DollarSign, Layers, LogOut, Shield, BarChart3, Database, ShieldAlert, Briefcase, MessageSquare } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
 import { useAuth } from "@/context/AuthContext";
@@ -25,6 +25,7 @@ export function Sidebar() {
   const adminNavigation = [
     { name: "Rate Cards", href: "/admin/rate-cards", icon: DollarSign, show: true },
     { name: "Scope Catalog", href: "/admin/scope-catalog", icon: BookOpen, show: true },
+    { name: "Prompt Sets", href: "/admin/prompt-sets", icon: MessageSquare, show: true },
   ];
 
   const roleColor: Record<string, string> = {

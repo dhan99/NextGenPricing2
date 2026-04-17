@@ -1,13 +1,16 @@
 import { Express, Request, Response } from "express";
 import { db } from "./db";
-import { clients, deals, scopeCatalog, dealScopeItems, scopeTemplates, scopeTemplateItems, roles, rateCards, rateCardEntries, pricingLines, scenarios, approvals, promptResponses, activityLog, changeOrders, dynamicsOpportunities } from "../shared/schema";
-import { eq, desc, sql, and, count, isNull, isNotNull } from "drizzle-orm";
+import { clients, deals, scopeCatalog, dealScopeItems, scopeTemplates, scopeTemplateItems, roles, rateCards, rateCardEntries, pricingLines, scenarios, approvals, promptResponses, activityLog, changeOrders, dynamicsOpportunities, promptSets, promptSetItems } from "../shared/schema";
+import { eq, desc, sql, and, count, isNull, isNotNull, asc } from "drizzle-orm";
 
 function escapeHtml(str: string | null | undefined): string {
   if (!str) return "";
   return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }
 
+// Fallback prompt set used only if no governed prompt set is published for the
+// deal's BU+service line AND no published cross-service default exists.
+// Pricing Operations should publish a real set per BU/service line via /api/prompt-sets.
 const STANDARD_PROMPTS = [
   { question: "How many geographic regions are involved?", category: "Complexity", sortOrder: 1 },
   { question: "Are there regulatory/compliance requirements?", category: "Compliance", sortOrder: 2 },
@@ -18,10 +21,53 @@ const STANDARD_PROMPTS = [
   { question: "Is there a hard deadline or external dependency?", category: "Timeline", sortOrder: 7 },
 ];
 
+// Find the most-specific published prompt set for a deal's BU + serviceLine.
+// Specificity priority: exact (BU+SL) > BU-only > SL-only > cross-service default.
+async function findActivePromptSet(businessUnit: string | null | undefined, serviceLine: string | null | undefined) {
+  const all = await db.select().from(promptSets).where(eq(promptSets.status, "published"));
+  if (all.length === 0) return null;
+  const score = (s: any): number => {
+    const buMatch = s.businessUnit && businessUnit && s.businessUnit === businessUnit;
+    const slMatch = s.serviceLine && serviceLine && s.serviceLine === serviceLine;
+    const buNull = !s.businessUnit;
+    const slNull = !s.serviceLine;
+    if (buMatch && slMatch) return 100;
+    if (buMatch && slNull) return 80;
+    if (buNull && slMatch) return 60;
+    if (buNull && slNull) return 40;
+    return -1; // mismatch — exclude
+  };
+  const ranked = all.map(s => ({ s, score: score(s) })).filter(x => x.score >= 0);
+  if (ranked.length === 0) return null;
+  ranked.sort((a, b) => b.score - a.score || b.s.version - a.s.version);
+  return ranked[0].s;
+}
+
 async function createDefaultPrompts(dealId: number) {
   const existing = await db.select({ id: promptResponses.id }).from(promptResponses)
     .where(eq(promptResponses.dealId, dealId)).limit(1);
   if (existing.length > 0) return;
+  const deal = await db.query.deals.findFirst({ where: eq(deals.id, dealId) });
+  const activeSet = deal ? await findActivePromptSet(deal.businessUnit, deal.serviceLine) : null;
+  if (activeSet) {
+    const items = await db.select().from(promptSetItems)
+      .where(and(eq(promptSetItems.promptSetId, activeSet.id), eq(promptSetItems.enabled, true)))
+      .orderBy(asc(promptSetItems.sortOrder));
+    if (items.length > 0) {
+      await db.insert(promptResponses).values(items.map((it) => ({
+        dealId,
+        question: it.question,
+        answer: null,
+        category: it.category,
+        impactMultiplier: "1.0",
+        sortOrder: it.sortOrder ?? 0,
+        promptSetId: activeSet.id,
+        promptSetVersion: activeSet.version,
+      })));
+      return;
+    }
+  }
+  // No governed set found — fall back to the hardcoded baseline.
   await db.insert(promptResponses).values(
     STANDARD_PROMPTS.map((p) => ({
       dealId,
@@ -1302,6 +1348,244 @@ export function registerRoutes(app: Express) {
     if (!updated) return res.status(404).json({ error: "Prompt not found" });
     await recalcPricingFromScope(dealId);
     res.json(updated);
+  });
+
+  // ========== PROMPT SETS (Pricing Operations governance — US-12) ==========
+  // List sets, optionally filtered by status / BU / serviceLine.
+  app.get("/api/prompt-sets", async (req: Request, res: Response) => {
+    const conds: any[] = [];
+    if (req.query.status) conds.push(eq(promptSets.status, String(req.query.status)));
+    if (req.query.businessUnit) conds.push(eq(promptSets.businessUnit, String(req.query.businessUnit)));
+    if (req.query.serviceLine) conds.push(eq(promptSets.serviceLine, String(req.query.serviceLine)));
+    const where = conds.length ? and(...conds) : undefined;
+    const rows = where
+      ? await db.select().from(promptSets).where(where).orderBy(desc(promptSets.updatedAt))
+      : await db.select().from(promptSets).orderBy(desc(promptSets.updatedAt));
+    res.json(rows);
+  });
+
+  // Resolve the active published set for (BU, serviceLine) using same precedence as new-deal flow.
+  app.get("/api/prompt-sets/active", async (req: Request, res: Response) => {
+    const bu = (req.query.businessUnit as string) || null;
+    const sl = (req.query.serviceLine as string) || null;
+    const set = await findActivePromptSet(bu, sl);
+    if (!set) return res.json(null);
+    const items = await db.select().from(promptSetItems)
+      .where(and(eq(promptSetItems.promptSetId, set.id), eq(promptSetItems.enabled, true)))
+      .orderBy(asc(promptSetItems.sortOrder));
+    res.json({ ...set, items });
+  });
+
+  app.get("/api/prompt-sets/:id", async (req: Request, res: Response) => {
+    const id = parseInt(req.params.id);
+    const [set] = await db.select().from(promptSets).where(eq(promptSets.id, id));
+    if (!set) return res.status(404).json({ error: "Prompt set not found" });
+    const items = await db.select().from(promptSetItems)
+      .where(eq(promptSetItems.promptSetId, id))
+      .orderBy(asc(promptSetItems.sortOrder));
+    res.json({ ...set, items });
+  });
+
+  // Create a new draft set (version starts at 1 unless caller specifies).
+  app.post("/api/prompt-sets", async (req: Request, res: Response) => {
+    const { name, businessUnit, serviceLine, notes, version } = req.body || {};
+    if (!name || typeof name !== "string") return res.status(400).json({ error: "name is required" });
+    const createdBy = (req.header("x-user-name") || "Unknown").trim();
+    const [created] = await db.insert(promptSets).values({
+      name, businessUnit: businessUnit || null, serviceLine: serviceLine || null,
+      notes: notes || null, version: Number.isFinite(version) ? Math.max(1, parseInt(String(version))) : 1,
+      status: "draft", createdBy,
+    }).returning();
+    res.status(201).json(created);
+  });
+
+  // Update draft metadata (cannot edit published sets — clone instead).
+  app.patch("/api/prompt-sets/:id", async (req: Request, res: Response) => {
+    const id = parseInt(req.params.id);
+    const [existing] = await db.select().from(promptSets).where(eq(promptSets.id, id));
+    if (!existing) return res.status(404).json({ error: "Prompt set not found" });
+    if (existing.status !== "draft") {
+      return res.status(409).json({ error: "Only draft sets can be edited. Clone this set to create a new draft." });
+    }
+    const allowed: any = {};
+    for (const k of ["name", "businessUnit", "serviceLine", "notes"]) {
+      if (k in (req.body || {})) allowed[k] = req.body[k];
+    }
+    allowed.updatedAt = new Date();
+    const [updated] = await db.update(promptSets).set(allowed).where(eq(promptSets.id, id)).returning();
+    res.json(updated);
+  });
+
+  // Delete a draft set (cascades to items). Published/archived sets cannot be deleted.
+  app.delete("/api/prompt-sets/:id", async (req: Request, res: Response) => {
+    const id = parseInt(req.params.id);
+    const [existing] = await db.select().from(promptSets).where(eq(promptSets.id, id));
+    if (!existing) return res.status(404).json({ error: "Prompt set not found" });
+    if (existing.status !== "draft") {
+      return res.status(409).json({ error: "Only draft sets can be deleted. Archive published sets instead." });
+    }
+    await db.delete(promptSets).where(eq(promptSets.id, id));
+    res.json({ ok: true });
+  });
+
+  // Publish a draft. Auto-archives any prior published set with same (BU, serviceLine).
+  app.post("/api/prompt-sets/:id/publish", async (req: Request, res: Response) => {
+    const id = parseInt(req.params.id);
+    const [existing] = await db.select().from(promptSets).where(eq(promptSets.id, id));
+    if (!existing) return res.status(404).json({ error: "Prompt set not found" });
+    if (existing.status !== "draft") {
+      return res.status(409).json({ error: `Cannot publish a set in status "${existing.status}"` });
+    }
+    const items = await db.select().from(promptSetItems).where(eq(promptSetItems.promptSetId, id));
+    if (items.length === 0) {
+      return res.status(400).json({ error: "Cannot publish an empty set — add at least one prompt." });
+    }
+    const actor = (req.header("x-user-name") || "Unknown").trim();
+    // Wrap archive-prior + publish-new in a single transaction so concurrent
+    // publishes for the same (BU, SL) tuple cannot leave two published rows.
+    // The unique partial index uq_prompt_sets_published_tuple is the ultimate
+    // safety net.
+    const updated = await db.transaction(async (tx) => {
+      const priorConds: any[] = [eq(promptSets.status, "published")];
+      priorConds.push(existing.businessUnit ? eq(promptSets.businessUnit, existing.businessUnit) : isNull(promptSets.businessUnit));
+      priorConds.push(existing.serviceLine ? eq(promptSets.serviceLine, existing.serviceLine) : isNull(promptSets.serviceLine));
+      await tx.update(promptSets)
+        .set({ status: "archived", archivedAt: new Date(), archivedBy: actor, updatedAt: new Date() })
+        .where(and(...priorConds));
+      const [u] = await tx.update(promptSets)
+        .set({ status: "published", publishedAt: new Date(), publishedBy: actor, updatedAt: new Date() })
+        .where(eq(promptSets.id, id))
+        .returning();
+      return u;
+    });
+    res.json(updated);
+  });
+
+  // Clone a set as a new draft with version = max(version)+1 for that (BU, serviceLine).
+  app.post("/api/prompt-sets/:id/clone", async (req: Request, res: Response) => {
+    const id = parseInt(req.params.id);
+    const [src] = await db.select().from(promptSets).where(eq(promptSets.id, id));
+    if (!src) return res.status(404).json({ error: "Prompt set not found" });
+    const sameTuple: any[] = [];
+    sameTuple.push(src.businessUnit ? eq(promptSets.businessUnit, src.businessUnit) : isNull(promptSets.businessUnit));
+    sameTuple.push(src.serviceLine ? eq(promptSets.serviceLine, src.serviceLine) : isNull(promptSets.serviceLine));
+    const siblings = await db.select({ version: promptSets.version }).from(promptSets).where(and(...sameTuple));
+    const nextVersion = (siblings.reduce((m, r) => Math.max(m, r.version || 1), 0) || 0) + 1;
+    const createdBy = (req.header("x-user-name") || "Unknown").trim();
+    const [cloned] = await db.insert(promptSets).values({
+      name: src.name,
+      businessUnit: src.businessUnit,
+      serviceLine: src.serviceLine,
+      notes: src.notes,
+      version: nextVersion,
+      status: "draft",
+      createdBy,
+    }).returning();
+    const items = await db.select().from(promptSetItems).where(eq(promptSetItems.promptSetId, src.id));
+    if (items.length > 0) {
+      await db.insert(promptSetItems).values(items.map((it) => ({
+        promptSetId: cloned.id,
+        question: it.question,
+        category: it.category,
+        helpText: it.helpText,
+        options: it.options,
+        sortOrder: it.sortOrder,
+        enabled: it.enabled,
+      })));
+    }
+    res.status(201).json(cloned);
+  });
+
+  // Manually archive any set (publishers may want to retire without replacement).
+  app.post("/api/prompt-sets/:id/archive", async (req: Request, res: Response) => {
+    const id = parseInt(req.params.id);
+    const actor = (req.header("x-user-name") || "Unknown").trim();
+    const [updated] = await db.update(promptSets)
+      .set({ status: "archived", archivedAt: new Date(), archivedBy: actor, updatedAt: new Date() })
+      .where(eq(promptSets.id, id))
+      .returning();
+    if (!updated) return res.status(404).json({ error: "Prompt set not found" });
+    res.json(updated);
+  });
+
+  // Items: only draft sets are mutable.
+  async function assertDraftSet(setId: number): Promise<{ error?: string; status?: number; set?: any }> {
+    const [set] = await db.select().from(promptSets).where(eq(promptSets.id, setId));
+    if (!set) return { error: "Prompt set not found", status: 404 };
+    if (set.status !== "draft") return { error: "Only draft sets can be edited. Clone the set first.", status: 409 };
+    return { set };
+  }
+
+  function validateOptionsArray(opts: any): { error?: string; value?: any[] } {
+    if (!Array.isArray(opts) || opts.length === 0) return { error: "options must be a non-empty array" };
+    const cleaned: any[] = [];
+    for (let i = 0; i < opts.length; i++) {
+      const o = opts[i];
+      if (!o || typeof o !== "object") return { error: `option ${i + 1} is invalid` };
+      const label = String(o.label ?? "").trim();
+      const m = parseFloat(String(o.multiplier ?? ""));
+      if (!label) return { error: `option ${i + 1} is missing a label` };
+      if (!Number.isFinite(m) || m < 0.1 || m > 5.0) return { error: `option "${label}" multiplier must be a number between 0.1 and 5.0` };
+      cleaned.push({ label, multiplier: m.toFixed(2) });
+    }
+    return { value: cleaned };
+  }
+
+  app.post("/api/prompt-sets/:id/items", async (req: Request, res: Response) => {
+    const setId = parseInt(req.params.id);
+    const guard = await assertDraftSet(setId);
+    if (guard.error) return res.status(guard.status!).json({ error: guard.error });
+    const { question, category, helpText, options, sortOrder, enabled } = req.body || {};
+    if (!question || typeof question !== "string") return res.status(400).json({ error: "question is required" });
+    const v = validateOptionsArray(options);
+    if (v.error) return res.status(400).json({ error: v.error });
+    const [created] = await db.insert(promptSetItems).values({
+      promptSetId: setId,
+      question,
+      category: category || null,
+      helpText: helpText || null,
+      options: v.value!,
+      sortOrder: Number.isFinite(sortOrder) ? parseInt(String(sortOrder)) : 0,
+      enabled: enabled === false ? false : true,
+    }).returning();
+    await db.update(promptSets).set({ updatedAt: new Date() }).where(eq(promptSets.id, setId));
+    res.status(201).json(created);
+  });
+
+  app.patch("/api/prompt-sets/:id/items/:itemId", async (req: Request, res: Response) => {
+    const setId = parseInt(req.params.id);
+    const itemId = parseInt(req.params.itemId);
+    const guard = await assertDraftSet(setId);
+    if (guard.error) return res.status(guard.status!).json({ error: guard.error });
+    const patch: any = {};
+    if ("question" in req.body) patch.question = String(req.body.question || "");
+    if ("category" in req.body) patch.category = req.body.category || null;
+    if ("helpText" in req.body) patch.helpText = req.body.helpText || null;
+    if ("sortOrder" in req.body) patch.sortOrder = parseInt(String(req.body.sortOrder)) || 0;
+    if ("enabled" in req.body) patch.enabled = !!req.body.enabled;
+    if ("options" in req.body) {
+      const v = validateOptionsArray(req.body.options);
+      if (v.error) return res.status(400).json({ error: v.error });
+      patch.options = v.value;
+    }
+    if (patch.question !== undefined && !patch.question.trim()) return res.status(400).json({ error: "question cannot be empty" });
+    const [updated] = await db.update(promptSetItems).set(patch)
+      .where(and(eq(promptSetItems.id, itemId), eq(promptSetItems.promptSetId, setId)))
+      .returning();
+    if (!updated) return res.status(404).json({ error: "Item not found" });
+    await db.update(promptSets).set({ updatedAt: new Date() }).where(eq(promptSets.id, setId));
+    res.json(updated);
+  });
+
+  app.delete("/api/prompt-sets/:id/items/:itemId", async (req: Request, res: Response) => {
+    const setId = parseInt(req.params.id);
+    const itemId = parseInt(req.params.itemId);
+    const guard = await assertDraftSet(setId);
+    if (guard.error) return res.status(guard.status!).json({ error: guard.error });
+    await db.delete(promptSetItems)
+      .where(and(eq(promptSetItems.id, itemId), eq(promptSetItems.promptSetId, setId)));
+    await db.update(promptSets).set({ updatedAt: new Date() }).where(eq(promptSets.id, setId));
+    res.json({ ok: true });
   });
 
   // ========== AI ENDPOINTS ==========

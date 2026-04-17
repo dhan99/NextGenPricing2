@@ -8,6 +8,7 @@ import { DealDetail } from "./pages/DealDetail";
 import { RenewalLeadsheet } from "./pages/RenewalLeadsheet";
 import { RateCards } from "./pages/RateCards";
 import { ScopeCatalogAdmin } from "./pages/ScopeCatalogAdmin";
+import { PromptSetsAdmin } from "./pages/PromptSetsAdmin";
 import { Architecture } from "./pages/Architecture";
 import { ArchitectureInteractive } from "./pages/ArchitectureInteractive";
 import { ArchitectureHub } from "./pages/ArchitectureHub";
@@ -59,6 +60,9 @@ function AuthenticatedApp() {
         </Route>
         <Route path="/admin/scope-catalog">
           {hasPermission("manageScopeCatalog") ? <ScopeCatalogAdmin /> : <NoAccess feature="scope catalog management" />}
+        </Route>
+        <Route path="/admin/prompt-sets">
+          {hasPermission("manageScopeCatalog") ? <PromptSetsAdmin /> : <NoAccess feature="prompt set governance" />}
         </Route>
         <Route path="/analytics">
           {hasPermission("viewDeals") ? <Analytics /> : <NoAccess feature="analytics" />}

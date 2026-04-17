@@ -171,6 +171,39 @@ export const promptResponses = pgTable("prompt_responses", {
   category: text("category"),
   impactMultiplier: decimal("impact_multiplier", { precision: 4, scale: 2 }).default("1.0"),
   sortOrder: integer("sort_order").default(0),
+  promptSetId: integer("prompt_set_id"),
+  promptSetVersion: integer("prompt_set_version"),
+});
+
+// Governed, versioned prompt sets owned by Pricing Operations (US-12).
+// Only one published set per (businessUnit, serviceLine) is "active" at a time.
+export const promptSets = pgTable("prompt_sets", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  businessUnit: text("business_unit"),
+  serviceLine: text("service_line"),
+  version: integer("version").notNull().default(1),
+  status: text("status").notNull().default("draft"), // draft | published | archived
+  notes: text("notes"),
+  publishedAt: timestamp("published_at"),
+  publishedBy: text("published_by"),
+  archivedAt: timestamp("archived_at"),
+  archivedBy: text("archived_by"),
+  createdBy: text("created_by"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// Each prompt belongs to a set. `options` is an array of {label, multiplier} entries.
+export const promptSetItems = pgTable("prompt_set_items", {
+  id: serial("id").primaryKey(),
+  promptSetId: integer("prompt_set_id").references(() => promptSets.id, { onDelete: "cascade" }).notNull(),
+  question: text("question").notNull(),
+  category: text("category"),
+  helpText: text("help_text"),
+  options: jsonb("options").notNull(), // [{ label: string, multiplier: string }]
+  sortOrder: integer("sort_order").default(0),
+  enabled: boolean("enabled").default(true),
 });
 
 export const activityLog = pgTable("activity_log", {

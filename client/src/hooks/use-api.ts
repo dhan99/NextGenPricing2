@@ -680,3 +680,100 @@ export function useWorkdayEvents() {
 export function useWorkdayDashboard() {
   return useQuery({ queryKey: ["wd-dashboard"], queryFn: () => fetchApi("/api/workday/dashboard") });
 }
+
+// ============ PROMPT SETS (Pricing Operations governance) ============
+export function usePromptSets(filters?: { status?: string; businessUnit?: string; serviceLine?: string }) {
+  const qs = new URLSearchParams();
+  if (filters?.status) qs.set("status", filters.status);
+  if (filters?.businessUnit) qs.set("businessUnit", filters.businessUnit);
+  if (filters?.serviceLine) qs.set("serviceLine", filters.serviceLine);
+  const q = qs.toString();
+  return useQuery({
+    queryKey: ["prompt-sets", filters?.status || "", filters?.businessUnit || "", filters?.serviceLine || ""],
+    queryFn: () => fetchApi(`/api/prompt-sets${q ? `?${q}` : ""}`),
+  });
+}
+export function usePromptSet(id: number | null) {
+  return useQuery({
+    queryKey: ["prompt-set", id],
+    queryFn: () => fetchApi(`/api/prompt-sets/${id}`),
+    enabled: !!id,
+  });
+}
+export function useCreatePromptSet() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { name: string; businessUnit?: string | null; serviceLine?: string | null; notes?: string | null }) =>
+      fetchApi("/api/prompt-sets", { method: "POST", body: JSON.stringify(data) }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["prompt-sets"] }),
+  });
+}
+export function useUpdatePromptSet() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, data }: { id: number; data: any }) =>
+      fetchApi(`/api/prompt-sets/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
+    onSuccess: (_d, vars) => {
+      qc.invalidateQueries({ queryKey: ["prompt-sets"] });
+      qc.invalidateQueries({ queryKey: ["prompt-set", vars.id] });
+    },
+  });
+}
+export function useDeletePromptSet() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => fetchApi(`/api/prompt-sets/${id}`, { method: "DELETE" }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["prompt-sets"] }),
+  });
+}
+export function usePublishPromptSet() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => fetchApi(`/api/prompt-sets/${id}/publish`, { method: "POST" }),
+    onSuccess: (_d, id) => {
+      qc.invalidateQueries({ queryKey: ["prompt-sets"] });
+      qc.invalidateQueries({ queryKey: ["prompt-set", id] });
+    },
+  });
+}
+export function useClonePromptSet() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => fetchApi(`/api/prompt-sets/${id}/clone`, { method: "POST" }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["prompt-sets"] }),
+  });
+}
+export function useArchivePromptSet() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => fetchApi(`/api/prompt-sets/${id}/archive`, { method: "POST" }),
+    onSuccess: (_d, id) => {
+      qc.invalidateQueries({ queryKey: ["prompt-sets"] });
+      qc.invalidateQueries({ queryKey: ["prompt-set", id] });
+    },
+  });
+}
+export function useCreatePromptSetItem() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ setId, data }: { setId: number; data: any }) =>
+      fetchApi(`/api/prompt-sets/${setId}/items`, { method: "POST", body: JSON.stringify(data) }),
+    onSuccess: (_d, vars) => qc.invalidateQueries({ queryKey: ["prompt-set", vars.setId] }),
+  });
+}
+export function useUpdatePromptSetItem() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ setId, itemId, data }: { setId: number; itemId: number; data: any }) =>
+      fetchApi(`/api/prompt-sets/${setId}/items/${itemId}`, { method: "PATCH", body: JSON.stringify(data) }),
+    onSuccess: (_d, vars) => qc.invalidateQueries({ queryKey: ["prompt-set", vars.setId] }),
+  });
+}
+export function useDeletePromptSetItem() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ setId, itemId }: { setId: number; itemId: number }) =>
+      fetchApi(`/api/prompt-sets/${setId}/items/${itemId}`, { method: "DELETE" }),
+    onSuccess: (_d, vars) => qc.invalidateQueries({ queryKey: ["prompt-set", vars.setId] }),
+  });
+}
