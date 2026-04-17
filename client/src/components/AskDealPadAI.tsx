@@ -119,7 +119,7 @@ export function AskDealPadAI({ context }: { context: AskAIContext }) {
     return (
       <button
         onClick={() => setOpen(true)}
-        className="fixed bottom-24 right-6 z-40 flex items-center gap-2 px-3.5 py-2.5 rounded-full bg-primary text-primary-foreground shadow-lg hover:bg-primary/90 transition-all"
+        className="fixed top-1/2 -translate-y-1/2 right-6 z-40 flex items-center gap-2 px-3.5 py-2.5 rounded-full bg-primary text-primary-foreground shadow-lg hover:bg-primary/90 transition-all"
         aria-label="Ask DealPad AI"
         title="Ask DealPad AI"
       >
@@ -130,7 +130,7 @@ export function AskDealPadAI({ context }: { context: AskAIContext }) {
   }
 
   return (
-    <div className="fixed bottom-24 right-6 z-40 w-[380px] max-h-[70vh] flex flex-col rounded-2xl border border-border bg-card shadow-2xl">
+    <div className="fixed top-1/2 -translate-y-1/2 right-6 z-40 w-[380px] max-h-[70vh] flex flex-col rounded-2xl border border-border bg-card shadow-2xl">
       <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-amber-50/50 rounded-t-2xl">
         <div className="flex items-center gap-2 min-w-0">
           <Sparkles className="w-4 h-4 text-primary flex-shrink-0" />
