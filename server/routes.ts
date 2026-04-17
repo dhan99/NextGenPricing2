@@ -1182,7 +1182,7 @@ export function registerRoutes(app: Express) {
         await db.insert(scenarios).values([
           {
             dealId, name: "Option 1", description: "Balanced team composition with standard timeline",
-            scenarioType: "option_1", isRecommended: false,
+            scenarioType: "option_1", isRecommended: true,
             totalFee: String(Math.round(fee)), totalCost: String(Math.round(cost)),
             totalHours: String(Math.round(hours)), marginPercent: String(stdMargin.toFixed(1)),
             blendedRate: hours > 0 ? String((fee / hours).toFixed(2)) : "0",
@@ -1190,7 +1190,7 @@ export function registerRoutes(app: Express) {
           },
           {
             dealId, name: "Option 2", description: "Senior-heavy team with accelerated timeline",
-            scenarioType: "option_2", isRecommended: true,
+            scenarioType: "option_2", isRecommended: false,
             totalFee: String(premFee), totalCost: String(premCost),
             totalHours: String(premHours), marginPercent: String(premMargin.toFixed(1)),
             blendedRate: premHours > 0 ? String((premFee / premHours).toFixed(2)) : "0",

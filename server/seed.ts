@@ -180,13 +180,13 @@ export async function seedDatabase() {
   await db.insert(scenarios).values([
     {
       dealId: deal1.id, name: "Option 1", description: "Balanced team composition with standard timeline",
-      scenarioType: "option_1", isRecommended: false,
+      scenarioType: "option_1", isRecommended: true,
       totalFee: "425000", totalCost: "310250", totalHours: "1200", marginPercent: "27.0", blendedRate: "354.17",
       aiReasoning: "Standard delivery model with balanced senior-to-junior ratio. Meets minimum margin requirements.",
     },
     {
       dealId: deal1.id, name: "Option 2", description: "Senior-heavy team with accelerated timeline",
-      scenarioType: "option_2", isRecommended: true,
+      scenarioType: "option_2", isRecommended: false,
       totalFee: "495000", totalCost: "346500", totalHours: "1100", marginPercent: "30.0", blendedRate: "450.00",
       aiReasoning: "Recommended based on client history of selecting senior-heavy teams. Higher margin compensates for reduced hours through experienced delivery.",
     },
