@@ -1145,10 +1145,74 @@ function PricingStep({ deal }: { deal: any }) {
   }), { hours: 0, fee: 0, cost: 0, margin: 0 });
 
   const marginPct = totals.fee > 0 ? ((totals.fee - totals.cost) / totals.fee) * 100 : 0;
+  const targetMargin = 35;
+  const vsTarget = marginPct - targetMargin;
+  const blendedRate = totals.hours > 0 ? totals.fee / totals.hours : 0;
+
+  // Cost breakdown by role bucket (Staff, Senior, Manager, Senior Manager, Director, Partner).
+  const levelOrder = ["Partner", "Director", "Manager", "Senior", "Staff"];
+  const levelLabels: Record<string, string> = {
+    Partner: "Partner",
+    Director: "Managing Director",
+    Manager: "Manager / Sr. Manager",
+    Senior: "Senior",
+    Staff: "Staff",
+  };
+  const levelTints: Record<string, string> = {
+    Partner: "bg-rose-500",
+    Director: "bg-purple-500",
+    Manager: "bg-blue-500",
+    Senior: "bg-emerald-500",
+    Staff: "bg-amber-500",
+  };
+  const costByLevel = new Map<string, { cost: number; hours: number; fee: number }>();
+  (pricingLines || []).forEach((l: any) => {
+    const lvl = l.role?.level || "Staff";
+    const cur = costByLevel.get(lvl) || { cost: 0, hours: 0, fee: 0 };
+    cur.cost += parseFloat(l.cost || 0);
+    cur.hours += parseFloat(l.hours || 0);
+    cur.fee += parseFloat(l.fee || 0);
+    costByLevel.set(lvl, cur);
+  });
+  const maxCostByLevel = Math.max(1, ...Array.from(costByLevel.values()).map((v) => v.cost));
+
+  const kpiCards = [
+    { label: "Total Proposed Fees", value: formatCurrency(totals.fee), tone: "default" as const },
+    { label: "Standard Cost", value: formatCurrency(totals.cost), tone: "muted" as const },
+    { label: "Gross Margin $", value: formatCurrency(totals.margin), tone: "default" as const },
+    { label: "Margin %", value: `${marginPct.toFixed(1)}%`, tone: marginPct >= targetMargin ? "success" as const : marginPct >= 25 ? "warning" as const : "danger" as const },
+    { label: "Total Hours", value: formatNumber(totals.hours), tone: "default" as const },
+    { label: "Effective Rate", value: blendedRate > 0 ? `${formatCurrency(blendedRate)}/hr` : "—", tone: "default" as const },
+    { label: `vs Target (${targetMargin}%)`, value: `${vsTarget >= 0 ? "+" : ""}${vsTarget.toFixed(1)}%`, tone: vsTarget >= 0 ? "success" as const : "danger" as const, accent: true },
+  ];
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-      <div className="lg:col-span-3">
+      <div className="lg:col-span-3 space-y-6">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3">
+          {kpiCards.map((c) => (
+            <div
+              key={c.label}
+              className={cn(
+                "rounded-xl border px-3 py-3 bg-card",
+                c.accent && c.tone === "success" && "border-emerald-300 bg-emerald-50/60",
+                c.accent && c.tone === "danger" && "border-rose-300 bg-rose-50/60",
+                !c.accent && "border-border"
+              )}
+            >
+              <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground leading-tight">{c.label}</p>
+              <p className={cn(
+                "text-lg font-bold mt-1 leading-none",
+                c.tone === "success" && "text-emerald-700",
+                c.tone === "danger" && "text-rose-700",
+                c.tone === "warning" && "text-amber-700",
+                (c.tone === "default" || c.tone === "muted") && "text-foreground",
+              )}>
+                {c.value}
+              </p>
+            </div>
+          ))}
+        </div>
         <ScopeBreakdownPanel dealId={deal.id} pricingLines={pricingLines || []} />
         <div className="card overflow-hidden">
           <div className="px-6 py-4 border-b border-border flex items-center justify-between">
@@ -1214,7 +1278,40 @@ function PricingStep({ deal }: { deal: any }) {
         </div>
       </div>
 
-      <div>
+      <div className="space-y-6">
+        <div className="card p-5">
+          <h3 className="text-sm font-semibold text-foreground mb-4">Cost Breakdown by Role</h3>
+          {costByLevel.size === 0 ? (
+            <p className="text-xs text-muted-foreground py-4 text-center">Add pricing lines to see breakdown.</p>
+          ) : (
+            <div className="space-y-3">
+              {levelOrder.filter((lvl) => costByLevel.has(lvl)).map((lvl) => {
+                const v = costByLevel.get(lvl)!;
+                const pct = (v.cost / maxCostByLevel) * 100;
+                return (
+                  <div key={lvl}>
+                    <div className="flex items-center justify-between text-xs mb-1">
+                      <span className="text-foreground font-medium">{levelLabels[lvl]}</span>
+                      <span className="text-foreground font-semibold tabular-nums">{formatCurrency(v.cost)}</span>
+                    </div>
+                    <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                      <div className={cn("h-full rounded-full", levelTints[lvl])} style={{ width: `${pct}%` }} />
+                    </div>
+                    <div className="flex items-center justify-between text-[10px] text-muted-foreground mt-0.5">
+                      <span>{formatNumber(v.hours)} hrs</span>
+                      <span>{formatCurrency(v.fee)} fee</span>
+                    </div>
+                  </div>
+                );
+              })}
+              <div className="pt-3 mt-2 border-t border-border flex items-center justify-between text-xs">
+                <span className="text-muted-foreground">Total cost</span>
+                <span className="font-bold text-foreground tabular-nums">{formatCurrency(totals.cost)}</span>
+              </div>
+            </div>
+          )}
+        </div>
+
         <div className="card p-6 border-primary/20 bg-primary/5">
           <div className="flex items-center gap-2 mb-4">
             <Sparkles className="w-5 h-5 text-primary" />
