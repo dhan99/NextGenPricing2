@@ -249,6 +249,14 @@ export function useDealPrompts(dealId: number) {
   return useQuery({ queryKey: ["deal-prompts", dealId], queryFn: () => fetchApi(`/api/deals/${dealId}/prompts`), enabled: !!dealId });
 }
 
+export function useEngagementInputSpec(serviceLine?: string | null) {
+  return useQuery({
+    queryKey: ["engagement-input-spec", serviceLine || "_generic"],
+    queryFn: () => fetchApi(`/api/engagement-input-spec/${encodeURIComponent(serviceLine || "_generic")}`),
+    enabled: true,
+  });
+}
+
 export function useUpdatePrompt() {
   const qc = useQueryClient();
   return useMutation({

@@ -54,11 +54,22 @@ async function recalcPricingFromScope(dealId: number) {
   );
   const totalMultiplier = baseMultiplier * promptMultiplier;
 
+  // Engagement Inputs adjustments (Tax PHB Excel parity): T&M rate adjustment % and rounding
+  const ei: any = (deal as any).engagementInputs || {};
+  const rateAdjustmentPct = parseFloat(ei.tmRateAdjustmentPct ?? "0") || 0;
+  const rateAdjustmentFactor = 1 + rateAdjustmentPct / 100;
+  const techAdminFeePct = parseFloat(ei.techAdminFeePct ?? "0") || 0;
+  const lineRounding = parseFloat(ei.lineItemRounding ?? "0") || 0;
+  const roundLine = (v: number) => lineRounding > 0 ? Math.round(v / lineRounding) * lineRounding : v;
+
+  // Use only billable items (assemblies are groupings, not billable lines)
+  const billableScope = (deal.scopeItems || []).filter((si: any) => !si.scopeItem?.isAssembly);
   let totalHours: number;
-  if (deal.scopeItems && deal.scopeItems.length > 0) {
-    totalHours = deal.scopeItems.reduce((sum: number, si: any) => {
+  if (billableScope.length > 0) {
+    totalHours = billableScope.reduce((sum: number, si: any) => {
       const baseHrs = parseFloat(si.adjustedHours || si.scopeItem?.defaultHours || "40");
-      return sum + Math.round(baseHrs * totalMultiplier);
+      const qty = si.quantity || 1;
+      return sum + Math.round(baseHrs * qty * totalMultiplier);
     }, 0);
   } else {
     totalHours = Math.round(200 * totalMultiplier);
@@ -75,24 +86,28 @@ async function recalcPricingFromScope(dealId: number) {
       const role = roleMap.get(line.roleId!);
       const pct = role ? (ROLE_DISTRIBUTION[role.name] || (1 / allRoles.length)) : (1 / existingLines.length);
       const hours = Math.max(Math.round(totalHours * pct), 1);
-      const rate = parseFloat(line.rate || "300");
+      const rate = parseFloat(line.rate || "300") * rateAdjustmentFactor;
       const costRate = parseFloat(line.costRate || "150");
+      const lineFee = roundLine(hours * rate);
+      const lineCost = hours * costRate;
       await db.update(pricingLines).set({
         hours: String(hours),
-        fee: String(hours * rate),
-        cost: String(hours * costRate),
-        margin: String(hours * (rate - costRate)),
+        fee: String(lineFee),
+        cost: String(lineCost),
+        margin: String(lineFee - lineCost),
       }).where(eq(pricingLines.id, line.id));
     }
   }
 
   const updatedLines = await db.select().from(pricingLines).where(eq(pricingLines.dealId, dealId));
-  const calcFee = updatedLines.reduce((s, l) => s + parseFloat(l.fee || "0"), 0);
+  let calcFee = updatedLines.reduce((s, l) => s + parseFloat(l.fee || "0"), 0);
   const calcCost = updatedLines.reduce((s, l) => s + parseFloat(l.cost || "0"), 0);
   const calcHours = updatedLines.reduce((s, l) => s + parseFloat(l.hours || "0"), 0);
+  // Tech & Admin fee is a % uplift on top of professional fees
+  if (techAdminFeePct > 0) calcFee = calcFee * (1 + techAdminFeePct / 100);
   await db.update(deals).set({
-    totalFee: String(calcFee),
-    totalCost: String(calcCost),
+    totalFee: String(calcFee.toFixed(2)),
+    totalCost: String(calcCost.toFixed(2)),
     totalHours: String(calcHours),
     marginPercent: calcFee > 0 ? String(((calcFee - calcCost) / calcFee * 100).toFixed(1)) : "0",
     blendedRate: calcHours > 0 ? String((calcFee / calcHours).toFixed(2)) : "0",
@@ -239,34 +254,92 @@ export function registerRoutes(app: Express) {
 
   app.patch("/api/deals/:id", async (req: Request, res: Response) => {
     const dealId = parseInt(req.params.id);
-    const [prior] = await db.select({ status: deals.status }).from(deals).where(eq(deals.id, dealId));
+    const [prior] = await db.select().from(deals).where(eq(deals.id, dealId));
+    if (!prior) return res.status(404).json({ error: "Deal not found" });
     // SERVER-SIDE GATING: a status transition to "submitted" must pass Intapp screening.
-    if (req.body?.status === "submitted" && prior?.status !== "submitted") {
+    if (req.body?.status === "submitted" && prior.status !== "submitted") {
       const actor = (req.header("x-user-name") || req.body?.userName || "Unknown").trim();
       const gate = await assertSubmissionAllowed(dealId, actor);
       if (!gate.allow) {
         return res.status(409).json({ error: gate.reason, code: "intapp_conflict", screening: gate.screening });
       }
     }
+
+    // Engagement Inputs: validate against the service-line preset, clamp ranges,
+    // and merge with the existing row to avoid last-write-wins races on per-field edits.
+    const patch: any = { ...req.body, updatedAt: new Date() };
+    if (req.body?.engagementInputs !== undefined) {
+      const sl = req.body.serviceLine || prior.serviceLine || "_generic";
+      const preset = ENGAGEMENT_INPUT_PRESETS[sl] || ENGAGEMENT_INPUT_PRESETS["_generic"];
+      const validated = validateEngagementInputs(req.body.engagementInputs, preset);
+      if (validated.error) return res.status(400).json({ error: validated.error, field: validated.field });
+      const existing = (prior as any).engagementInputs || {};
+      patch.engagementInputs = { ...existing, ...validated.values };
+    }
+
     const [updated] = await db.update(deals)
-      .set({ ...req.body, updatedAt: new Date() })
+      .set(patch)
       .where(eq(deals.id, dealId))
       .returning();
     if (!updated) return res.status(404).json({ error: "Deal not found" });
     const changedFields = Object.keys(req.body || {});
-    if (req.body.complexity) {
+    let finalRow = updated;
+    if (req.body.complexity || req.body.engagementInputs !== undefined) {
       await recalcPricingFromScope(dealId);
       if (!changedFields.includes("totalFee")) changedFields.push("totalFee", "totalCost", "totalHours");
+      // Re-fetch so the response carries the freshly recalculated totals
+      const [refetched] = await db.select().from(deals).where(eq(deals.id, dealId));
+      if (refetched) finalRow = refetched;
     }
     autoPushDeal(dealId, changedFields, req.body?.userName).catch(() => {});
-    if (prior?.status !== "submitted" && updated.status === "submitted") {
-      // Gating already passed (assertSubmissionAllowed ran a fresh screening
-      // above). Fire the post-submit trigger to record the audit event.
+    if (prior.status !== "submitted" && finalRow.status === "submitted") {
       const actor = (req.header("x-user-name") || req.body?.userName || "Unknown").trim();
       onDealSubmittedTrigger(dealId, actor).catch(() => {});
     }
-    res.json(updated);
+    res.json(finalRow);
   });
+
+  // Validate an engagementInputs payload against a preset spec.
+  // - Strips unknown keys
+  // - For 'select' fields: enum check
+  // - For 'number' fields: parses, requires finite, clamps to safe ranges
+  function validateEngagementInputs(input: any, preset: any): { error?: string; field?: string; values: Record<string, string> } {
+    if (input === null || typeof input !== "object" || Array.isArray(input)) {
+      return { error: "engagementInputs must be an object", values: {} };
+    }
+    const fieldMap = new Map<string, any>((preset.fields || []).map((f: any) => [f.key, f]));
+    // Per-field safety bounds (covers all current preset numeric fields)
+    const NUMERIC_BOUNDS: Record<string, { min: number; max: number }> = {
+      tmRateAdjustmentPct: { min: -50, max: 100 },
+      techAdminFeePct: { min: 0, max: 25 },
+      grossMarginBenchmarkPct: { min: 0, max: 100 },
+      lineItemRounding: { min: 0, max: 10000 },
+      fixedFeeRounding: { min: 0, max: 100000 },
+    };
+    const out: Record<string, string> = {};
+    for (const [key, raw] of Object.entries(input)) {
+      const f: any = fieldMap.get(key);
+      if (!f) continue; // strip unknown keys silently
+      if (f.type === "select") {
+        const v = String(raw ?? "");
+        if (!f.options.includes(v)) {
+          return { error: `Invalid value for "${f.label}". Allowed: ${f.options.join(", ")}`, field: key, values: {} };
+        }
+        out[key] = v;
+      } else if (f.type === "number") {
+        const n = parseFloat(String(raw ?? ""));
+        if (!Number.isFinite(n)) {
+          return { error: `"${f.label}" must be a number`, field: key, values: {} };
+        }
+        const bounds = NUMERIC_BOUNDS[key] || { min: -1e9, max: 1e9 };
+        if (n < bounds.min || n > bounds.max) {
+          return { error: `"${f.label}" must be between ${bounds.min} and ${bounds.max}`, field: key, values: {} };
+        }
+        out[key] = String(n);
+      }
+    }
+    return { values: out };
+  }
 
   app.post("/api/deals/:id/archive", async (req: Request, res: Response) => {
     const dealId = parseInt(req.params.id);
@@ -522,6 +595,65 @@ export function registerRoutes(app: Express) {
   });
 
   // ========== SCOPE CATALOG ==========
+  // ========== ENGAGEMENT INPUTS PRESETS (per service line) ==========
+  // Each preset describes the structured pricing inputs that mirror the
+  // Excel "Core Assumptions" sheet for that service line. Tax-PHB is the
+  // first fully-modeled preset; others fall back to a generic minimal set.
+  const ENGAGEMENT_INPUT_PRESETS: Record<string, any> = {
+    "Tax-PHB": {
+      label: "Tax — Private Holdings & Business",
+      sourceWorkbook: "tax-pricing-calculator.xlsx (Core Assumptions)",
+      defaults: {
+        rateYear: "2026",
+        tmBasis: "National",
+        tmRateAdjustmentPct: "0",
+        techAdminFeePct: "7",
+        grossMarginBenchmarkPct: "74.6",
+        lineItemRounding: "100",
+        fixedFeeRounding: "1000",
+        offshoringAcceptable: "Yes",
+        offshoring7216: "N/A",
+        comparisonProject: "No",
+      },
+      fields: [
+        { key: "rateYear", label: "Rate Year", type: "select", options: ["2025", "2026"], help: "Select 2026 for projects starting after Jan 1, 2026." },
+        { key: "tmBasis", label: "T&M Basis", type: "select", options: ["National", "Geo"], help: "Standard rate (National) or geography-adjusted (Geo)." },
+        { key: "tmRateAdjustmentPct", label: "One-time Pricing Adjustment (%)", type: "number", suffix: "%", help: "Applied to T&M rates. Default 0%. Positive = uplift, negative = discount." },
+        { key: "techAdminFeePct", label: "Technology & Admin Fee (%)", type: "number", suffix: "%", help: "7% standard. Below 7% requires BUOL written approval." },
+        { key: "grossMarginBenchmarkPct", label: "Gross Margin Benchmark (%)", type: "number", suffix: "%", help: "Target margin for this service line. Excel default: 74.6%." },
+        { key: "lineItemRounding", label: "Line Item Rounding ($)", type: "number", prefix: "$", help: "Default $100." },
+        { key: "fixedFeeRounding", label: "Fixed Fee Total Rounding ($)", type: "number", prefix: "$", help: "Default $1,000." },
+        { key: "offshoringAcceptable", label: "Offshoring Available — Client Acceptable", type: "select", options: ["Yes", "No"], help: "Confirm Outsourcing Resource availability with Resource Planning." },
+        { key: "offshoring7216", label: "Form 7216 — Individual Returns", type: "select", options: ["N/A", "Yes (signed)", "Pending"], help: "Required for offshoring Individual returns. N/A for non-individual engagements." },
+        { key: "comparisonProject", label: "Comparison Project (renewal history)", type: "select", options: ["No", "Yes"], help: "Pulls prior-year actuals from Project Profitability dashboard." },
+      ],
+    },
+    "_generic": {
+      label: "Generic Engagement Inputs",
+      sourceWorkbook: null,
+      defaults: {
+        rateYear: "2026",
+        tmRateAdjustmentPct: "0",
+        techAdminFeePct: "0",
+        grossMarginBenchmarkPct: "30",
+        lineItemRounding: "0",
+      },
+      fields: [
+        { key: "rateYear", label: "Rate Year", type: "select", options: ["2025", "2026"] },
+        { key: "tmRateAdjustmentPct", label: "Rate Adjustment (%)", type: "number", suffix: "%" },
+        { key: "techAdminFeePct", label: "Tech & Admin Fee (%)", type: "number", suffix: "%" },
+        { key: "grossMarginBenchmarkPct", label: "Gross Margin Benchmark (%)", type: "number", suffix: "%" },
+        { key: "lineItemRounding", label: "Line Item Rounding ($)", type: "number", prefix: "$" },
+      ],
+    },
+  };
+
+  app.get("/api/engagement-input-spec/:serviceLine", async (req: Request, res: Response) => {
+    const sl = req.params.serviceLine;
+    const preset = ENGAGEMENT_INPUT_PRESETS[sl] || ENGAGEMENT_INPUT_PRESETS["_generic"];
+    res.json({ serviceLine: sl, ...preset });
+  });
+
   app.get("/api/scope-catalog", async (req: Request, res: Response) => {
     const includeInactive = req.query.includeInactive === "1" || req.query.includeInactive === "true";
     const rows = await db.select().from(scopeCatalog).orderBy(scopeCatalog.sortOrder);

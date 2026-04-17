@@ -42,6 +42,7 @@ export const deals = pgTable("deals", {
   archivedAt: timestamp("archived_at"),
   archivedBy: text("archived_by"),
   workdayCostCenterId: integer("workday_cost_center_id"),
+  engagementInputs: jsonb("engagement_inputs"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

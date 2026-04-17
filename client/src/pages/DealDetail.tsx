@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRoute } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
-import { useDeal, useUpdateDeal, useScopeCatalog, useScopeTemplates, useApplyScopeTemplate, useDealScopeItems, useAddScopeItem, useRemoveScopeItem, useRoles, useDealPricing, useUpdatePricingLine, useDealScenarios, useSelectScenario, useDealApprovals, useSubmitApproval, useUpdateApproval, useDealPrompts, useUpdatePrompt, useAIDealSimilarity, useAIEffortEstimation, useAIMarginAdvisor, useAIScenarioRecommendation, useAIRiskSummary, useDealIntappScreening, useRunIntappScreening, useIntappOverride, useAddIntappMitigation, useUpdateIntappMitigation, useWorkdayLatestValidation, useWorkdayCostCenters, useRunWorkdayValidation, useLinkWorkdayCostCenter, useOverrideWorkdayValidation } from "@/hooks/use-api";
+import { useDeal, useUpdateDeal, useScopeCatalog, useScopeTemplates, useApplyScopeTemplate, useDealScopeItems, useAddScopeItem, useRemoveScopeItem, useRoles, useDealPricing, useUpdatePricingLine, useDealScenarios, useSelectScenario, useDealApprovals, useSubmitApproval, useUpdateApproval, useDealPrompts, useUpdatePrompt, useEngagementInputSpec, useAIDealSimilarity, useAIEffortEstimation, useAIMarginAdvisor, useAIScenarioRecommendation, useAIRiskSummary, useDealIntappScreening, useRunIntappScreening, useIntappOverride, useAddIntappMitigation, useUpdateIntappMitigation, useWorkdayLatestValidation, useWorkdayCostCenters, useRunWorkdayValidation, useLinkWorkdayCostCenter, useOverrideWorkdayValidation } from "@/hooks/use-api";
 import { ResultBadge as IntappResultBadge, RiskBadge as IntappRiskBadge, SourceBadge as IntappSourceBadge } from "./Intapp";
 import { ShieldAlert, ShieldCheck, Unlock } from "lucide-react";
 import { formatCurrency, formatPercent, formatNumber, getStatusColor, getStatusLabel, cn } from "@/lib/utils";
@@ -761,13 +761,14 @@ function AssumptionsStep({ deal }: { deal: any }) {
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-      <div className="lg:col-span-2">
+      <div className="lg:col-span-2 space-y-6">
+        <EngagementInputsCard deal={deal} />
         <div className="card p-6">
           <div className="flex items-center justify-between mb-2">
-            <h2 className="text-lg font-semibold text-foreground">Complexity & Scope Prompts</h2>
+            <h2 className="text-lg font-semibold text-foreground">Complexity Drivers</h2>
             <span className="text-xs font-medium text-muted-foreground">{answeredCount} of {items.length} answered</span>
           </div>
-          <p className="text-sm text-muted-foreground mb-6">Answer these questions to adjust effort multipliers. Each response fine-tunes the scope estimation based on project-specific factors.</p>
+          <p className="text-sm text-muted-foreground mb-6">These project-specific factors fine-tune the AI effort estimation through compounding multipliers.</p>
           <div className="space-y-4">
             {items.map((p: any) => {
               const options = PROMPT_OPTIONS[p.question] || [];
@@ -858,6 +859,132 @@ function AssumptionsStep({ deal }: { deal: any }) {
             <p className="text-xs text-muted-foreground leading-relaxed">Each response adjusts the baseline effort estimation. Multipliers above 1.0x increase hours; below 1.0x decrease them.</p>
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function EngagementInputsCard({ deal }: { deal: any }) {
+  const { data: spec, isLoading } = useEngagementInputSpec(deal.serviceLine);
+  const updateDeal = useUpdateDeal();
+  const [draft, setDraft] = useState<Record<string, string>>({});
+  const [savedKey, setSavedKey] = useState<string | null>(null);
+
+  // Hydrate draft from saved engagementInputs (or preset defaults) once spec loads
+  useEffect(() => {
+    if (!spec) return;
+    const saved = (deal.engagementInputs as Record<string, string>) || {};
+    const merged: Record<string, string> = { ...spec.defaults, ...saved };
+    setDraft(merged);
+  }, [spec, deal.id]);
+
+  if (isLoading || !spec) {
+    return (
+      <div className="card p-6">
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Loader2 className="w-4 h-4 animate-spin" /> Loading engagement inputs...
+        </div>
+      </div>
+    );
+  }
+
+  const setField = (key: string, value: string) => {
+    setDraft((d) => ({ ...d, [key]: value }));
+  };
+
+  const commitField = (key: string, value: string) => {
+    const merged = { ...((deal.engagementInputs as Record<string, string>) || {}), ...draft, [key]: value };
+    updateDeal.mutate(
+      { id: deal.id, data: { engagementInputs: merged } },
+      {
+        onSuccess: () => {
+          setSavedKey(key);
+          setTimeout(() => setSavedKey((k) => (k === key ? null : k)), 1200);
+        },
+      }
+    );
+  };
+
+  const isTaxPHB = deal.serviceLine === "Tax-PHB";
+
+  return (
+    <div className="card p-6">
+      <div className="flex items-start justify-between mb-4">
+        <div>
+          <h2 className="text-lg font-semibold text-foreground">Engagement Inputs</h2>
+          <p className="text-sm text-muted-foreground mt-1">
+            {isTaxPHB
+              ? "Structured pricing inputs from Armanino's Tax PHB workbook. These flow into the pricing engine and govern rounding, fees, and margin targets."
+              : "Generic engagement inputs. A service-line-specific preset will appear when this deal's service line is recognized."}
+          </p>
+        </div>
+        <span className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 whitespace-nowrap">
+          {spec.label}
+        </span>
+      </div>
+
+      {spec.sourceWorkbook && (
+        <p className="text-[11px] text-muted-foreground mb-4">
+          Source: <span className="font-mono">{spec.sourceWorkbook}</span>
+        </p>
+      )}
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {spec.fields.map((f: any) => {
+          const value = draft[f.key] ?? "";
+          const justSaved = savedKey === f.key;
+          return (
+            <div key={f.key} className="space-y-1.5">
+              <label className="block text-xs font-semibold text-foreground">
+                {f.label}
+                {justSaved && (
+                  <span className="ml-2 text-[10px] font-normal text-emerald-600 inline-flex items-center gap-0.5">
+                    <Check className="w-3 h-3" /> saved
+                  </span>
+                )}
+              </label>
+              {f.type === "select" ? (
+                <select
+                  value={value}
+                  onChange={(e) => {
+                    setField(f.key, e.target.value);
+                    commitField(f.key, e.target.value);
+                  }}
+                  disabled={updateDeal.isPending}
+                  className="w-full px-3 py-2 text-sm rounded-lg border border-border bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+                >
+                  {f.options.map((opt: string) => (
+                    <option key={opt} value={opt}>{opt}</option>
+                  ))}
+                </select>
+              ) : (
+                <div className="relative">
+                  {f.prefix && (
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground pointer-events-none">{f.prefix}</span>
+                  )}
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    step="0.01"
+                    value={value}
+                    onChange={(e) => setField(f.key, e.target.value)}
+                    onBlur={(e) => commitField(f.key, e.target.value)}
+                    disabled={updateDeal.isPending}
+                    className={cn(
+                      "w-full py-2 text-sm rounded-lg border border-border bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary",
+                      f.prefix ? "pl-7 pr-3" : "px-3",
+                      f.suffix ? "pr-8" : ""
+                    )}
+                  />
+                  {f.suffix && (
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground pointer-events-none">{f.suffix}</span>
+                  )}
+                </div>
+              )}
+              {f.help && <p className="text-[11px] text-muted-foreground leading-snug">{f.help}</p>}
+            </div>
+          );
+        })}
       </div>
     </div>
   );
