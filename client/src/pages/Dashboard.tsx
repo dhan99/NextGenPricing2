@@ -200,14 +200,6 @@ export function Dashboard() {
           <h1 className="text-2xl font-bold text-foreground tracking-tight">{greeting.title}</h1>
           <p className="text-muted-foreground text-sm mt-1 max-w-2xl">{greeting.subtitle}</p>
         </div>
-        {hasPermission("createDeals") && (
-          <Link href="/deals/new">
-            <button className="btn-primary">
-              <FileText className="w-4 h-4" />
-              Scope an Engagement
-            </button>
-          </Link>
-        )}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
