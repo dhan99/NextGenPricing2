@@ -19,7 +19,7 @@ const STEPS = [
   { num: 3, label: "Assumptions" },
   { num: 4, label: "Pricing" },
   { num: 5, label: "Review" },
-  { num: 6, label: "Approval" },
+  { num: 6, label: "Submit for Approval" },
   { num: 7, label: "Summary" },
 ];
 
@@ -1841,6 +1841,16 @@ function ReviewStep({ deal, navigateToStep, onReadiness, override, setOverride }
               {blockers} blocker{blockers > 1 ? "s" : ""}
             </span>
           )}
+          <a
+            href={`/api/deals/${deal.id}/proposal`}
+            target="_blank"
+            rel="noopener noreferrer"
+            title="Opens a printable summary — use your browser's Print dialog to save as PDF."
+            className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border border-stone-200 hover:bg-stone-50 transition-colors"
+          >
+            <FileText className="w-3.5 h-3.5" />
+            Download PDF Summary
+          </a>
         </div>
       </div>
 
