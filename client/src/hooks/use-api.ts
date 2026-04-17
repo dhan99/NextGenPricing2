@@ -465,6 +465,45 @@ export function useAskDealPadAI() {
   return useMutation({ mutationFn: (data: { question: string; context: any; role?: string }) => fetchApi("/api/ai/ask", { method: "POST", body: JSON.stringify(data) }) });
 }
 
+// ============ CONGA ENGAGEMENT LETTERS ============
+export function useCongaTemplates() {
+  return useQuery({ queryKey: ["conga-templates"], queryFn: () => fetchApi("/api/conga/templates") });
+}
+export function useCongaSettings() {
+  return useQuery({ queryKey: ["conga-settings"], queryFn: () => fetchApi("/api/conga/settings") });
+}
+export function useUpdateCongaSettings() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: any) => fetchApi("/api/conga/settings", { method: "PATCH", body: JSON.stringify(body) }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["conga-settings"] });
+      qc.invalidateQueries({ queryKey: ["conga-templates"] });
+    },
+  });
+}
+export function useDealEngagementLetters(dealId: number) {
+  return useQuery({
+    queryKey: ["conga-letters", dealId],
+    queryFn: () => fetchApi(`/api/conga/deals/${dealId}/letters`),
+    enabled: !!dealId,
+  });
+}
+export function useGenerateEngagementLetter() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ dealId, templateId, generatedBy }: { dealId: number; templateId: number; generatedBy?: string }) =>
+      fetchApi(`/api/conga/deals/${dealId}/letters`, {
+        method: "POST",
+        body: JSON.stringify({ templateId, generatedBy }),
+      }),
+    onSuccess: (_, { dealId }) => {
+      qc.invalidateQueries({ queryKey: ["conga-letters", dealId] });
+      qc.invalidateQueries({ queryKey: ["activity"] });
+    },
+  });
+}
+
 // ============ INTAPP RISK & COMPLIANCE ============
 export function useIntappSettings() {
   return useQuery({ queryKey: ["intapp-settings"], queryFn: () => fetchApi("/api/intapp/settings") });

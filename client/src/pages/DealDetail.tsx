@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useRoute } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
-import { useDeal, useUpdateDeal, useScopeCatalog, useScopeTemplates, useApplyScopeTemplate, useDealScopeItems, useAddScopeItem, useRemoveScopeItem, useRoles, useDealPricing, useUpdatePricingLine, useDealScenarios, useSelectScenario, useDealApprovals, useSubmitApproval, useUpdateApproval, useDealPrompts, useUpdatePrompt, useEngagementInputSpec, useAIDealSimilarity, useAIEffortEstimation, useAIMarginAdvisor, useAIScenarioRecommendation, useAIRiskSummary, useDealIntappScreening, useRunIntappScreening, useIntappOverride, useAddIntappMitigation, useUpdateIntappMitigation, useWorkdayLatestValidation, useWorkdayCostCenters, useRunWorkdayValidation, useLinkWorkdayCostCenter, useOverrideWorkdayValidation, usePromptSets } from "@/hooks/use-api";
+import { useDeal, useUpdateDeal, useScopeCatalog, useScopeTemplates, useApplyScopeTemplate, useDealScopeItems, useAddScopeItem, useRemoveScopeItem, useRoles, useDealPricing, useUpdatePricingLine, useDealScenarios, useSelectScenario, useDealApprovals, useSubmitApproval, useUpdateApproval, useDealPrompts, useUpdatePrompt, useEngagementInputSpec, useAIDealSimilarity, useAIEffortEstimation, useAIMarginAdvisor, useAIScenarioRecommendation, useAIRiskSummary, useDealIntappScreening, useRunIntappScreening, useIntappOverride, useAddIntappMitigation, useUpdateIntappMitigation, useWorkdayLatestValidation, useWorkdayCostCenters, useRunWorkdayValidation, useLinkWorkdayCostCenter, useOverrideWorkdayValidation, usePromptSets, useCongaTemplates, useDealEngagementLetters, useGenerateEngagementLetter } from "@/hooks/use-api";
 import { ResultBadge as IntappResultBadge, RiskBadge as IntappRiskBadge, SourceBadge as IntappSourceBadge } from "./Intapp";
 import { ShieldAlert, ShieldCheck, Unlock } from "lucide-react";
 import { formatCurrency, formatPercent, formatNumber, formatRelativeTime, getStatusColor, getStatusLabel, cn } from "@/lib/utils";
@@ -2270,9 +2270,10 @@ function ApprovalStep({ deal }: { deal: any }) {
 }
 
 function SummaryStep({ deal }: { deal: any }) {
+  const [letterModalOpen, setLetterModalOpen] = useState(false);
   return (
     <div className="max-w-4xl mx-auto space-y-6">
-      <div className="flex gap-3 justify-end">
+      <div className="flex gap-3 justify-end flex-wrap">
         <a
           href={`/api/deals/${deal.id}/proposal`}
           target="_blank"
@@ -2282,6 +2283,13 @@ function SummaryStep({ deal }: { deal: any }) {
           <FileText className="w-4 h-4" />
           Generate Proposal
         </a>
+        <button
+          onClick={() => setLetterModalOpen(true)}
+          className="px-4 py-2 rounded-lg bg-primary/10 text-primary text-sm font-medium hover:bg-primary/20 transition-all flex items-center gap-2"
+        >
+          <FileText className="w-4 h-4" />
+          Generate Engagement Letter
+        </button>
         <Link href={`/deals/${deal.id}/change-orders`}>
           <button className="px-4 py-2 rounded-lg border border-stone-200 text-sm font-medium hover:bg-stone-50 transition-all flex items-center gap-2">
             <GitBranch className="w-4 h-4" />
@@ -2369,6 +2377,155 @@ function SummaryStep({ deal }: { deal: any }) {
               <p className="text-sm text-foreground">{deal.notes}</p>
             </div>
           )}
+        </div>
+      </div>
+
+      <EngagementLettersPanel dealId={deal.id} onGenerate={() => setLetterModalOpen(true)} />
+
+      {letterModalOpen && (
+        <EngagementLetterModal
+          deal={deal}
+          onClose={() => setLetterModalOpen(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+function EngagementLettersPanel({ dealId, onGenerate }: { dealId: number; onGenerate: () => void }) {
+  const { data: letters = [], isLoading } = useDealEngagementLetters(dealId);
+  return (
+    <div className="card p-6">
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <h2 className="text-lg font-bold text-foreground">Engagement Letters</h2>
+          <p className="text-xs text-muted-foreground mt-0.5">Generated via Conga Composer document automation</p>
+        </div>
+        <button onClick={onGenerate} className="text-sm text-primary hover:underline flex items-center gap-1">
+          <Plus className="w-4 h-4" /> Generate
+        </button>
+      </div>
+      {isLoading ? (
+        <p className="text-sm text-muted-foreground">Loading…</p>
+      ) : letters.length === 0 ? (
+        <div className="text-center py-8 text-sm text-muted-foreground border-2 border-dashed border-border rounded-xl">
+          No engagement letters generated yet for this deal.
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {letters.map((l: any) => (
+            <div key={l.id} className="flex items-center justify-between p-3 border border-border rounded-lg hover:bg-muted/40 transition-all">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className={cn("w-8 h-8 rounded-lg flex items-center justify-center", l.status === "failed" ? "bg-red-100 text-red-600" : "bg-primary/10 text-primary")}>
+                  <FileText className="w-4 h-4" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-foreground truncate">{l.templateName}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {l.externalRef || "—"} · {l.source} · by {l.generatedBy || "system"} · {new Date(l.generatedAt).toLocaleString()}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className={cn("text-[10px] px-2 py-0.5 rounded-full font-semibold uppercase",
+                  l.status === "failed" ? "bg-red-100 text-red-700" : "bg-emerald-100 text-emerald-700")}>
+                  {l.status}
+                </span>
+                {l.status === "generated" && (
+                  <a href={`/api/conga/letters/${l.id}/download`} target="_blank" rel="noopener noreferrer"
+                     className="text-xs px-3 py-1.5 rounded-md bg-primary text-primary-foreground hover:opacity-90 flex items-center gap-1">
+                    <Download className="w-3 h-3" /> Download
+                  </a>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function EngagementLetterModal({ deal, onClose }: { deal: any; onClose: () => void }) {
+  const { data: tmplResp, isLoading } = useCongaTemplates();
+  const generate = useGenerateEngagementLetter();
+  const templates: any[] = tmplResp?.templates || [];
+  const matchedKey = (() => {
+    const sl = (deal.serviceLine || "").toLowerCase();
+    if (sl.includes("audit")) return "audit-fy26";
+    if (sl.includes("tax")) return "tax-provision";
+    if (sl.includes("advisory") || sl.includes("strateg")) return "advisory-strategy";
+    if (sl.includes("consult") || sl.includes("erp") || sl.includes("implement")) return "consulting-implementation";
+    return null;
+  })();
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+  useEffect(() => {
+    if (selectedId == null && templates.length) {
+      const m = matchedKey ? templates.find((t) => t.key === matchedKey) : null;
+      setSelectedId((m || templates[0]).id);
+    }
+  }, [templates, matchedKey, selectedId]);
+
+  const onGenerate = async () => {
+    if (!selectedId) return;
+    try {
+      const res: any = await generate.mutateAsync({ dealId: deal.id, templateId: selectedId });
+      onClose();
+      if (res?.id) window.open(`/api/conga/letters/${res.id}/download`, "_blank", "noopener,noreferrer");
+    } catch {/* react-query exposes via .error */}
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
+        <div className="px-6 py-4 border-b border-border flex items-center justify-between">
+          <div>
+            <h2 className="text-lg font-bold">Generate Engagement Letter</h2>
+            <p className="text-xs text-muted-foreground">{deal.title} · {deal.dealNumber}</p>
+          </div>
+          <button onClick={onClose} className="p-1 rounded hover:bg-muted"><X className="w-5 h-5" /></button>
+        </div>
+        <div className="p-6 overflow-y-auto flex-1">
+          {isLoading ? (
+            <p className="text-sm text-muted-foreground">Loading templates…</p>
+          ) : templates.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No templates registered. Configure templates in Admin → Engagement Letters.</p>
+          ) : (
+            <div className="space-y-2">
+              <p className="text-xs uppercase tracking-wider text-muted-foreground mb-2">Choose Template</p>
+              {templates.map((t) => (
+                <label key={t.id} className={cn("block p-3 border rounded-lg cursor-pointer transition-all",
+                  selectedId === t.id ? "border-primary bg-primary/5" : "border-border hover:bg-muted/40")}>
+                  <div className="flex items-start gap-3">
+                    <input type="radio" name="tmpl" checked={selectedId === t.id} onChange={() => setSelectedId(t.id)} className="mt-1" />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="font-semibold text-sm">{t.name}</p>
+                        {matchedKey === t.key && (
+                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-semibold uppercase">Suggested</span>
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-0.5">{t.practice} · {t.description}</p>
+                    </div>
+                  </div>
+                </label>
+              ))}
+            </div>
+          )}
+          {generate.error && (
+            <p className="mt-4 text-sm text-red-600">{(generate.error as any).message || "Generation failed"}</p>
+          )}
+        </div>
+        <div className="px-6 py-4 border-t border-border flex justify-end gap-2">
+          <button onClick={onClose} className="px-4 py-2 rounded-lg border border-border text-sm font-medium hover:bg-muted">Cancel</button>
+          <button
+            onClick={onGenerate}
+            disabled={!selectedId || generate.isPending}
+            className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-semibold disabled:opacity-50 flex items-center gap-2"
+          >
+            {generate.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
+            {generate.isPending ? "Generating…" : "Generate Letter"}
+          </button>
         </div>
       </div>
     </div>

@@ -1827,6 +1827,7 @@ graph TD
 | Power BI Embedded | Advanced analytics dashboards within DealPad |
 | Multi-Tenant RBAC | Row-level security for practice group isolation |
 | Document Generation | Automated SOW/proposal generation from deal data |
+| Conga Composer | Engagement letter automation with practice-specific templates, field-mapped merges from deal data, signature blocks, and per-deal generation history. Provider abstraction (`CongaProvider`) ships with a Simulated default and a Live REST stub mirroring the IntappProvider pattern — switching to live Conga Composer is a configuration change (`CONGA_API_KEY` + tenant URL/ID) with no code changes required. |
 | Notification Engine | Email/Teams notifications for approval workflow |
 
 ### Phase 4: Advanced AI

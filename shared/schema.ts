@@ -512,6 +512,61 @@ export const workdayEvents = pgTable("workday_events", {
   timestamp: timestamp("timestamp").defaultNow().notNull(),
 });
 
+// ============ CONGA ENGAGEMENT LETTER AUTOMATION ============
+// Mirrors the Intapp / Workday simulated→live provider pattern.
+// `congaTemplates` are registered template metadata (authoring stays in Conga
+// Composer itself). `engagementLetters` is the per-deal generation history.
+export const congaSettings = pgTable("conga_settings", {
+  id: serial("id").primaryKey(),
+  mode: text("mode").notNull().default("simulated"), // 'simulated' | 'live'
+  liveBaseUrl: text("live_base_url"),
+  liveTenantId: text("live_tenant_id"),
+  liveApiKeySecret: text("live_api_key_secret"),
+  defaultTemplateKey: text("default_template_key"),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const congaTemplates = pgTable("conga_templates", {
+  id: serial("id").primaryKey(),
+  key: text("key").notNull().unique(),
+  name: text("name").notNull(),
+  practice: text("practice"),       // e.g. Audit, Tax, Consulting, Advisory
+  serviceLine: text("service_line"),
+  description: text("description"),
+  // Field map describes which deal/client/pricing fields flow into each
+  // template merge field. Stored as [{ field, source, description }] JSON.
+  fieldMap: jsonb("field_map").notNull(),
+  // Standard clauses appended/varied by template. Stored as
+  // [{ heading, body }] for use by the simulated PDF renderer.
+  clauses: jsonb("clauses").notNull(),
+  isActive: boolean("is_active").default(true),
+  sortOrder: integer("sort_order").default(0),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const engagementLetters = pgTable("engagement_letters", {
+  id: serial("id").primaryKey(),
+  dealId: integer("deal_id").references(() => deals.id).notNull(),
+  templateId: integer("template_id").references(() => congaTemplates.id).notNull(),
+  templateKey: text("template_key").notNull(),
+  templateName: text("template_name").notNull(),
+  source: text("source").notNull().default("simulated"),
+  status: text("status").notNull().default("generated"), // generated | failed
+  // External reference returned by Conga Composer (sim: SIM-CONGA-XXXXXX).
+  externalRef: text("external_ref"),
+  // Stored document. For the simulated provider we persist the rendered HTML
+  // so re-download produces the exact same document.
+  storedDocumentRef: text("stored_document_ref"),
+  // Generated PDF document, stored as a base64 string. Re-download decodes
+  // and serves it back as application/pdf.
+  documentBase64: text("document_base64"),
+  // Snapshot of the parameters that were merged into the template (deal,
+  // client, pricing summary). Lets QRM see exactly what was sent to Conga.
+  parameters: jsonb("parameters"),
+  generatedBy: text("generated_by"),
+  generatedAt: timestamp("generated_at").defaultNow().notNull(),
+});
+
 export const dealsRelations = relations(deals, ({ one, many }) => ({
   client: one(clients, { fields: [deals.clientId], references: [clients.id] }),
   scopeItems: many(dealScopeItems),

@@ -26,6 +26,7 @@ export function Sidebar() {
     { name: "Rate Cards", href: "/admin/rate-cards", icon: DollarSign, show: true },
     { name: "Scope Catalog", href: "/admin/scope-catalog", icon: BookOpen, show: true },
     { name: "Prompt Sets", href: "/admin/prompt-sets", icon: MessageSquare, show: true },
+    { name: "Engagement Letters", href: "/admin/engagement-letters", icon: FileText, show: true },
   ];
 
   return (

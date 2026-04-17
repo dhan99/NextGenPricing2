@@ -545,6 +545,58 @@ async function pushSchema() {
     );
   `);
 
+  // ============ CONGA ENGAGEMENT LETTER AUTOMATION ============
+  // Mirrors the Intapp/Workday pattern: provider settings + registered
+  // templates (field map + clauses) + per-deal generation history.
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS conga_settings (
+      id SERIAL PRIMARY KEY,
+      mode TEXT NOT NULL DEFAULT 'simulated',
+      live_base_url TEXT,
+      live_tenant_id TEXT,
+      live_api_key_secret TEXT,
+      default_template_key TEXT,
+      updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS conga_templates (
+      id SERIAL PRIMARY KEY,
+      key TEXT NOT NULL UNIQUE,
+      name TEXT NOT NULL,
+      practice TEXT,
+      service_line TEXT,
+      description TEXT,
+      field_map JSONB NOT NULL,
+      clauses JSONB NOT NULL,
+      is_active BOOLEAN DEFAULT TRUE,
+      sort_order INTEGER DEFAULT 0,
+      created_at TIMESTAMP NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS engagement_letters (
+      id SERIAL PRIMARY KEY,
+      deal_id INTEGER NOT NULL REFERENCES deals(id),
+      template_id INTEGER NOT NULL REFERENCES conga_templates(id),
+      template_key TEXT NOT NULL,
+      template_name TEXT NOT NULL,
+      source TEXT NOT NULL DEFAULT 'simulated',
+      status TEXT NOT NULL DEFAULT 'generated',
+      external_ref TEXT,
+      stored_document_ref TEXT,
+      document_html TEXT,
+      document_base64 TEXT,
+      parameters JSONB,
+      generated_by TEXT,
+      generated_at TIMESTAMP NOT NULL DEFAULT NOW()
+    );
+  `);
+
+  // Backfill: add document_base64 column on environments where the table
+  // pre-dated the rename from document_html.
+  await db.execute(sql`
+    ALTER TABLE engagement_letters ADD COLUMN IF NOT EXISTS document_base64 TEXT;
+  `);
+
   // Backfill: ensure unique constraint on dealpad_deal_id even if table pre-existed
   await db.execute(sql`
     DO $$ BEGIN

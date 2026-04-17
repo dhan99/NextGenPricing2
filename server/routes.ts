@@ -172,11 +172,13 @@ import {
   startNightlyRescreenLoop,
 } from "./intapp";
 import { registerWorkdayRoutes, onDealSaved, onDealSubmitted } from "./workday";
+import { registerCongaRoutes } from "./conga";
 
 export function registerRoutes(app: Express) {
   registerDynamicsRoutes(app);
   registerIntappRoutes(app);
   registerWorkdayRoutes(app);
+  registerCongaRoutes(app);
 
 
   // ========== DASHBOARD ==========
