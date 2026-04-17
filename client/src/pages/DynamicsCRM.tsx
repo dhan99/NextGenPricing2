@@ -395,21 +395,76 @@ function OpportunitiesTab() {
             <span className="text-xs text-muted-foreground">New opportunities in Dynamics not yet imported</span>
           </div>
           <div className="space-y-2">
-            {queued.map((o: any) => (
-              <div key={o.id} className="flex items-center justify-between p-3 rounded-md bg-amber-50/50 border border-amber-200">
-                <div className="flex-1">
-                  <div className="text-sm font-medium text-foreground">{o.name}</div>
-                  <div className="text-xs text-muted-foreground mt-0.5">
-                    {o.opportunityNumber} · {o.accountName} · {o.stage} · {fmtMoney(o.estimatedValue)} · Close {o.estimatedCloseDate}
+            {queued.map((o: any) => {
+              const isEditing = editingId === o.id;
+              return (
+                <div key={o.id} className="p-3 rounded-md bg-amber-50/50 border border-amber-200">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-medium text-foreground">{o.name}</div>
+                      {isEditing ? (
+                        <div className="mt-2 grid grid-cols-2 md:grid-cols-4 gap-2">
+                          <div>
+                            <label className="text-[10px] uppercase tracking-wider text-muted-foreground">Stage</label>
+                            <select value={draft.stage} onChange={(e) => setDraft({ ...draft, stage: e.target.value })}
+                              className="w-full text-xs px-2 py-1 border border-stone-300 rounded">
+                              {["Qualify", "Develop", "Propose", "Close", "Won", "Lost"].map((s) => <option key={s} value={s}>{s}</option>)}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="text-[10px] uppercase tracking-wider text-muted-foreground">Est. Value</label>
+                            <input type="number" value={draft.estimatedValue}
+                              onChange={(e) => setDraft({ ...draft, estimatedValue: parseFloat(e.target.value || "0") })}
+                              className="w-full text-xs px-2 py-1 border border-stone-300 rounded" />
+                          </div>
+                          <div>
+                            <label className="text-[10px] uppercase tracking-wider text-muted-foreground">Probability %</label>
+                            <input type="number" value={draft.probability}
+                              onChange={(e) => setDraft({ ...draft, probability: parseInt(e.target.value || "0") })}
+                              className="w-full text-xs px-2 py-1 border border-stone-300 rounded" />
+                          </div>
+                          <div>
+                            <label className="text-[10px] uppercase tracking-wider text-muted-foreground">Owner</label>
+                            <input value={draft.ownerName || ""} onChange={(e) => setDraft({ ...draft, ownerName: e.target.value })}
+                              className="w-full text-xs px-2 py-1 border border-stone-300 rounded" />
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="text-xs text-muted-foreground mt-0.5">
+                          {o.opportunityNumber} · {o.accountName} · {o.stage} · {fmtMoney(o.estimatedValue)} · Close {o.estimatedCloseDate}
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex gap-1 flex-shrink-0">
+                      {isEditing ? (
+                        <>
+                          <button onClick={saveEdit} disabled={update.isPending}
+                            className="inline-flex items-center gap-1 px-2 py-1.5 rounded-md bg-primary text-white text-xs font-medium hover:bg-primary/90 disabled:opacity-50">
+                            <Save className="w-3.5 h-3.5" />
+                          </button>
+                          <button onClick={() => setEditingId(null)}
+                            className="inline-flex items-center gap-1 px-2 py-1.5 rounded-md border border-stone-300 text-xs hover:bg-stone-50">
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <button onClick={() => startEdit(o)} title="Edit in D365"
+                            className="inline-flex items-center gap-1 px-2 py-1.5 rounded-md border border-stone-300 text-xs hover:bg-stone-50">
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+                          <button onClick={() => importOpp.mutate({ id: o.id, userName: persona?.name })}
+                            disabled={importOpp.isPending}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-primary text-white text-xs font-medium hover:bg-primary/90 disabled:opacity-50">
+                            <ArrowDownToLine className="w-3.5 h-3.5" /> Import to DealPad
+                          </button>
+                        </>
+                      )}
+                    </div>
                   </div>
                 </div>
-                <button onClick={() => importOpp.mutate({ id: o.id, userName: persona?.name })}
-                  disabled={importOpp.isPending}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-primary text-white text-xs font-medium hover:bg-primary/90 disabled:opacity-50">
-                  <ArrowDownToLine className="w-3.5 h-3.5" /> Import to DealPad
-                </button>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
