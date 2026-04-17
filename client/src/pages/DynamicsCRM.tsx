@@ -480,21 +480,22 @@ function OpportunitiesTab() {
                               }
                             };
                             return (
-                              <button
-                                onClick={handleClick}
-                                disabled={!eligible || agentDraft.isPending || importOpp.isPending}
-                                title={tooltip}
-                                aria-label={tooltip}
-                                className={cn(
-                                  "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium",
-                                  eligible
-                                    ? "bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-50"
-                                    : "bg-purple-100 text-purple-400 cursor-not-allowed"
-                                )}
-                                data-testid={`button-agent-draft-${o.id}`}
-                              >
-                                <Sparkles className="w-3.5 h-3.5" /> Autonomous Agent
-                              </button>
+                              <span title={tooltip} className="inline-flex">
+                                <button
+                                  onClick={handleClick}
+                                  disabled={!eligible || agentDraft.isPending || importOpp.isPending}
+                                  aria-label={tooltip}
+                                  className={cn(
+                                    "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium",
+                                    eligible
+                                      ? "bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-50"
+                                      : "bg-purple-100 text-purple-400 cursor-not-allowed pointer-events-none"
+                                  )}
+                                  data-testid={`button-agent-draft-${o.id}`}
+                                >
+                                  <Sparkles className="w-3.5 h-3.5" /> Autonomous Agent
+                                </button>
+                              </span>
                             );
                           })()}
                         </>
@@ -586,17 +587,21 @@ function OpportunitiesTab() {
                         <button onClick={() => startEdit(o)} title="Edit in D365" className="text-muted-foreground hover:text-primary p-1">
                           <Pencil className="w-3.5 h-3.5" />
                         </button>
-                        <button
-                          disabled
+                        <span
                           title={o.dealpadDealId
                             ? `Already linked to DealPad deal #${o.dealpadDealId} — Autonomous Agent unavailable`
                             : `Stage "${o.stage}" not eligible — Autonomous Agent requires Develop or Propose`}
-                          aria-label="Autonomous Agent unavailable"
-                          className="text-purple-300 cursor-not-allowed p-1"
-                          data-testid={`button-agent-draft-disabled-${o.id}`}
+                          className="inline-flex"
                         >
-                          <Sparkles className="w-3.5 h-3.5" />
-                        </button>
+                          <button
+                            disabled
+                            aria-label="Autonomous Agent unavailable"
+                            className="text-purple-300 cursor-not-allowed p-1 pointer-events-none"
+                            data-testid={`button-agent-draft-disabled-${o.id}`}
+                          >
+                            <Sparkles className="w-3.5 h-3.5" />
+                          </button>
+                        </span>
                         {o.dealpadDealId && (
                           <button onClick={() => push.mutate({ dealId: o.dealpadDealId, userName: persona?.name })}
                             disabled={push.isPending} title="Push DealPad → D365"
