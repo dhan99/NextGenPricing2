@@ -5,22 +5,21 @@ import { useDeal, useUpdateDeal, useScopeCatalog, useScopeTemplates, useApplySco
 import { ResultBadge as IntappResultBadge, RiskBadge as IntappRiskBadge, SourceBadge as IntappSourceBadge } from "./Intapp";
 import { ShieldAlert, ShieldCheck, Unlock } from "lucide-react";
 import { formatCurrency, formatPercent, formatNumber, getStatusColor, getStatusLabel, cn } from "@/lib/utils";
-import { ArrowLeft, Check, ChevronRight, Sparkles, AlertTriangle, TrendingUp, Target, FileText, Shield, CheckCircle, XCircle, Clock, Loader2, Plus, Trash2, Lightbulb, RefreshCw, Pencil, Save, GitBranch } from "lucide-react";
+import { ArrowLeft, Check, ChevronRight, Sparkles, AlertTriangle, TrendingUp, Target, FileText, Shield, CheckCircle, XCircle, Clock, Loader2, Plus, Trash2, Lightbulb, RefreshCw, Pencil, Save, GitBranch, Layers, X } from "lucide-react";
 import { Link } from "wouter";
 import { useAuth } from "@/context/AuthContext";
 import { AskDealPadAI } from "@/components/AskDealPadAI";
 
-const STEP_KEYS = ["", "wizard-setup", "wizard-scope", "wizard-assumptions", "wizard-pricing", "wizard-scenarios", "wizard-review", "wizard-approval", "wizard-summary"];
+const STEP_KEYS = ["", "wizard-setup", "wizard-scope", "wizard-assumptions", "wizard-pricing", "wizard-review", "wizard-approval", "wizard-summary"];
 
 const STEPS = [
   { num: 1, label: "Setup" },
   { num: 2, label: "Scope" },
   { num: 3, label: "Assumptions" },
   { num: 4, label: "Pricing" },
-  { num: 5, label: "Scenarios" },
-  { num: 6, label: "Review" },
-  { num: 7, label: "Approval" },
-  { num: 8, label: "Summary" },
+  { num: 5, label: "Review" },
+  { num: 6, label: "Approval" },
+  { num: 7, label: "Summary" },
 ];
 
 export function DealDetail() {
@@ -42,7 +41,12 @@ export function DealDetail() {
   }, [dealId, qc]);
 
   useEffect(() => {
-    if (deal?.currentStep) setCurrentStep(deal.currentStep);
+    if (deal?.currentStep) {
+      // Clamp to the current step range. Older deals may have a saved step from
+      // before "Scenarios" was collapsed into a drawer on Pricing.
+      const next = Math.min(STEPS.length, Math.max(1, deal.currentStep));
+      setCurrentStep(next);
+    }
   }, [deal?.currentStep]);
 
   if (isLoading) return <div className="p-8 flex items-center justify-center min-h-screen"><Loader2 className="w-6 h-6 animate-spin text-primary" /></div>;
@@ -100,10 +104,9 @@ export function DealDetail() {
         {currentStep === 2 && <ScopeStep deal={deal} />}
         {currentStep === 3 && <AssumptionsStep deal={deal} />}
         {currentStep === 4 && <PricingStep deal={deal} />}
-        {currentStep === 5 && <ScenariosStep deal={deal} />}
-        {currentStep === 6 && <ReviewStep deal={deal} />}
-        {currentStep === 7 && <ApprovalStep deal={deal} />}
-        {currentStep === 8 && <SummaryStep deal={deal} />}
+        {currentStep === 5 && <ReviewStep deal={deal} />}
+        {currentStep === 6 && <ApprovalStep deal={deal} />}
+        {currentStep === 7 && <SummaryStep deal={deal} />}
 
         <div className="flex items-center justify-between mt-8 pt-6 border-t border-border">
           <button
@@ -1130,6 +1133,9 @@ function PricingStep({ deal }: { deal: any }) {
   const { data: pricingLines } = useDealPricing(deal.id);
   const updateLine = useUpdatePricingLine();
   const marginAdvisor = useAIMarginAdvisor();
+  const [optionsOpen, setOptionsOpen] = useState(false);
+  const { data: scenariosForBadge } = useDealScenarios(deal.id);
+  const selectedScenario = (scenariosForBadge || []).find((s: any) => s.isRecommended);
 
   useEffect(() => {
     if (pricingLines && pricingLines.length > 0) {
@@ -1188,6 +1194,26 @@ function PricingStep({ deal }: { deal: any }) {
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+      <PricingOptionsDrawer deal={deal} open={optionsOpen} onClose={() => setOptionsOpen(false)} />
+      <div className="lg:col-span-4 flex items-center justify-between gap-4 -mb-2">
+        <div>
+          <h2 className="text-lg font-semibold text-foreground">Pricing</h2>
+          <p className="text-xs text-muted-foreground mt-0.5">Tune hours and margins live, or compare alternative pricing options.</p>
+        </div>
+        <button
+          onClick={() => setOptionsOpen(true)}
+          className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-border bg-card hover:bg-muted/40 text-sm font-medium text-foreground transition-colors"
+        >
+          <Layers className="w-4 h-4 text-primary" />
+          Compare Pricing Options
+          {selectedScenario && (
+            <span className="ml-1 inline-flex items-center gap-1 text-[11px] font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
+              <CheckCircle className="w-3 h-3" />
+              {selectedScenario.name}
+            </span>
+          )}
+        </button>
+      </div>
       <div className="lg:col-span-3 space-y-6">
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3">
           {kpiCards.map((c) => (
@@ -1343,44 +1369,59 @@ function PricingStep({ deal }: { deal: any }) {
   );
 }
 
-function ScenariosStep({ deal }: { deal: any }) {
+function PricingOptionsDrawer({ deal, open, onClose }: { deal: any; open: boolean; onClose: () => void }) {
   const { data: scenarios } = useDealScenarios(deal.id);
   const selectScenario = useSelectScenario();
   const recommendation = useAIScenarioRecommendation();
   const { persona } = useAuth();
 
   useEffect(() => {
-    if (deal.id) recommendation.mutate({ dealId: deal.id });
-  }, [deal.id]);
+    if (open && deal.id) recommendation.mutate({ dealId: deal.id });
+  }, [open, deal.id]);
 
   const selectedScenario = (scenarios || []).find((s: any) => s.isRecommended);
 
+  if (!open) return null;
+
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-lg font-semibold text-foreground">Pricing Scenarios</h2>
-          <p className="text-sm text-muted-foreground mt-1">Compare options and select the best fit for this engagement.</p>
-        </div>
-        {selectedScenario && (
-          <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 px-4 py-2 rounded-lg">
-            <CheckCircle className="w-4 h-4 text-emerald-600" />
-            <span className="text-sm font-medium text-emerald-700">Selected: {selectedScenario.name}</span>
+    <div className="fixed inset-0 z-50 flex">
+      <div className="flex-1 bg-black/40" onClick={onClose} />
+      <div className="w-full max-w-[1100px] bg-background shadow-2xl overflow-y-auto">
+        <div className="sticky top-0 z-10 bg-background border-b border-border px-6 py-4 flex items-center justify-between">
+          <div>
+            <h2 className="text-lg font-semibold text-foreground">Pricing Options</h2>
+            <p className="text-xs text-muted-foreground mt-0.5">Compare alternatives and select the recommended option for this engagement.</p>
           </div>
-        )}
-      </div>
-
-      {recommendation.data?.narrative && (
-        <div className="card p-4 border-primary/20 bg-primary/5">
-          <div className="flex items-start gap-2">
-            <Sparkles className="w-4 h-4 text-primary mt-0.5 shrink-0" />
-            <p className="text-sm text-foreground leading-relaxed">{recommendation.data.narrative}</p>
+          <div className="flex items-center gap-3">
+            {selectedScenario && (
+              <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-lg">
+                <CheckCircle className="w-4 h-4 text-emerald-600" />
+                <span className="text-xs font-medium text-emerald-700">Selected: {selectedScenario.name}</span>
+              </div>
+            )}
+            <button onClick={onClose} className="p-2 rounded hover:bg-muted/40" aria-label="Close">
+              <X className="w-5 h-5" />
+            </button>
           </div>
         </div>
-      )}
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {(scenarios || []).map((scenario: any) => {
+        <div className="p-6 space-y-6">
+          {recommendation.data?.narrative && (
+            <div className="card p-4 border-primary/20 bg-primary/5">
+              <div className="flex items-start gap-2">
+                <Sparkles className="w-4 h-4 text-primary mt-0.5 shrink-0" />
+                <p className="text-sm text-foreground leading-relaxed">{recommendation.data.narrative}</p>
+              </div>
+            </div>
+          )}
+
+          {(!scenarios || scenarios.length === 0) ? (
+            <div className="card p-12 text-center text-sm text-muted-foreground">
+              No pricing options have been generated for this deal yet.
+            </div>
+          ) : (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {(scenarios || []).map((scenario: any) => {
           const isSelected = scenario.isRecommended;
           return (
             <div key={scenario.id} className={cn(
@@ -1453,6 +1494,9 @@ function ScenariosStep({ deal }: { deal: any }) {
             </div>
           );
         })}
+          </div>
+          )}
+        </div>
       </div>
     </div>
   );
