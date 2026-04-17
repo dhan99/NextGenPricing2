@@ -2420,6 +2420,242 @@ function AgentResubmitButton({ dealId, navigateToStep }: { dealId: number; navig
   );
 }
 
+function ReviewerEditsDiff({
+  snapshot,
+  deal,
+  editedAt,
+  editedBy,
+}: {
+  snapshot: any;
+  deal: any;
+  editedAt: string;
+  editedBy?: string;
+}) {
+  const num = (v: any) => (v == null || v === "" ? NaN : typeof v === "number" ? v : parseFloat(v));
+  const fmtMoney = (v: any) => {
+    const n = num(v);
+    return Number.isFinite(n) ? `$${n.toLocaleString(undefined, { maximumFractionDigits: 0 })}` : "—";
+  };
+  const fmtNum = (v: any, digits = 1) => {
+    const n = num(v);
+    return Number.isFinite(n) ? n.toLocaleString(undefined, { maximumFractionDigits: digits }) : "—";
+  };
+  const fmtPct = (v: any) => {
+    const n = num(v);
+    return Number.isFinite(n) ? `${n.toFixed(1)}%` : "—";
+  };
+  const sameNum = (a: any, b: any) => {
+    const na = num(a), nb = num(b);
+    if (!Number.isFinite(na) && !Number.isFinite(nb)) return true;
+    if (!Number.isFinite(na) || !Number.isFinite(nb)) return false;
+    return Math.abs(na - nb) < 0.005;
+  };
+  const sameStr = (a: any, b: any) => (a ?? "") === (b ?? "");
+
+  const totalsRows = [
+    { label: "Total Fee", before: snapshot.totalFee, after: deal.totalFee, fmt: fmtMoney, isNum: true },
+    { label: "Total Cost", before: snapshot.totalCost, after: deal.totalCost, fmt: fmtMoney, isNum: true },
+    { label: "Total Hours", before: snapshot.totalHours, after: deal.totalHours, fmt: (v: any) => fmtNum(v, 1), isNum: true },
+    { label: "Margin %", before: snapshot.marginPercent, after: deal.marginPercent, fmt: fmtPct, isNum: true },
+    { label: "Blended Rate", before: snapshot.blendedRate, after: deal.blendedRate, fmt: (v: any) => `$${fmtNum(v, 0)}`, isNum: true },
+  ];
+
+  const fieldRows = [
+    { label: "Service Line", before: snapshot.serviceLine, after: deal.serviceLine },
+    { label: "Business Unit", before: snapshot.businessUnit, after: deal.businessUnit },
+    { label: "Complexity", before: snapshot.complexity, after: deal.complexity },
+  ];
+
+  const beforeScope: Array<{ code?: string; name?: string; hours?: any }> = Array.isArray(snapshot.scopeItems) ? snapshot.scopeItems : [];
+  const afterScopeRaw: any[] = Array.isArray(deal.scopeItems) ? deal.scopeItems : [];
+  const afterScope = afterScopeRaw.map((s) => ({
+    code: s.scopeItem?.code,
+    name: s.scopeItem?.name,
+    hours: s.adjustedHours,
+  }));
+  const keyOf = (s: { code?: string; name?: string }) => s.code || s.name || "";
+  const beforeMap = new Map(beforeScope.map((s) => [keyOf(s), s]));
+  const afterMap = new Map(afterScope.map((s) => [keyOf(s), s]));
+  const removed = beforeScope.filter((s) => !afterMap.has(keyOf(s)));
+  const added = afterScope.filter((s) => !beforeMap.has(keyOf(s)));
+  const changedHours = afterScope
+    .filter((s) => beforeMap.has(keyOf(s)))
+    .map((s) => ({ now: s, was: beforeMap.get(keyOf(s))! }))
+    .filter(({ now, was }) => !sameNum(now.hours, was.hours));
+
+  const beforePromptResponses: any[] = Array.isArray(snapshot.promptResponses) ? snapshot.promptResponses : [];
+  const afterPromptResponses: any[] = Array.isArray(deal.promptResponses) ? deal.promptResponses : [];
+  const promptBeforeMap = new Map(beforePromptResponses.map((p) => [p.question, p]));
+  const changedPrompts = afterPromptResponses
+    .filter((p) => promptBeforeMap.has(p.question))
+    .map((p) => ({ now: p, was: promptBeforeMap.get(p.question) }))
+    .filter(({ now, was }) => !sameStr(now.answer, was.answer) || !sameNum(now.impactMultiplier, was.impactMultiplier));
+
+  const fieldChangeCount =
+    totalsRows.filter((r) => !sameNum(r.before, r.after)).length +
+    fieldRows.filter((r) => !sameStr(r.before, r.after)).length +
+    changedPrompts.length;
+  const totalChanges = fieldChangeCount + added.length + removed.length + changedHours.length;
+
+  return (
+    <div
+      className="p-4 rounded-md bg-blue-50/60 border border-blue-200"
+      data-testid="reviewer-edits-diff"
+    >
+      <div className="flex items-start justify-between gap-3 mb-3">
+        <div>
+          <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+            <Pencil className="w-4 h-4 text-blue-700" /> Reviewer edits
+          </h3>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Changes made by {editedBy || "reviewer"} in the wizard, compared to the original agent draft · {formatRelativeTime(editedAt)}
+          </p>
+        </div>
+        <span className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 flex-shrink-0">
+          {totalChanges} {totalChanges === 1 ? "change" : "changes"}
+        </span>
+      </div>
+
+      {totalChanges === 0 ? (
+        <p className="text-xs text-muted-foreground">No reviewer edits detected — current values match the original agent draft.</p>
+      ) : (
+        <div className="space-y-4">
+          <div>
+            <p className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold mb-2">Totals</p>
+            <div className="overflow-hidden rounded-md border border-stone-200 bg-white">
+              <table className="w-full text-xs">
+                <thead className="bg-stone-50">
+                  <tr className="text-left text-muted-foreground">
+                    <th className="px-3 py-1.5 font-semibold">Metric</th>
+                    <th className="px-3 py-1.5 font-semibold">Before</th>
+                    <th className="px-3 py-1.5 font-semibold">After</th>
+                    <th className="px-3 py-1.5 font-semibold text-right">Δ</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {totalsRows.map((r) => {
+                    const changed = !sameNum(r.before, r.after);
+                    const nb = num(r.before), na = num(r.after);
+                    const delta = Number.isFinite(na) && Number.isFinite(nb) ? na - nb : NaN;
+                    return (
+                      <tr key={r.label} className={cn("border-t border-stone-100", changed && "bg-amber-50/40")}>
+                        <td className="px-3 py-1.5 text-foreground">{r.label}</td>
+                        <td className="px-3 py-1.5 text-muted-foreground">{r.fmt(r.before)}</td>
+                        <td className={cn("px-3 py-1.5", changed ? "font-semibold text-foreground" : "text-foreground")}>{r.fmt(r.after)}</td>
+                        <td className={cn("px-3 py-1.5 text-right tabular-nums",
+                          !changed ? "text-muted-foreground" : delta > 0 ? "text-emerald-700" : "text-red-700")}>
+                          {!changed || !Number.isFinite(delta) ? "—" : `${delta > 0 ? "+" : ""}${r.fmt(delta)}`}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {fieldRows.some((r) => !sameStr(r.before, r.after)) && (
+            <div>
+              <p className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold mb-2">Header fields</p>
+              <ul className="space-y-1">
+                {fieldRows
+                  .filter((r) => !sameStr(r.before, r.after))
+                  .map((r) => (
+                    <li key={r.label} className="text-xs flex items-center gap-2">
+                      <span className="text-muted-foreground w-32 flex-shrink-0">{r.label}</span>
+                      <span className="text-muted-foreground line-through">{r.before || "—"}</span>
+                      <ChevronRight className="w-3 h-3 text-muted-foreground" />
+                      <span className="font-semibold text-foreground">{r.after || "—"}</span>
+                    </li>
+                  ))}
+              </ul>
+            </div>
+          )}
+
+          {(added.length > 0 || removed.length > 0 || changedHours.length > 0) && (
+            <div>
+              <p className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold mb-2">
+                Scope items <span className="text-muted-foreground/70 normal-case font-normal">({beforeScope.length} → {afterScope.length})</span>
+              </p>
+              <div className="space-y-1.5">
+                {added.map((s, i) => (
+                  <div key={`add-${i}`} className="flex items-center gap-2 text-xs" data-testid="scope-added">
+                    <span className="text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800">Added</span>
+                    {s.code && <span className="font-mono text-muted-foreground">{s.code}</span>}
+                    <span className="font-semibold text-foreground truncate">{s.name || "—"}</span>
+                    <span className="text-muted-foreground ml-auto flex-shrink-0">{fmtNum(s.hours, 1)} hrs</span>
+                  </div>
+                ))}
+                {removed.map((s, i) => (
+                  <div key={`rem-${i}`} className="flex items-center gap-2 text-xs" data-testid="scope-removed">
+                    <span className="text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded bg-red-100 text-red-800">Removed</span>
+                    {s.code && <span className="font-mono text-muted-foreground">{s.code}</span>}
+                    <span className="font-semibold text-foreground line-through truncate">{s.name || "—"}</span>
+                    <span className="text-muted-foreground ml-auto flex-shrink-0">{fmtNum(s.hours, 1)} hrs</span>
+                  </div>
+                ))}
+                {changedHours.map(({ now, was }, i) => {
+                  const nb = num(was.hours), na = num(now.hours);
+                  const delta = Number.isFinite(na) && Number.isFinite(nb) ? na - nb : NaN;
+                  return (
+                    <div key={`chg-${i}`} className="flex items-center gap-2 text-xs" data-testid="scope-hours-changed">
+                      <span className="text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded bg-amber-100 text-amber-800">Hours</span>
+                      {now.code && <span className="font-mono text-muted-foreground">{now.code}</span>}
+                      <span className="font-semibold text-foreground truncate">{now.name || "—"}</span>
+                      <span className="ml-auto flex-shrink-0 text-muted-foreground">
+                        <span className="line-through">{fmtNum(was.hours, 1)}</span>
+                        <ChevronRight className="inline w-3 h-3 mx-0.5" />
+                        <span className="font-semibold text-foreground">{fmtNum(now.hours, 1)} hrs</span>
+                        {Number.isFinite(delta) && (
+                          <span className={cn("ml-1", delta > 0 ? "text-emerald-700" : "text-red-700")}>
+                            ({delta > 0 ? "+" : ""}{fmtNum(delta, 1)})
+                          </span>
+                        )}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {changedPrompts.length > 0 && (
+            <div>
+              <p className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold mb-2">Assumptions</p>
+              <ul className="space-y-1.5">
+                {changedPrompts.map(({ now, was }, i) => {
+                  const answerChanged = !sameStr(now.answer, was.answer);
+                  const multChanged = !sameNum(now.impactMultiplier, was.impactMultiplier);
+                  return (
+                    <li key={`prompt-${i}`} className="text-xs">
+                      <p className="text-foreground font-medium truncate">{now.question}</p>
+                      {answerChanged && (
+                        <p className="text-muted-foreground">
+                          <span className="line-through">{was.answer || "—"}</span>
+                          <ChevronRight className="inline w-3 h-3 mx-1" />
+                          <span className="font-semibold text-foreground">{now.answer || "—"}</span>
+                        </p>
+                      )}
+                      {multChanged && (
+                        <p className="text-muted-foreground mt-0.5">
+                          <span className="text-[10px] uppercase tracking-wider mr-1">Impact ×</span>
+                          <span className="line-through">{fmtNum(was.impactMultiplier, 2)}</span>
+                          <ChevronRight className="inline w-3 h-3 mx-1" />
+                          <span className="font-semibold text-foreground">{fmtNum(now.impactMultiplier, 2)}</span>
+                        </p>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function AgentDraftReviewBanner({ deal, navigateToStep }: { deal: any; navigateToStep: (n: number) => void }) {
   const { persona } = useAuth();
   const approve = useAgentApproveDeal();
@@ -2433,6 +2669,15 @@ function AgentDraftReviewBanner({ deal, navigateToStep }: { deal: any; navigateT
     .filter((a) => a?.metadata?.agentRun && a.action !== "agent_complete" && a.action !== "agent_draft_snapshot")
     .map((a) => ({ ...a.metadata.agentRun, action: a.action, ts: a.createdAt, userName: a.userName }))
     .reverse();
+
+  const tsOf = (a: any) => new Date(a?.createdAt || 0).getTime();
+  const resubmitActivity = activities
+    .filter((a) => a.action === "agent_resubmit")
+    .sort((a, b) => tsOf(b) - tsOf(a))[0];
+  const snapshotActivity = activities
+    .filter((a) => a.action === "agent_draft_snapshot" && (!resubmitActivity || tsOf(a) <= tsOf(resubmitActivity)))
+    .sort((a, b) => tsOf(b) - tsOf(a))[0];
+  const snapshot = snapshotActivity?.metadata?.agentRun?.snapshot;
 
   const handleApprove = async () => {
     setError(null);
@@ -2526,6 +2771,15 @@ function AgentDraftReviewBanner({ deal, navigateToStep }: { deal: any; navigateT
             <p className="text-[11px] uppercase tracking-wider text-purple-700 font-semibold mb-1">Agent Risk Narrative</p>
             <p className="text-sm text-foreground">{deal.aiSummary}</p>
           </div>
+        )}
+
+        {snapshot && resubmitActivity && (
+          <ReviewerEditsDiff
+            snapshot={snapshot}
+            deal={deal}
+            editedAt={resubmitActivity.createdAt}
+            editedBy={resubmitActivity.userName}
+          />
         )}
 
         <div>
