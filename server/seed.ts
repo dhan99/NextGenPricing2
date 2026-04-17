@@ -1,6 +1,10 @@
 import { db } from "./db";
 import { clients, deals, scopeCatalog, roles, rateCards, rateCardEntries, dealScopeItems, pricingLines, scenarios, approvals, promptResponses, activityLog, promptSets, promptSetItems } from "../shared/schema";
 import { sql } from "drizzle-orm";
+import { seedDynamics } from "./dynamics";
+import { seedIntapp } from "./intapp";
+import { seedWorkday } from "./workday";
+import { loadSeedSnapshot } from "./snapshot-loader";
 
 // Idempotent: ensures at least one published cross-service prompt set exists so
 // the prompt-resolution code has a default to fall back on. Runs every startup.
@@ -233,4 +237,85 @@ export async function seedDatabase() {
   ]);
 
   console.log("Database seeded successfully");
+}
+
+// ====================================================================
+// Production seed orchestrator
+//
+// Runs every startup BEFORE app.listen so a freshly deployed instance
+// never serves traffic against a half-seeded database. Each step is
+// idempotent (no-op if data already exists). Core seeds re-throw on
+// failure so startup aborts; integration seeds log and continue so a
+// broken simulator can't take the whole server down.
+// ====================================================================
+export type SeedStepResult = {
+  step: string;
+  status: "ok" | "skipped" | "failed";
+  durationMs: number;
+  error?: string;
+};
+
+async function runStep(
+  name: string,
+  fn: () => Promise<void>,
+  { fatal }: { fatal: boolean },
+): Promise<SeedStepResult> {
+  const t0 = Date.now();
+  try {
+    await fn();
+    const durationMs = Date.now() - t0;
+    console.log(`[seed] ${name}: ok (${durationMs}ms)`);
+    return { step: name, status: "ok", durationMs };
+  } catch (e: any) {
+    const durationMs = Date.now() - t0;
+    const msg = e?.stack || e?.message || String(e);
+    console.error(`[seed] ${name}: FAILED after ${durationMs}ms`, msg);
+    if (fatal) throw e;
+    return { step: name, status: "failed", durationMs, error: e?.message || String(e) };
+  }
+}
+
+// Stable 64-bit-ish int chosen for pg_advisory_lock. Picked to be unique to
+// this app's seed orchestrator so it can't collide with other advisory locks.
+const SEED_ADVISORY_LOCK_KEY = 7411131113n;
+
+export async function seedAll(): Promise<SeedStepResult[]> {
+  console.log("[seed] starting seedAll()");
+  const t0 = Date.now();
+  const results: SeedStepResult[] = [];
+
+  // Concurrency safety for horizontal scale-out: only one instance at a time
+  // runs the seed body. Other instances block here until the leader releases
+  // the lock, then re-enter and find every step is a no-op (record-level
+  // idempotency). pg_advisory_lock is session-scoped; pair with explicit
+  // unlock in finally. We use the underlying pg pool so the lock and unlock
+  // run on the SAME connection (drizzle/postgres-js may otherwise round-robin).
+  const { pool } = await import("./db");
+  const conn = await pool.connect();
+  try {
+    await conn.query("SELECT pg_advisory_lock($1)", [SEED_ADVISORY_LOCK_KEY.toString()]);
+    console.log("[seed] acquired advisory lock");
+
+    // Core (fatal): without these the app cannot serve sensible data.
+    results.push(await runStep("core:database", () => seedDatabase(), { fatal: true }));
+    results.push(await runStep("core:promptSet", () => seedDefaultPromptSet(), { fatal: true }));
+    results.push(await runStep("core:snapshot", () => loadSeedSnapshot(), { fatal: false }));
+
+    // Integrations (non-fatal): a failed simulator should not block the server.
+    results.push(await runStep("integration:dynamics", () => seedDynamics(), { fatal: false }));
+    results.push(await runStep("integration:intapp", () => seedIntapp(), { fatal: false }));
+    results.push(await runStep("integration:workday", () => seedWorkday(), { fatal: false }));
+  } finally {
+    try {
+      await conn.query("SELECT pg_advisory_unlock($1)", [SEED_ADVISORY_LOCK_KEY.toString()]);
+    } catch (e) {
+      console.error("[seed] failed to release advisory lock:", e);
+    }
+    conn.release();
+  }
+
+  const totalMs = Date.now() - t0;
+  const failed = results.filter(r => r.status === "failed");
+  console.log(`[seed] seedAll() complete in ${totalMs}ms — ${results.length - failed.length}/${results.length} ok${failed.length ? `, failed: ${failed.map(f => f.step).join(", ")}` : ""}`);
+  return results;
 }

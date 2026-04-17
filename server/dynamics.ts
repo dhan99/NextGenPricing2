@@ -71,59 +71,75 @@ async function getSettings() {
 }
 
 export async function seedDynamics() {
-  // Idempotent: only seed if empty
-  const [{ count: ownerCount }] = await db.select({ count: sql<number>`count(*)::int` }).from(dynamicsOwners);
-  if (ownerCount === 0) {
-    await db.insert(dynamicsOwners).values(SEED_OWNERS);
+  // Record-level idempotency: every insert is gated by a per-record existence
+  // check so this can heal a partially-populated database without duplicating
+  // rows or hitting unique constraints. Safe to run on every cold start AND
+  // via the admin reseed endpoint after a half-broken deploy.
+
+  // Owners — keyed by email
+  const existingOwners = await db.select({ email: dynamicsOwners.email }).from(dynamicsOwners);
+  const existingOwnerEmails = new Set(existingOwners.map((o) => o.email));
+  const missingOwners = SEED_OWNERS.filter((o) => !existingOwnerEmails.has(o.email));
+  if (missingOwners.length > 0) {
+    await db.insert(dynamicsOwners).values(missingOwners);
   }
+
   await getSettings();
 
-  const [{ count: acctCount }] = await db.select({ count: sql<number>`count(*)::int` }).from(dynamicsAccounts);
+  // Accounts — keyed by dealpad_client_id (one D365 account per DealPad client)
   const clientRows = await db.select().from(clients);
-
-  if (acctCount === 0 && clientRows.length > 0) {
+  if (clientRows.length > 0) {
+    const existingAccts = await db.select({ dealpadClientId: dynamicsAccounts.dealpadClientId }).from(dynamicsAccounts);
+    const linkedClientIds = new Set(existingAccts.map((a) => a.dealpadClientId).filter((id): id is number => id != null));
     const owners = await db.select().from(dynamicsOwners);
-    for (let i = 0; i < clientRows.length; i++) {
-      const c = clientRows[i];
-      const industry = c.industry || pick(Object.keys(INDUSTRY_CODES), i);
-      const owner = pick(owners, i);
-      const revenueMillions = c.revenueSize?.includes("$")
-        ? parseFloat(c.revenueSize.replace(/[^0-9.]/g, "")) || 50
-        : 50 + rnd(c.id, 10, 500);
-      await db.insert(dynamicsAccounts).values({
-        dynamicsId: uuid(`acct-${c.id}`),
-        accountNumber: `ACC-${String(c.id).padStart(6, "0")}`,
-        dealpadClientId: c.id,
-        name: c.name,
-        industry,
-        industryCode: INDUSTRY_CODES[industry] || "541000",
-        segment: c.segment || (revenueMillions > 250 ? "Enterprise" : revenueMillions > 50 ? "Mid-Market" : "SMB"),
-        annualRevenue: String(Math.round(revenueMillions * 1_000_000)),
-        numberOfEmployees: rnd(c.id + 1, 50, 5000),
-        ownerName: owner.name, ownerEmail: owner.email,
-        contactName: c.contactName || `Contact ${i + 1}`,
-        contactTitle: pick(["CFO", "Controller", "VP Finance", "Director of Accounting", "CEO"], i),
-        contactEmail: c.contactEmail || `contact${i}@example.com`,
-        contactPhone: `(415) 555-${String(1000 + rnd(c.id, 100, 9999)).slice(0, 4)}`,
-        billingStreet: `${rnd(c.id, 100, 999)} Market St`,
-        billingCity: c.region?.split(",")[0] || "San Francisco",
-        billingState: c.region?.split(",")[1]?.trim() || "CA",
-        billingZip: String(94000 + rnd(c.id, 0, 999)).padStart(5, "0"),
-        relationshipType: (c.relationshipYears || 0) > 0 ? "Customer" : "Prospect",
-        customerSince: `${2026 - (c.relationshipYears || 1)}-01-15`,
-      });
+    if (owners.length > 0) {
+      const missingClients = clientRows.filter((c) => !linkedClientIds.has(c.id));
+      for (let i = 0; i < missingClients.length; i++) {
+        const c = missingClients[i];
+        const industry = c.industry || pick(Object.keys(INDUSTRY_CODES), i);
+        const owner = pick(owners, i);
+        const revenueMillions = c.revenueSize?.includes("$")
+          ? parseFloat(c.revenueSize.replace(/[^0-9.]/g, "")) || 50
+          : 50 + rnd(c.id, 10, 500);
+        await db.insert(dynamicsAccounts).values({
+          dynamicsId: uuid(`acct-${c.id}`),
+          accountNumber: `ACC-${String(c.id).padStart(6, "0")}`,
+          dealpadClientId: c.id,
+          name: c.name,
+          industry,
+          industryCode: INDUSTRY_CODES[industry] || "541000",
+          segment: c.segment || (revenueMillions > 250 ? "Enterprise" : revenueMillions > 50 ? "Mid-Market" : "SMB"),
+          annualRevenue: String(Math.round(revenueMillions * 1_000_000)),
+          numberOfEmployees: rnd(c.id + 1, 50, 5000),
+          ownerName: owner.name, ownerEmail: owner.email,
+          contactName: c.contactName || `Contact ${i + 1}`,
+          contactTitle: pick(["CFO", "Controller", "VP Finance", "Director of Accounting", "CEO"], i),
+          contactEmail: c.contactEmail || `contact${i}@example.com`,
+          contactPhone: `(415) 555-${String(1000 + rnd(c.id, 100, 9999)).slice(0, 4)}`,
+          billingStreet: `${rnd(c.id, 100, 999)} Market St`,
+          billingCity: c.region?.split(",")[0] || "San Francisco",
+          billingState: c.region?.split(",")[1]?.trim() || "CA",
+          billingZip: String(94000 + rnd(c.id, 0, 999)).padStart(5, "0"),
+          relationshipType: (c.relationshipYears || 0) > 0 ? "Customer" : "Prospect",
+          customerSince: `${2026 - (c.relationshipYears || 1)}-01-15`,
+        }).onConflictDoNothing();
+      }
     }
   }
 
-  const [{ count: oppCount }] = await db.select({ count: sql<number>`count(*)::int` }).from(dynamicsOpportunities);
-  if (oppCount === 0) {
-    const dealRows = await db.select().from(deals);
+  // Opportunities linked to deals — keyed by dealpad_deal_id (UNIQUE constraint exists)
+  const dealRows = await db.select().from(deals);
+  if (dealRows.length > 0) {
+    const existingLinks = await db.select({ dealpadDealId: dynamicsOpportunities.dealpadDealId })
+      .from(dynamicsOpportunities);
+    const linkedDealIds = new Set(existingLinks.map((o) => o.dealpadDealId).filter((id): id is number => id != null));
     const acctRows = await db.select().from(dynamicsAccounts);
     const acctByClient = new Map(acctRows.map((a) => [a.dealpadClientId, a]));
     const owners = await db.select().from(dynamicsOwners);
 
-    for (let i = 0; i < dealRows.length; i++) {
-      const d = dealRows[i];
+    const missingDeals = dealRows.filter((d) => !linkedDealIds.has(d.id));
+    for (let i = 0; i < missingDeals.length; i++) {
+      const d = missingDeals[i];
       const acct = acctByClient.get(d.clientId);
       const stage = inferStage(d);
       const owner = owners.find((o) => o.name === d.pdlName) || pick(owners, i);
@@ -145,41 +161,48 @@ export async function seedDynamics() {
         forecastCategory: forecastFor(stage, probability),
         rating: probability >= 70 ? "Hot" : probability >= 40 ? "Warm" : "Cold",
         lastPushedAt: d.updatedAt || new Date(),
-      });
-    }
-
-    // Dynamics-only opps not yet imported into DealPad
-    const extras = [
-      {
-        dynamicsId: uuid("opp-x1"), opportunityNumber: "OPP-100201",
-        name: "Pacific Logistics Co - Tax Provision Outsourcing", accountName: "Pacific Logistics Co",
-        estimatedValue: "285000", stage: "Qualify", probability: 20,
-        estimatedCloseDate: "2026-09-30", ownerName: "Jennifer Walsh",
-        forecastCategory: "Pipeline", rating: "Warm",
-        syncStatus: "queued", syncDirection: "inbound",
-      },
-      {
-        dynamicsId: uuid("opp-x2"), opportunityNumber: "OPP-100202",
-        name: "Helios Energy Inc - SOX Readiness", accountName: "Helios Energy Inc",
-        estimatedValue: "540000", stage: "Develop", probability: 40,
-        estimatedCloseDate: "2026-08-15", ownerName: "Marcus Chen",
-        forecastCategory: "Best Case", rating: "Hot",
-        syncStatus: "queued", syncDirection: "inbound",
-      },
-      {
-        dynamicsId: uuid("opp-x3"), opportunityNumber: "OPP-100203",
-        name: "Crestwood Holdings - 2026 Annual Audit", accountName: "Crestwood Holdings",
-        estimatedValue: "412000", stage: "Qualify", probability: 20,
-        estimatedCloseDate: "2026-11-01", ownerName: "Priya Anand",
-        forecastCategory: "Pipeline", rating: "Warm",
-        syncStatus: "queued", syncDirection: "inbound",
-      },
-    ];
-    for (const e of extras) {
-      await db.insert(dynamicsOpportunities).values(e as any);
+      }).onConflictDoNothing();
     }
   }
 
+  // Dynamics-only opps not yet imported into DealPad — keyed by dynamics_id (unique).
+  const extras = [
+    {
+      dynamicsId: uuid("opp-x1"), opportunityNumber: "OPP-100201",
+      name: "Pacific Logistics Co - Tax Provision Outsourcing", accountName: "Pacific Logistics Co",
+      estimatedValue: "285000", stage: "Qualify", probability: 20,
+      estimatedCloseDate: "2026-09-30", ownerName: "Jennifer Walsh",
+      forecastCategory: "Pipeline", rating: "Warm",
+      syncStatus: "queued", syncDirection: "inbound",
+    },
+    {
+      dynamicsId: uuid("opp-x2"), opportunityNumber: "OPP-100202",
+      name: "Helios Energy Inc - SOX Readiness", accountName: "Helios Energy Inc",
+      estimatedValue: "540000", stage: "Develop", probability: 40,
+      estimatedCloseDate: "2026-08-15", ownerName: "Marcus Chen",
+      forecastCategory: "Best Case", rating: "Hot",
+      syncStatus: "queued", syncDirection: "inbound",
+    },
+    {
+      dynamicsId: uuid("opp-x3"), opportunityNumber: "OPP-100203",
+      name: "Crestwood Holdings - 2026 Annual Audit", accountName: "Crestwood Holdings",
+      estimatedValue: "412000", stage: "Qualify", probability: 20,
+      estimatedCloseDate: "2026-11-01", ownerName: "Priya Anand",
+      forecastCategory: "Pipeline", rating: "Warm",
+      syncStatus: "queued", syncDirection: "inbound",
+    },
+  ];
+  const existingExtraIds = new Set(
+    (await db.select({ dynamicsId: dynamicsOpportunities.dynamicsId }).from(dynamicsOpportunities))
+      .map((o) => o.dynamicsId).filter((id): id is string => id != null),
+  );
+  for (const e of extras) {
+    if (!existingExtraIds.has(e.dynamicsId)) {
+      await db.insert(dynamicsOpportunities).values(e as any).onConflictDoNothing();
+    }
+  }
+
+  // Bootstrap log line — only if no log entries at all (the action is self-describing).
   const [{ count: logCount }] = await db.select({ count: sql<number>`count(*)::int` }).from(dynamicsSyncLog);
   if (logCount === 0) {
     await logEvent({ direction: "inbound", entity: "System", entityName: "Initial seed",
@@ -341,8 +364,7 @@ const SCOPE_TEMPLATES: Record<string, { businessUnit: string; serviceLine: strin
 };
 
 export function registerDynamicsRoutes(app: Express) {
-  // Kick off seed asynchronously after server start
-  seedDynamics().catch((e) => console.error("Dynamics seed error:", e));
+  // Seeding is centralized in seedAll() (server/seed.ts) and runs before app.listen.
 
   // ============ READ ============
   app.get("/api/dynamics/accounts", async (_req, res) => {

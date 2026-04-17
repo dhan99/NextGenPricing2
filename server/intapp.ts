@@ -963,9 +963,10 @@ function maskSecrets<T extends Record<string, any>>(s: T): T & {
 // SEED — defaults + demo screenings (clear, review, conflict, override)
 // ====================================================================
 export async function seedIntapp() {
+  // Record-level idempotency: each demo deal/screening is checked individually
+  // so this can heal a partially-populated database (e.g. settings exist but
+  // demo screenings don't) without duplicating rows.
   await getSettings();
-  const existing = await db.select({ c: sql<number>`count(*)::int` }).from(intappScreenings);
-  if ((existing[0]?.c ?? 0) > 0) return;
 
   // Ensure two demo clients + deals exist so the dashboard always has rich data:
   //   - one cannabis high-risk industry (will produce a conflict)
@@ -980,14 +981,37 @@ export async function seedIntapp() {
     }
     let [d] = await db.select().from(deals).where(and(eq(deals.clientId, c.id), eq(deals.title, title)));
     if (!d) {
-      const dealNumber = `INT-DEMO-${Date.now().toString().slice(-6)}-${Math.floor(Math.random() * 100)}`;
+      // Stable deal number keyed on client+title so concurrent or repeated
+      // seeds don't collide on the deal_number UNIQUE constraint.
+      const dealNumber = `INT-DEMO-${c.id}-${title.replace(/[^A-Z0-9]+/gi, "").slice(0, 12).toUpperCase()}`;
       [d] = await db.insert(deals).values({
         dealNumber, title, clientId: c.id, status: "draft", dealType: "new",
         businessUnit: "Risk Advisory", serviceLine: "Compliance Consulting",
         totalFee: fee, complexity: "medium",
-      }).returning();
+      }).onConflictDoNothing().returning();
+      if (!d) {
+        // Race lost — fetch the row a peer just inserted.
+        [d] = await db.select().from(deals).where(and(eq(deals.clientId, c.id), eq(deals.title, title)));
+      }
     }
     return d;
+  };
+
+  // Returns true if at least one screening already exists for the given deal.
+  // Used as a per-record gate so reseeding doesn't pile up screenings.
+  const hasScreening = async (dealId: number) => {
+    const [r] = await db.select({ c: sql<number>`count(*)::int` })
+      .from(intappScreenings).where(eq(intappScreenings.dealId, dealId));
+    return (r?.c ?? 0) > 0;
+  };
+
+  const screenIfMissing = async (dealId: number, label: string) => {
+    if (await hasScreening(dealId)) return;
+    try {
+      await runScreeningForDeal(dealId, "Demo Seeder", "seed");
+    } catch (e) {
+      console.error(`[seed:intapp] ${label} (deal ${dealId}) failed:`, e);
+    }
   };
 
   try {
@@ -1003,14 +1027,17 @@ export async function seedIntapp() {
       "Trust Tax Advisory FY2026",
       "180000",
     );
-    await runScreeningForDeal(cannabisDeal.id, "Demo Seeder", "seed");
-    await runScreeningForDeal(pepDeal.id, "Demo Seeder", "seed");
-  } catch (e) { /* non-fatal */ }
+    if (cannabisDeal) await screenIfMissing(cannabisDeal.id, "cannabis demo screening");
+    if (pepDeal) await screenIfMissing(pepDeal.id, "PEP demo screening");
+  } catch (e) {
+    console.error("[seed:intapp] demo deal setup failed:", e);
+  }
 
-  // Seed 3 baseline screenings against existing deals
+  // Baseline screenings on the first 3 existing deals — only if they have
+  // no screening yet, so reseed heals gaps without duplicating.
   const allDeals = await db.select().from(deals).limit(8);
   for (const d of allDeals.slice(0, 3)) {
-    try { await runScreeningForDeal(d.id, "Demo Seeder", "seed"); } catch {}
+    await screenIfMissing(d.id, "baseline screening");
   }
 }
 
@@ -1018,7 +1045,7 @@ export async function seedIntapp() {
 // REST ROUTES
 // ====================================================================
 export function registerIntappRoutes(app: Express) {
-  seedIntapp().catch(e => console.error("Intapp seed error:", e));
+  // Seeding is centralized in seedAll() (server/seed.ts) and runs before app.listen.
 
   // -------- Settings --------
   app.get("/api/intapp/settings", async (_req, res) => {

@@ -91,3 +91,10 @@ All four platforms now push outcomes back from DealPad in addition to inbound sy
 - `attached_assets/Dealpad-technical-outline_*.pdf` - Technical outline
 - `attached_assets/3._User_Stories_*.pdf` - 69 user stories across 8 epics
 - `DealPad_Architecture_Document.md` - 1,900-line architecture document with 17 Mermaid diagrams
+
+## Production Seeding
+- `server/seed.ts` exports `seedAll()`, the single startup orchestrator. It runs core seeds (database, default prompt set, snapshot loader) and then all integration seeds (Dynamics, Intapp, Workday) in order.
+- `server/index.ts` `start()` calls `pushSchema()` then `seedAll()` BEFORE `app.listen()`. Schema push or core seed failure aborts startup (`process.exit(1)`); integration seed failures are logged but non-fatal.
+- Integration `register*Routes()` no longer fire-and-forget seeds; all seeding flows through `seedAll()`.
+- Operators can re-trigger seeding via `POST /api/admin/reseed` with header `x-admin-token: <ADMIN_RESEED_TOKEN>` (or `{ "token": "..." }` body). Returns 503 if `ADMIN_RESEED_TOKEN` is unset, 401 on bad token, 200/207 with per-step status.
+- Deployment: autoscale runs `npx tsx server/index.ts` which goes through the same `pushSchema + seedAll` path. `DATABASE_URL` must be set on the deployment.

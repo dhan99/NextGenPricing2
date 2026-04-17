@@ -182,6 +182,35 @@ export function registerRoutes(app: Express) {
   registerWorkdayRoutes(app);
   registerCongaRoutes(app);
 
+  // ========== ADMIN: RESEED ==========
+  // Re-runs the production seed orchestrator on demand. Guarded by a shared
+  // secret in ADMIN_RESEED_TOKEN. Useful when a deploy lands against an
+  // already-existing empty database and you don't want to redeploy just to
+  // re-trigger seeding. All steps remain idempotent.
+  app.post("/api/admin/reseed", async (req: Request, res: Response) => {
+    const expected = process.env.ADMIN_RESEED_TOKEN;
+    if (!expected) {
+      return res.status(503).json({
+        error: "Reseed endpoint disabled: set ADMIN_RESEED_TOKEN to enable.",
+      });
+    }
+    const provided = req.header("x-admin-token") || req.body?.token;
+    if (provided !== expected) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+    try {
+      const { seedAll } = await import("./seed");
+      const results = await seedAll();
+      const failed = results.filter(r => r.status === "failed");
+      res.status(failed.length === 0 ? 200 : 207).json({
+        ok: failed.length === 0,
+        results,
+      });
+    } catch (e: any) {
+      console.error("[admin:reseed] seedAll() threw:", e);
+      res.status(500).json({ error: e?.message || "Reseed failed", code: "seed_failed" });
+    }
+  });
 
   // ========== DASHBOARD ==========
   app.get("/api/dashboard/summary", async (_req: Request, res: Response) => {

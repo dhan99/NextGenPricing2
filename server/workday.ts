@@ -484,62 +484,94 @@ const SIM_WORKERS = [
 ];
 
 export async function seedWorkday() {
+  // Record-level idempotency: every reference table is gated by the natural
+  // unique key (code/workdayId/employeeNumber/roleName) and per-deal work is
+  // gated by per-row existence checks. Safe to run repeatedly to heal a
+  // partially populated DB without duplicating rows.
   await getWorkdaySettings();
 
-  const [{ count: ccCount }] = await db.select({ count: sql<number>`count(*)::int` }).from(workdayCostCenters);
-  if (ccCount === 0) {
-    for (const c of SIM_COST_CENTERS) {
-      await db.insert(workdayCostCenters).values({
-        workdayId: uuid(`cc-${c.code}`),
-        code: c.code, name: c.name, fiscalYear: c.fiscalYear,
-        totalBudget: c.totalBudget, committed: c.committed,
-        businessUnit: c.businessUnit, source: "simulated",
-      });
-    }
+  // Cost centers — keyed by `code` (UNIQUE)
+  const existingCCCodes = new Set(
+    (await db.select({ code: workdayCostCenters.code }).from(workdayCostCenters)).map((r) => r.code),
+  );
+  for (const c of SIM_COST_CENTERS) {
+    if (existingCCCodes.has(c.code)) continue;
+    await db.insert(workdayCostCenters).values({
+      workdayId: uuid(`cc-${c.code}`),
+      code: c.code, name: c.name, fiscalYear: c.fiscalYear,
+      totalBudget: c.totalBudget, committed: c.committed,
+      businessUnit: c.businessUnit, source: "simulated",
+    }).onConflictDoNothing();
   }
 
-  const [{ count: rcCount }] = await db.select({ count: sql<number>`count(*)::int` }).from(workdayRateCards);
-  if (rcCount === 0) {
-    for (const r of SIM_RATE_CARD) {
-      await db.insert(workdayRateCards).values({
-        roleName: r.roleName, standardCostRate: r.standardCostRate,
-        effectiveDate: "2025-07-01", source: "simulated",
-      });
-    }
+  // Rate cards — keyed by (roleName, effectiveDate, source). No DB unique
+  // constraint, so we check at the application level.
+  const existingRC = await db.select({ roleName: workdayRateCards.roleName }).from(workdayRateCards);
+  const existingRCRoles = new Set(existingRC.map((r) => r.roleName));
+  for (const r of SIM_RATE_CARD) {
+    if (existingRCRoles.has(r.roleName)) continue;
+    await db.insert(workdayRateCards).values({
+      roleName: r.roleName, standardCostRate: r.standardCostRate,
+      effectiveDate: "2025-07-01", source: "simulated",
+    });
   }
 
-  const [{ count: wkCount }] = await db.select({ count: sql<number>`count(*)::int` }).from(workdayWorkers);
-  if (wkCount === 0) {
-    let i = 0;
-    for (const [name, role, region, cap, avail, rate] of SIM_WORKERS) {
-      await db.insert(workdayWorkers).values({
-        workdayId: uuid(`worker-${i}-${name}`),
-        employeeNumber: `EMP-${String(10000 + i++).padStart(6, "0")}`,
-        name: String(name), roleName: String(role), region: String(region),
-        weeklyCapacityHours: String(cap), availableHours: String(avail),
-        standardCostRate: String(rate), source: "simulated",
-      });
-    }
+  // Workers — keyed by `employee_number` (UNIQUE)
+  const existingEmpNums = new Set(
+    (await db.select({ n: workdayWorkers.employeeNumber }).from(workdayWorkers)).map((r) => r.n),
+  );
+  for (let i = 0; i < SIM_WORKERS.length; i++) {
+    const [name, role, region, cap, avail, rate] = SIM_WORKERS[i];
+    const employeeNumber = `EMP-${String(10000 + i).padStart(6, "0")}`;
+    if (existingEmpNums.has(employeeNumber)) continue;
+    await db.insert(workdayWorkers).values({
+      workdayId: uuid(`worker-${i}-${name}`),
+      employeeNumber,
+      name: String(name), roleName: String(role), region: String(region),
+      weeklyCapacityHours: String(cap), availableHours: String(avail),
+      standardCostRate: String(rate), source: "simulated",
+    }).onConflictDoNothing();
   }
 
-  // Link existing demo deals to cost centers + run baseline validations
-  const [{ count: vCount }] = await db.select({ count: sql<number>`count(*)::int` }).from(workdayValidations);
-  if (vCount === 0) {
-    const allDeals = await db.select().from(deals);
-    const centers = await db.select().from(workdayCostCenters);
-    const ccByBU = new Map(centers.map((c) => [c.businessUnit, c]));
-    const consultingCC = centers.find((c) => c.code === "CC-CONS-300");
-    for (const d of allDeals) {
+  // Per-deal: link missing cost centers + run baseline validations only when
+  // the deal has none. Gated per-row so reseed heals partial work without
+  // double-validating deals that already have a record.
+  const allDeals = await db.select().from(deals);
+  const centers = await db.select().from(workdayCostCenters);
+  const ccByBU = new Map(centers.map((c) => [c.businessUnit, c]));
+  const consultingCC = centers.find((c) => c.code === "CC-CONS-300");
+
+  // Pull existing validation deal IDs so we don't re-run nightly validation
+  // for deals that already have one.
+  const existingValidationDealIds = new Set(
+    (await db.select({ dealId: workdayValidations.dealId }).from(workdayValidations)).map((r) => r.dealId),
+  );
+
+  for (const d of allDeals) {
+    if (!d.workdayCostCenterId) {
       const cc = (d.businessUnit && ccByBU.get(d.businessUnit)) || consultingCC;
       if (cc) {
         await db.update(deals).set({ workdayCostCenterId: cc.id }).where(eq(deals.id, d.id));
       }
-      try { await runSimulatedValidation(d.id, { trigger: "nightly", actorName: "Workday Seed" }); } catch {}
     }
+    if (existingValidationDealIds.has(d.id)) continue;
+    try {
+      await runSimulatedValidation(d.id, { trigger: "nightly", actorName: "Workday Seed" });
+    } catch (e) {
+      console.error(`[seed:workday] baseline validation for deal ${d.id} failed:`, e);
+    }
+  }
 
-    // Inject representative demo validations covering each outcome
+  // Inject representative demo validations covering each outcome — only the
+  // ones missing. seedDemoValidations now checks per (dealId, status) before
+  // inserting.
+  if (allDeals.length > 0) {
     await seedDemoValidations(allDeals, centers);
+  }
 
+  // Bootstrap log line — only if no events at all so reseed doesn't spam.
+  const [{ count: evtCount }] = await db.select({ count: sql<number>`count(*)::int` }).from(workdayEvents);
+  if (evtCount === 0) {
     await logEvent({
       eventType: "seed", entity: "System", entityName: "Workday simulation",
       message: `Workday pilot seeded: ${centers.length} cost centers, ${SIM_WORKERS.length} workers, ${SIM_RATE_CARD.length} rate-card roles.`,
@@ -594,7 +626,15 @@ async function seedDemoValidations(allDeals: any[], centers: any[]) {
     ],
   });
 
+  // Per-(deal,status) idempotency: skip cases where a Workday-Seed-created
+  // validation already exists for that pairing so reseed doesn't pile up demos.
+  const existing = await db.select({ dealId: workdayValidations.dealId, status: workdayValidations.status })
+    .from(workdayValidations)
+    .where(eq(workdayValidations.requestedBy, "Workday Seed"));
+  const existingDealStatus = new Set(existing.map((r) => `${r.dealId}:${r.status}`));
+
   for (const c of cases) {
+    if (existingDealStatus.has(`${c.deal.id}:${c.status}`)) continue;
     const [v] = await db.insert(workdayValidations).values({
       dealId: c.deal.id, costCenterId: c.cc.id,
       status: c.status, source: "simulated", trigger: "nightly",
@@ -619,7 +659,7 @@ async function seedDemoValidations(allDeals: any[], centers: any[]) {
 
 // ============ ROUTES ============
 export function registerWorkdayRoutes(app: Express) {
-  seedWorkday().catch((e) => console.error("Workday seed error:", e));
+  // Seeding is centralized in seedAll() (server/seed.ts) and runs before app.listen.
 
   // Bi-directional: push approved deal back to Workday as a Project record.
   app.post("/api/workday/deals/:id/push", async (req: Request, res: Response) => {

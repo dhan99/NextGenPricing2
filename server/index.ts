@@ -2,7 +2,7 @@ import express from "express";
 import cors from "cors";
 import path from "path";
 import { registerRoutes } from "./routes";
-import { seedDatabase, seedDefaultPromptSet } from "./seed";
+import { seedAll } from "./seed";
 import { db } from "./db";
 import { sql } from "drizzle-orm";
 import * as schema from "../shared/schema";
@@ -432,6 +432,9 @@ async function pushSchema() {
     ALTER TABLE intapp_settings ADD COLUMN IF NOT EXISTS qrm_teams_webhook_url TEXT;
     ALTER TABLE intapp_settings ADD COLUMN IF NOT EXISTS app_base_url TEXT;
     ALTER TABLE deals ADD COLUMN IF NOT EXISTS workday_cost_center_id INTEGER;
+    ALTER TABLE deals ADD COLUMN IF NOT EXISTS engagement_inputs JSONB;
+    ALTER TABLE prompt_responses ADD COLUMN IF NOT EXISTS prompt_set_id INTEGER;
+    ALTER TABLE prompt_responses ADD COLUMN IF NOT EXISTS prompt_set_version INTEGER;
 
     DELETE FROM deal_scope_items a
       USING deal_scope_items b
@@ -657,20 +660,22 @@ async function start() {
   try {
     await pushSchema();
     console.log("Database schema ready");
-
-    await seedDatabase();
-    console.log("Database seeded");
-
-    await seedDefaultPromptSet();
-    console.log("Default prompt set ready");
-
-    const { loadSeedSnapshot } = await import("./snapshot-loader");
-    await loadSeedSnapshot();
   } catch (err) {
-    console.error("Database initialization error:", err);
+    console.error("FATAL: Database schema push failed; aborting startup.", err);
+    process.exit(1);
   }
 
+  // Routes must be registered before seedAll() because some integration seeds
+  // expect routes/triggers to exist via shared module state. Express does not
+  // bind to the port until app.listen() below, so no requests can race the seed.
   registerRoutes(app);
+
+  try {
+    await seedAll();
+  } catch (err) {
+    console.error("FATAL: Core seed failed; aborting startup so traffic isn't served against an empty database.", err);
+    process.exit(1);
+  }
 
   // Start nightly Intapp re-screen loop (no-op until enabled in settings)
   try {
