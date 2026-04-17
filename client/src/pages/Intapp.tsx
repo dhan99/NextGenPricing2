@@ -416,6 +416,7 @@ export function ResultBadge({ result }: { result: string }) {
     clear: { label: "Cleared", cls: "bg-emerald-100 text-emerald-700" },
     review: { label: "Review", cls: "bg-amber-100 text-amber-700" },
     conflict: { label: "Conflict", cls: "bg-red-100 text-red-700" },
+    mitigated: { label: "Mitigated", cls: "bg-sky-100 text-sky-700" },
     override_approved: { label: "Override", cls: "bg-violet-100 text-violet-700" },
     pending: { label: "Pending", cls: "bg-stone-100 text-stone-700" },
   };

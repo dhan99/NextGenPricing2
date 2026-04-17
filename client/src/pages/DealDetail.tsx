@@ -1236,6 +1236,40 @@ function SummaryStep({ deal }: { deal: any }) {
 }
 
 // ============ INTAPP COMPLIANCE PANEL ============
+// Suggested mitigation actions per Intapp hit type. Used as quick-pick chips
+// in the per-hit mitigation modal so QRM doesn't have to retype boilerplate
+// for the most common compliance clearances.
+const HIT_ACTION_PRESETS: Record<string, string[]> = {
+  sanctions_watchlist: [
+    "Enhanced Due Diligence (EDD) file completed and attached",
+    "OFAC false-positive confirmed by Compliance",
+    "Engagement declined — client offboarded",
+  ],
+  pep: [
+    "PEP source-of-wealth verified; EDD on file",
+    "QRM Lead sign-off obtained",
+  ],
+  industry_restriction: [
+    "Partner sponsor confirmed and recorded",
+    "Independence clearance obtained from QRM",
+  ],
+  independence: [
+    "Independence checklist validated with QRM",
+    "Engagement partner rotated per policy",
+  ],
+  conflict_of_interest: [
+    "Conflict waiver letter received from both clients",
+    "Information barrier (ethical wall) established",
+  ],
+  regulatory_review: [
+    "Regulatory due-diligence questionnaire attached",
+  ],
+  fee_threshold: [
+    "Practice Partner concurrence recorded",
+    "QRM Lead concurrent review completed",
+  ],
+};
+
 function IntappCompliancePanel({ deal }: { deal: any }) {
   const { data: screening, isLoading } = useDealIntappScreening(deal.id);
   const runScreen = useRunIntappScreening();
@@ -1245,11 +1279,25 @@ function IntappCompliancePanel({ deal }: { deal: any }) {
   const { persona } = useAuth();
   const [showOverride, setShowOverride] = useState(false);
   const [justification, setJustification] = useState("");
-  const [showMitForm, setShowMitForm] = useState(false);
+  // Per-hit mitigation modal state. `mitHitId === null` means the modal is
+  // open for a "general" mitigation not tied to a specific hit.
+  const [mitModalHitId, setMitModalHitId] = useState<number | null | undefined>(undefined);
   const [mitAction, setMitAction] = useState("");
   const [mitNotes, setMitNotes] = useState("");
+  const [mitResolve, setMitResolve] = useState(true);
   const isQRM = persona?.role === "qrm";
   const canMitigate = ["qrm", "pdl", "sll"].includes(persona?.role || "");
+
+  const closeMitModal = () => {
+    setMitModalHitId(undefined);
+    setMitAction(""); setMitNotes(""); setMitResolve(true);
+  };
+  const openMitModal = (hitId: number | null, presetAction?: string) => {
+    setMitModalHitId(hitId);
+    setMitAction(presetAction || "");
+    setMitNotes("");
+    setMitResolve(true);
+  };
 
   if (isLoading) {
     return (
@@ -1285,16 +1333,35 @@ function IntappCompliancePanel({ deal }: { deal: any }) {
   const isOverridden = screening.result === "override_approved";
   const isClear = screening.result === "clear";
   const isReview = screening.result === "review";
+  const isMitigated = screening.result === "mitigated";
+
+  const allHits: any[] = screening.hits || [];
+  const allMits: any[] = screening.mitigations || [];
+  const mitsByHit = new Map<number, any[]>();
+  const orphanMits: any[] = [];
+  for (const m of allMits) {
+    if (m.hitId == null) orphanMits.push(m);
+    else {
+      const arr = mitsByHit.get(m.hitId) || [];
+      arr.push(m);
+      mitsByHit.set(m.hitId, arr);
+    }
+  }
+  const isHitResolved = (h: any) =>
+    (mitsByHit.get(h.id) || []).some(m => m.status === "resolved" || m.status === "completed");
+  const openHitCount = allHits.filter(h => !isHitResolved(h)).length;
 
   const banner = isBlocked
     ? { cls: "border-red-200 bg-red-50/60", icon: <ShieldAlert className="w-5 h-5 text-red-700" />, title: "Submission BLOCKED — Intapp conflict detected" }
     : isOverridden
       ? { cls: "border-violet-200 bg-violet-50/60", icon: <Unlock className="w-5 h-5 text-violet-700" />, title: "QRM override applied — proceed with documented justification" }
-      : isReview
-        ? { cls: "border-amber-200 bg-amber-50/60", icon: <ShieldAlert className="w-5 h-5 text-amber-700" />, title: "Review required — mitigations recommended" }
-        : isClear
-          ? { cls: "border-emerald-200 bg-emerald-50/60", icon: <ShieldCheck className="w-5 h-5 text-emerald-700" />, title: "Cleared by Intapp — no compliance issues" }
-          : { cls: "border-stone-200 bg-stone-50", icon: <Shield className="w-5 h-5 text-stone-600" />, title: "Screening pending" };
+      : isMitigated
+        ? { cls: "border-sky-200 bg-sky-50/60", icon: <ShieldCheck className="w-5 h-5 text-sky-700" />, title: `Mitigated — all ${allHits.length} hit(s) cleared with documented mitigations` }
+        : isReview
+          ? { cls: "border-amber-200 bg-amber-50/60", icon: <ShieldAlert className="w-5 h-5 text-amber-700" />, title: "Review required — mitigations recommended" }
+          : isClear
+            ? { cls: "border-emerald-200 bg-emerald-50/60", icon: <ShieldCheck className="w-5 h-5 text-emerald-700" />, title: "Cleared by Intapp — no compliance issues" }
+            : { cls: "border-stone-200 bg-stone-50", icon: <Shield className="w-5 h-5 text-stone-600" />, title: "Screening pending" };
 
   const handleOverride = () => {
     if (justification.trim().length < 10) return;
@@ -1325,37 +1392,91 @@ function IntappCompliancePanel({ deal }: { deal: any }) {
         </button>
       </div>
 
-      {(screening.hits || []).length > 0 && (
+      {allHits.length > 0 && (
         <div className="space-y-2 mt-3 pt-3 border-t border-stone-200/60">
-          {screening.hits.map((h: any) => (
-            <div key={h.id} className={cn("p-3 rounded-md text-xs",
-              h.severity === "high" ? "bg-red-50 border border-red-100" :
-              h.severity === "medium" ? "bg-amber-50 border border-amber-100" :
-              "bg-stone-50 border border-stone-200"
-            )}>
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="font-semibold text-foreground capitalize">{h.hitType.replace(/_/g, " ")}</span>
-                <IntappRiskBadge tier={h.severity} />
-                {h.matchedEntity && <span className="text-muted-foreground">· {h.matchedEntity}</span>}
-                {h.externalRef && <span className="text-[10px] font-mono text-muted-foreground">{h.externalRef}</span>}
-              </div>
-              <p className="text-muted-foreground mt-1">{h.description}</p>
-              <p className="text-foreground mt-1"><span className="font-medium">Recommendation:</span> {h.recommendation}</p>
+          <div className="flex items-center justify-between mb-1">
+            <div className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">
+              Findings ({allHits.length - openHitCount}/{allHits.length} mitigated)
             </div>
-          ))}
+          </div>
+          {allHits.map((h: any) => {
+            const hitMits = mitsByHit.get(h.id) || [];
+            const resolved = isHitResolved(h);
+            return (
+              <div key={h.id} className={cn("p-3 rounded-md text-xs",
+                resolved
+                  ? "bg-emerald-50 border border-emerald-100"
+                  : h.severity === "high"
+                    ? "bg-red-50 border border-red-100"
+                    : h.severity === "medium"
+                      ? "bg-amber-50 border border-amber-100"
+                      : "bg-stone-50 border border-stone-200"
+              )}>
+                <div className="flex items-center gap-2 flex-wrap">
+                  {resolved && <CheckCircle className="w-3.5 h-3.5 text-emerald-600" />}
+                  <span className="font-semibold text-foreground capitalize">{h.hitType.replace(/_/g, " ")}</span>
+                  <IntappRiskBadge tier={h.severity} />
+                  {resolved && (
+                    <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded font-semibold bg-emerald-100 text-emerald-700">
+                      Mitigated
+                    </span>
+                  )}
+                  {h.matchedEntity && <span className="text-muted-foreground">· {h.matchedEntity}</span>}
+                  {h.externalRef && <span className="text-[10px] font-mono text-muted-foreground">{h.externalRef}</span>}
+                  {canMitigate && !resolved && (
+                    <button onClick={() => openMitModal(h.id)}
+                      className="ml-auto inline-flex items-center gap-1 text-[11px] font-medium text-primary hover:underline">
+                      <Plus className="w-3 h-3" /> Mitigate
+                    </button>
+                  )}
+                </div>
+                <p className="text-muted-foreground mt-1">{h.description}</p>
+                <p className="text-foreground mt-1"><span className="font-medium">Recommendation:</span> {h.recommendation}</p>
+
+                {hitMits.length > 0 && (
+                  <div className="mt-2 pt-2 border-t border-stone-200/70 space-y-1">
+                    {hitMits.map((m: any) => {
+                      const done = m.status === "resolved" || m.status === "completed";
+                      return (
+                        <div key={m.id} className="flex items-start gap-2 text-[11px] text-foreground">
+                          {done
+                            ? <CheckCircle className="w-3 h-3 text-emerald-600 mt-0.5 shrink-0" />
+                            : <Clock className="w-3 h-3 text-amber-600 mt-0.5 shrink-0" />}
+                          <div className="flex-1 min-w-0">
+                            <div><span className="font-medium">{m.action}</span>
+                              {m.notes && <span className="text-muted-foreground"> — {m.notes}</span>}
+                            </div>
+                            <div className="text-muted-foreground text-[10px]">
+                              {done && m.resolvedBy
+                                ? `Resolved by ${m.resolvedBy}${m.resolvedAt ? ` · ${new Date(m.resolvedAt).toLocaleDateString()}` : ""}`
+                                : `Pending · logged ${m.createdAt ? new Date(m.createdAt).toLocaleDateString() : "—"}`}
+                            </div>
+                          </div>
+                          {!done && canMitigate && (
+                            <button
+                              onClick={() => updateMit.mutate({ id: m.id, dealId: deal.id, status: "resolved" } as any)}
+                              disabled={updateMit.isPending}
+                              className="text-[11px] font-medium text-emerald-700 hover:underline disabled:opacity-50">
+                              Mark resolved
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
 
-      {((screening.mitigations || []).length > 0 || canMitigate) && (
+      {orphanMits.length > 0 && (
         <div className="mt-3 pt-3 border-t border-stone-200/60">
-          <div className="flex items-center justify-between mb-1.5">
-            <div className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">Mitigations on file</div>
-            {canMitigate && !showMitForm && (
-              <button onClick={() => setShowMitForm(true)}
-                className="text-[11px] font-medium text-primary hover:underline">+ Add mitigation</button>
-            )}
+          <div className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold mb-1.5">
+            General mitigations (not tied to a specific hit)
           </div>
-          {(screening.mitigations || []).map((m: any) => {
+          {orphanMits.map((m: any) => {
             const done = m.status === "resolved" || m.status === "completed";
             return (
               <div key={m.id} className="text-xs text-foreground py-1 flex items-center gap-2">
@@ -1368,45 +1489,52 @@ function IntappCompliancePanel({ deal }: { deal: any }) {
                     onClick={() => updateMit.mutate({ id: m.id, dealId: deal.id, status: "resolved" } as any)}
                     disabled={updateMit.isPending}
                     className="ml-auto text-[11px] font-medium text-emerald-700 hover:underline disabled:opacity-50">
-                    Resolve
+                    Mark resolved
                   </button>
                 )}
               </div>
             );
           })}
-          {showMitForm && canMitigate && (
-            <div className="mt-2 space-y-2">
-              <input
-                type="text" value={mitAction} onChange={(e) => setMitAction(e.target.value)}
-                placeholder="Mitigation action (e.g., Obtained partner concurrence; EDD on file)"
-                className="w-full px-3 py-2 border border-stone-300 rounded-md text-xs focus:outline-none focus:border-primary" />
-              <textarea
-                value={mitNotes} onChange={(e) => setMitNotes(e.target.value)}
-                placeholder="Notes (optional)"
-                className="w-full min-h-[50px] px-3 py-2 border border-stone-300 rounded-md text-xs resize-y focus:outline-none focus:border-primary" />
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => {
-                    if (mitAction.trim().length < 3) return;
-                    addMit.mutate({
-                      screeningId: screening.id,
-                      dealId: deal.id,
-                      action: mitAction,
-                      notes: mitNotes,
-                      status: "pending",
-                    } as any);
-                    setMitAction(""); setMitNotes(""); setShowMitForm(false);
-                  }}
-                  disabled={addMit.isPending || mitAction.trim().length < 3}
-                  className="px-3 py-1.5 rounded-md bg-primary text-white text-xs font-medium hover:bg-primary/90 disabled:opacity-50">
-                  Save mitigation
-                </button>
-                <button onClick={() => { setShowMitForm(false); setMitAction(""); setMitNotes(""); }}
-                  className="px-3 py-1.5 rounded-md bg-white border border-stone-300 text-xs font-medium hover:bg-stone-50">Cancel</button>
-              </div>
-            </div>
-          )}
         </div>
+      )}
+
+      {canMitigate && allHits.length === 0 && (
+        <div className="mt-3 pt-3 border-t border-stone-200/60">
+          <button onClick={() => openMitModal(null)}
+            className="text-[11px] font-medium text-primary hover:underline">
+            + Add general mitigation note
+          </button>
+        </div>
+      )}
+
+      {mitModalHitId !== undefined && canMitigate && (
+        <MitigationModal
+          hit={mitModalHitId == null ? null : allHits.find(h => h.id === mitModalHitId) || null}
+          action={mitAction}
+          setAction={setMitAction}
+          notes={mitNotes}
+          setNotes={setMitNotes}
+          resolve={mitResolve}
+          setResolve={setMitResolve}
+          presets={
+            mitModalHitId != null
+              ? (HIT_ACTION_PRESETS[(allHits.find(h => h.id === mitModalHitId) || {}).hitType] || [])
+              : []
+          }
+          submitting={addMit.isPending}
+          onCancel={closeMitModal}
+          onSubmit={() => {
+            if (mitAction.trim().length < 3) return;
+            addMit.mutate({
+              screeningId: screening.id,
+              dealId: deal.id,
+              hitId: mitModalHitId ?? undefined,
+              action: mitAction,
+              notes: mitNotes,
+              status: mitResolve ? "resolved" : "pending",
+            } as any, { onSuccess: closeMitModal });
+          }}
+        />
       )}
 
       {isBlocked && isQRM && (
@@ -1441,6 +1569,108 @@ function IntappCompliancePanel({ deal }: { deal: any }) {
           Switch to a QRM persona (e.g., David Kim) to apply an override, or attach mitigations from the Intapp admin page.
         </div>
       )}
+    </div>
+  );
+}
+
+function MitigationModal({
+  hit, action, setAction, notes, setNotes, resolve, setResolve,
+  presets, submitting, onCancel, onSubmit,
+}: {
+  hit: any | null;
+  action: string; setAction: (v: string) => void;
+  notes: string; setNotes: (v: string) => void;
+  resolve: boolean; setResolve: (v: boolean) => void;
+  presets: string[];
+  submitting: boolean;
+  onCancel: () => void;
+  onSubmit: () => void;
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      onClick={onCancel}
+    >
+      <div
+        className="bg-card rounded-lg shadow-xl border border-border w-full max-w-lg max-h-[90vh] overflow-y-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="p-5 border-b border-border">
+          <div className="flex items-center gap-2">
+            <Shield className="w-5 h-5 text-primary" />
+            <h3 className="text-base font-semibold text-foreground">
+              {hit ? "Log mitigation for hit" : "Log general mitigation"}
+            </h3>
+          </div>
+          {hit && (
+            <div className="mt-2 p-2.5 rounded-md bg-stone-50 border border-stone-200 text-xs">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-semibold text-foreground capitalize">{hit.hitType.replace(/_/g, " ")}</span>
+                <IntappRiskBadge tier={hit.severity} />
+                {hit.matchedEntity && <span className="text-muted-foreground">· {hit.matchedEntity}</span>}
+              </div>
+              <p className="text-muted-foreground mt-1">{hit.description}</p>
+              <p className="text-foreground mt-1"><span className="font-medium">Recommendation:</span> {hit.recommendation}</p>
+            </div>
+          )}
+        </div>
+
+        <div className="p-5 space-y-4">
+          {presets.length > 0 && (
+            <div>
+              <label className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">Suggested actions</label>
+              <div className="flex flex-wrap gap-1.5 mt-1.5">
+                {presets.map(p => (
+                  <button key={p} type="button" onClick={() => setAction(p)}
+                    className={cn(
+                      "text-[11px] px-2 py-1 rounded-md border transition-colors",
+                      action === p
+                        ? "bg-primary text-primary-foreground border-primary"
+                        : "bg-white border-stone-300 text-foreground hover:bg-stone-50"
+                    )}>
+                    {p}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div>
+            <label className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">Mitigation action *</label>
+            <input type="text" value={action} onChange={(e) => setAction(e.target.value)}
+              placeholder="e.g., Obtained partner concurrence; EDD on file"
+              className="mt-1 w-full px-3 py-2 border border-stone-300 rounded-md text-sm focus:outline-none focus:border-primary" />
+          </div>
+
+          <div>
+            <label className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">Notes (optional)</label>
+            <textarea value={notes} onChange={(e) => setNotes(e.target.value)}
+              placeholder="Document evidence, file references, or partner sign-offs"
+              className="mt-1 w-full min-h-[70px] px-3 py-2 border border-stone-300 rounded-md text-sm resize-y focus:outline-none focus:border-primary" />
+          </div>
+
+          <label className="flex items-start gap-2 text-xs text-foreground cursor-pointer select-none">
+            <input type="checkbox" checked={resolve} onChange={(e) => setResolve(e.target.checked)}
+              className="mt-0.5" />
+            <span>
+              <span className="font-medium">Mark this hit as resolved.</span>
+              <span className="text-muted-foreground"> When every hit on the screening has a resolved mitigation, the screening auto-transitions to <span className="font-semibold">Mitigated</span> and submission unblocks.</span>
+            </span>
+          </label>
+        </div>
+
+        <div className="p-4 border-t border-border flex items-center justify-end gap-2">
+          <button onClick={onCancel}
+            className="px-3 py-1.5 rounded-md bg-white border border-stone-300 text-xs font-medium hover:bg-stone-50">
+            Cancel
+          </button>
+          <button onClick={onSubmit} disabled={submitting || action.trim().length < 3}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 disabled:opacity-50">
+            {submitting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+            {resolve ? "Save & resolve hit" : "Save mitigation"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

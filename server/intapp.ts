@@ -368,6 +368,72 @@ export async function runScreeningForDeal(
   return { screening: { ...screening, ...response, status: "complete", hitCount: response.hits.length }, response };
 }
 
+/**
+ * Reconcile a screening's `result` against its hit→mitigation lifecycle.
+ *
+ * - Every hit on the screening is considered "cleared" if at least one
+ *   mitigation row references its `hitId` AND has status `resolved` or
+ *   `completed`.
+ * - When ALL hits are cleared and the screening is currently in `conflict`
+ *   or `review`, the result is transitioned to `mitigated` and an audit
+ *   event is logged. Submission gating treats `mitigated` the same as
+ *   `clear` / `override_approved` (i.e. submission is unblocked).
+ * - If a hit becomes un-resolved later (mitigation re-opened), the screening
+ *   is reverted to its severity-implied result so it re-blocks submission.
+ *
+ * Returns the updated screening row (or null if the screening was missing).
+ */
+export async function reconcileMitigationStatus(screeningId: number) {
+  const [s] = await db.select().from(intappScreenings).where(eq(intappScreenings.id, screeningId));
+  if (!s) return null;
+  const hits = await db.select().from(intappHits).where(eq(intappHits.screeningId, screeningId));
+  if (hits.length === 0) return s;
+  const mits = await db.select().from(intappMitigations).where(eq(intappMitigations.screeningId, screeningId));
+  const resolvedHitIds = new Set(
+    mits.filter(m => (m.status === "resolved" || m.status === "completed") && m.hitId != null)
+        .map(m => m.hitId as number),
+  );
+  const allCleared = hits.every(h => resolvedHitIds.has(h.id));
+
+  // Forward transition: every hit cleared → mitigated (if currently blocking).
+  if (allCleared && (s.result === "conflict" || s.result === "review")) {
+    const [updated] = await db.update(intappScreenings).set({
+      result: "mitigated",
+      narrative: `${s.narrative || ""}\n\n[AUTO-MITIGATED]: All ${hits.length} hit(s) have a resolved mitigation on file. Submission unblocked.`,
+    }).where(eq(intappScreenings.id, screeningId)).returning();
+    await logEvent({
+      dealId: s.dealId, screeningId,
+      eventType: "screening_mitigated",
+      message: `All ${hits.length} Intapp hit(s) cleared via mitigations — screening auto-transitioned to MITIGATED.`,
+      metadata: { previousResult: s.result, hitCount: hits.length, mitigationCount: mits.length },
+      source: s.source,
+    });
+    return updated;
+  }
+
+  // Reverse transition: a previously-mitigated screening lost a resolved
+  // mitigation (e.g. status set back to pending) → restore the severity-
+  // implied gating result so submission re-blocks until re-mitigated.
+  if (!allCleared && s.result === "mitigated") {
+    const hasHigh = hits.some(h => h.severity === "high");
+    const restored: "conflict" | "review" = hasHigh ? "conflict" : "review";
+    const [updated] = await db.update(intappScreenings).set({
+      result: restored,
+      narrative: `${s.narrative || ""}\n\n[MITIGATION REOPENED]: One or more hits are no longer resolved. Screening restored to ${restored.toUpperCase()}.`,
+    }).where(eq(intappScreenings.id, screeningId)).returning();
+    await logEvent({
+      dealId: s.dealId, screeningId,
+      eventType: "screening_mitigation_reopened",
+      message: `Mitigation re-opened — screening restored from MITIGATED to ${restored.toUpperCase()}.`,
+      metadata: { restoredResult: restored },
+      source: s.source,
+    });
+    return updated;
+  }
+
+  return s;
+}
+
 // Latest screening helper
 export async function getLatestScreening(dealId: number) {
   const [s] = await db.select().from(intappScreenings)
@@ -414,7 +480,7 @@ export async function assertSubmissionAllowed(
   // screening at submit time so stale "clear" screenings cannot be reused to
   // bypass new policy or new client/deal data.
   const prior = await getLatestScreening(dealId);
-  if (prior?.result === "override_approved") {
+  if (prior?.result === "override_approved" || prior?.result === "mitigated") {
     return { allow: true, screening: prior };
   }
 
@@ -707,6 +773,16 @@ export function registerIntappRoutes(app: Express) {
     const screeningId = parseInt(req.params.id);
     const { hitId, action, notes, status } = req.body || {};
     if (!action) return res.status(400).json({ error: "action is required" });
+    // Integrity: if hitId is provided, ensure it belongs to this screening.
+    // Without this check a caller could attach a mitigation against a hit
+    // from another screening, corrupting the hit→mitigation lifecycle and
+    // letting an unrelated screening be auto-transitioned to `mitigated`.
+    if (hitId != null) {
+      const [h] = await db.select().from(intappHits).where(eq(intappHits.id, hitId));
+      if (!h || h.screeningId !== screeningId) {
+        return res.status(400).json({ error: `hitId ${hitId} does not belong to screening ${screeningId}.` });
+      }
+    }
     const [m] = await db.insert(intappMitigations).values({
       screeningId,
       hitId: hitId || null,
@@ -723,6 +799,9 @@ export function registerIntappRoutes(app: Express) {
       message: `Mitigation logged by ${id.name} (${id.role}): ${action}`,
       metadata: { hitId, status: m.status },
     });
+    // If the mitigation was logged as already-resolved (per-hit clear flow),
+    // recompute screening result so a fully-mitigated deal unblocks submit.
+    await reconcileMitigationStatus(screeningId);
     res.status(201).json(m);
   });
 
@@ -750,6 +829,7 @@ export function registerIntappRoutes(app: Express) {
         message: `Mitigation ${mitId} → ${patch.status || "updated"} by ${id.name}`,
         metadata: { mitigationId: mitId, status: patch.status },
       });
+      await reconcileMitigationStatus(updated.screeningId);
     }
     res.json(updated);
   });
@@ -818,6 +898,7 @@ export function registerIntappRoutes(app: Express) {
       clear: all.filter(s => s.result === "clear").length,
       review: all.filter(s => s.result === "review").length,
       conflict: all.filter(s => s.result === "conflict").length,
+      mitigated: all.filter(s => s.result === "mitigated").length,
       override: all.filter(s => s.result === "override_approved").length,
       pending: all.filter(s => s.result === "pending").length,
     };
