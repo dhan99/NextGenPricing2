@@ -27,12 +27,16 @@ export function DealDetail() {
   const [, params] = useRoute("/deals/:id");
   const dealId = parseInt(params?.id || "0");
   const { data: deal, isLoading } = useDeal(dealId);
+  const { data: approvalsForGating } = useDealApprovals(dealId);
   const [currentStep, setCurrentStep] = useState(1);
   const { hasPermission, persona } = useAuth();
   const qc = useQueryClient();
   const [reviewBlockers, setReviewBlockers] = useState(0);
   const [reviewOverride, setReviewOverride] = useState(false);
   const reviewBlocked = currentStep === 5 && reviewBlockers > 0 && !reviewOverride;
+  const summaryUnlocked = (approvalsForGating || []).length > 0;
+  const summaryGated = currentStep === 6 && !summaryUnlocked;
+  const advanceBlocked = reviewBlocked || summaryGated;
 
   const navigateToStep = useCallback((step: number) => {
     qc.invalidateQueries({ queryKey: ["deal", dealId] });
@@ -58,7 +62,7 @@ export function DealDetail() {
 
   return (
     <div className="flex flex-col min-h-screen">
-      <DealBanner deal={deal} currentStep={currentStep} navigateToStep={navigateToStep} />
+      <DealBanner deal={deal} currentStep={currentStep} navigateToStep={navigateToStep} summaryUnlocked={summaryUnlocked} />
 
       <div className="flex-1 p-8 max-w-7xl mx-auto w-full">
         {currentStep === 1 && <SetupStep deal={deal} />}
@@ -67,7 +71,16 @@ export function DealDetail() {
         {currentStep === 4 && <PricingStep deal={deal} />}
         {currentStep === 5 && <ReviewStep deal={deal} navigateToStep={navigateToStep} onReadiness={(b) => setReviewBlockers(b)} override={reviewOverride} setOverride={setReviewOverride} />}
         {currentStep === 6 && <ApprovalStep deal={deal} />}
-        {currentStep === 7 && <SummaryStep deal={deal} />}
+        {currentStep === 7 && (summaryUnlocked
+          ? <SummaryStep deal={deal} />
+          : <div className="max-w-2xl mx-auto card p-8 text-center">
+              <Clock className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
+              <h2 className="text-lg font-semibold text-foreground mb-1">Summary locked</h2>
+              <p className="text-sm text-muted-foreground mb-4">Submit this deal for approval to unlock the proposal summary.</p>
+              <button onClick={() => navigateToStep(6)} className="btn-primary inline-flex items-center gap-2">
+                <ChevronRight className="w-4 h-4" /> Go to Approve
+              </button>
+            </div>)}
 
         <div className="flex items-center justify-between mt-8 pt-6 border-t border-border">
           <button
@@ -84,18 +97,30 @@ export function DealDetail() {
             {currentStep > 1 ? STEPS[currentStep - 2].label : "Previous"}
           </button>
 
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            Step {currentStep} of {STEPS.length}
+          <div className="flex flex-col items-center gap-1 text-sm text-muted-foreground">
+            <span>Step {currentStep} of {STEPS.length}</span>
+            {summaryGated && (
+              <span id="summary-gate-hint" className="text-[11px] font-medium text-amber-700 inline-flex items-center gap-1">
+                <Clock className="w-3 h-3" /> Click Submit for Approval to unlock the Summary
+              </span>
+            )}
           </div>
 
           {currentStep < STEPS.length ? (
             <button
-              onClick={() => !reviewBlocked && navigateToStep(Math.min(STEPS.length, currentStep + 1))}
-              disabled={reviewBlocked}
-              title={reviewBlocked ? `Resolve ${reviewBlockers} blocker${reviewBlockers > 1 ? "s" : ""} or override to continue` : undefined}
+              onClick={() => !advanceBlocked && navigateToStep(Math.min(STEPS.length, currentStep + 1))}
+              disabled={advanceBlocked}
+              aria-describedby={summaryGated ? "summary-gate-hint" : undefined}
+              title={
+                summaryGated
+                  ? "Click Submit for Approval first to unlock the Summary."
+                  : reviewBlocked
+                    ? `Resolve ${reviewBlockers} blocker${reviewBlockers > 1 ? "s" : ""} or override to continue`
+                    : undefined
+              }
               className={cn(
                 "flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-medium transition-all",
-                reviewBlocked
+                advanceBlocked
                   ? "bg-muted text-muted-foreground cursor-not-allowed"
                   : "bg-primary text-primary-foreground hover:bg-primary/90"
               )}
@@ -1470,12 +1495,12 @@ function PricingOptionsDrawer({ deal, open, onClose }: { deal: any; open: boolea
   );
 }
 
-function DealBanner({ deal, currentStep, navigateToStep }: { deal: any; currentStep: number; navigateToStep: (n: number) => void }) {
+function DealBanner({ deal, currentStep, navigateToStep, summaryUnlocked }: { deal: any; currentStep: number; navigateToStep: (n: number) => void; summaryUnlocked: boolean }) {
   const { data: approvals } = useDealApprovals(deal.id);
   const { data: publishedSets } = usePromptSets({ status: "published", serviceLine: deal.serviceLine });
   const [moreOpen, setMoreOpen] = useState(false);
 
-  const pendingApprovals = (approvals || []).filter((a: any) => a.status === "pending").length;
+  const pendingApprovals = (approvals || []).filter((a: any) => a.status === "pending" || a.status === "pending_lead_review" || a.status === "pending_bu_approval").length;
   const targetMargin = 35;
   const marginVal = parseFloat(deal.marginPercent || 0);
   const marginDelta = marginVal - targetMargin;
@@ -1613,12 +1638,14 @@ function DealBanner({ deal, currentStep, navigateToStep }: { deal: any; currentS
             {STEPS.map((step) => {
               const isDone = step.num < currentStep;
               const isActive = step.num === currentStep;
+              const isLocked = step.num === 7 && !summaryUnlocked;
               return (
                 <button
                   key={step.num}
-                  onClick={() => navigateToStep(step.num)}
-                  className="group relative flex flex-col items-center gap-1.5"
-                  title={`Step ${step.num}: ${step.label}`}
+                  onClick={() => { if (!isLocked) navigateToStep(step.num); }}
+                  disabled={isLocked}
+                  className={cn("group relative flex flex-col items-center gap-1.5", isLocked && "cursor-not-allowed opacity-50")}
+                  title={isLocked ? "Submit for Approval first to unlock the Summary" : `Step ${step.num}: ${step.label}`}
                 >
                   <span
                     className={cn(
@@ -2048,13 +2075,30 @@ function ApprovalStep({ deal }: { deal: any }) {
   const [reviewComment, setReviewComment] = useState("");
   const canApprove = hasPermission("approveDeals");
 
-  const handleDecision = (approvalId: number, status: "approved" | "rejected") => {
+  const handleAdvanceToBu = (approval: any) => {
+    const reviewerName = persona?.name || approval.approverName || "Service Line Lead";
+    const stamp = `[Stage 1 — Lead Review by ${reviewerName}] ${reviewComment || "Approved for BU sign-off"}`;
+    const merged = approval.comments ? `${approval.comments}\n${stamp}` : stamp;
     updateApproval.mutate({
-      id: approvalId,
+      id: approval.id,
       data: {
-        status,
-        comments: reviewComment || `${status === "approved" ? "Approved" : "Rejected"} by ${persona?.name || "Reviewer"}`,
+        status: "pending_bu_approval",
+        approverRole: "BU Approver",
+        approverName: "Business Unit Approver",
+        comments: merged,
       },
+    });
+    setReviewComment("");
+  };
+
+  const handleDecision = (approval: any, status: "approved" | "rejected") => {
+    const reviewerName = persona?.name || approval.approverName || "Reviewer";
+    const stageLabel = approval.status === "pending_bu_approval" ? "Stage 2 — BU Approval" : "Stage 1 — Lead Review";
+    const stamp = `[${stageLabel} ${status === "approved" ? "approved" : "rejected"} by ${reviewerName}] ${reviewComment || ""}`.trim();
+    const merged = approval.comments ? `${approval.comments}\n${stamp}` : stamp;
+    updateApproval.mutate({
+      id: approval.id,
+      data: { status, comments: merged },
     });
     setReviewComment("");
   };
@@ -2075,21 +2119,28 @@ function ApprovalStep({ deal }: { deal: any }) {
             <p className="text-sm text-muted-foreground">No approval requests submitted yet.</p>
             {hasPermission("editDeals") && (
               <button
-                disabled={blocked}
+                disabled={blocked || submitApproval.isPending}
                 title={blocked ? "Resolve the Intapp conflict above before submitting." : ""}
                 className="btn-primary mt-4 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-2"
                 onClick={() => {
+                  if (submitApproval.isPending) return;
                   if (!screening) runScreen.mutate({ dealId: deal.id, userName: persona?.name });
-                  submitApproval.mutate({ dealId: deal.id, data: { approverName: "Practice Leader", approverRole: "Service Line Lead", status: "pending", notes: "Auto-submitted for review", submittedBy: persona?.name } });
+                  submitApproval.mutate({ dealId: deal.id, data: { approverName: "Sarah Chen", approverRole: "Service Line Lead", status: "pending_lead_review", notes: "Stage 1 of 2 — awaiting Service Line Lead review", submittedBy: persona?.name } });
                 }}>
                 {blocked && <ShieldAlert className="w-4 h-4" />}
-                {blocked ? "Blocked by Intapp conflict" : "Submit for Approval"}
+                {submitApproval.isPending ? "Submitting…" : blocked ? "Blocked by Intapp conflict" : "Submit for Approval"}
               </button>
             )}
           </div>
         ) : (
           <div className="space-y-4">
-            {(approvals || []).map((approval: any) => (
+            {(approvals || []).map((approval: any) => {
+              const isLeadStage = approval.status === "pending_lead_review" || approval.status === "pending";
+              const isBuStage = approval.status === "pending_bu_approval";
+              const isFinal = approval.status === "approved" || approval.status === "rejected";
+              const stage1State = isLeadStage ? "active" : "done";
+              const stage2State = isBuStage ? "active" : isFinal ? (approval.status === "approved" ? "done" : "rejected") : "pending";
+              return (
               <div key={approval.id} className="border border-border rounded-xl p-5">
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center gap-3">
@@ -2106,6 +2157,37 @@ function ApprovalStep({ deal }: { deal: any }) {
                     </div>
                   </div>
                   <span className={`badge ${getStatusColor(approval.status)}`}>{getStatusLabel(approval.status)}</span>
+                </div>
+
+                {/* Two-stage approval tracker */}
+                <div className="flex items-center gap-3 mb-4 p-3 rounded-lg bg-muted/40 border border-border">
+                  <div className="flex items-center gap-2">
+                    <div className={cn("w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold border-2",
+                      stage1State === "done" && "bg-emerald-600 text-white border-emerald-600",
+                      stage1State === "active" && "bg-amber-500 text-white border-amber-500 animate-pulse",
+                    )}>
+                      {stage1State === "done" ? <Check className="w-3.5 h-3.5" /> : "1"}
+                    </div>
+                    <div className="text-xs">
+                      <div className="font-semibold text-foreground">Lead Review</div>
+                      <div className="text-muted-foreground">Service Line Lead</div>
+                    </div>
+                  </div>
+                  <div className={cn("flex-1 h-0.5", stage1State === "done" ? "bg-emerald-500" : "bg-border border-t border-dashed")} />
+                  <div className="flex items-center gap-2">
+                    <div className={cn("w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold border-2",
+                      stage2State === "done" && "bg-emerald-600 text-white border-emerald-600",
+                      stage2State === "active" && "bg-violet-600 text-white border-violet-600 animate-pulse",
+                      stage2State === "rejected" && "bg-rose-600 text-white border-rose-600",
+                      stage2State === "pending" && "bg-background text-muted-foreground border-border",
+                    )}>
+                      {stage2State === "done" ? <Check className="w-3.5 h-3.5" /> : stage2State === "rejected" ? <XCircle className="w-3.5 h-3.5" /> : "2"}
+                    </div>
+                    <div className="text-xs">
+                      <div className="font-semibold text-foreground">BU Approval</div>
+                      <div className="text-muted-foreground">Business Unit Approver</div>
+                    </div>
+                  </div>
                 </div>
 
                 {approval.aiNarrative && (
@@ -2132,26 +2214,37 @@ function ApprovalStep({ deal }: { deal: any }) {
                   </div>
                 )}
 
-                {canApprove && approval.status === "pending" && (
+                {canApprove && (isLeadStage || isBuStage) && (
                   <div className="mt-4 pt-4 border-t border-border">
-                    <label className="label mb-2">Review Comments (optional)</label>
+                    <label className="label mb-2">{isLeadStage ? "Lead Review Comments (optional)" : "BU Approval Comments (optional)"}</label>
                     <textarea
                       value={reviewComment}
                       onChange={(e) => setReviewComment(e.target.value)}
                       className="input-field min-h-[80px] resize-y mb-3"
-                      placeholder="Add comments about your decision..."
+                      placeholder={isLeadStage ? "Notes for the BU Approver..." : "Final approval notes..."}
                     />
                     <div className="flex items-center gap-3">
+                      {isLeadStage ? (
+                        <button
+                          onClick={() => handleAdvanceToBu(approval)}
+                          disabled={updateApproval.isPending}
+                          className="flex items-center gap-2 px-5 py-2.5 rounded-lg text-white text-sm font-medium bg-violet-600 hover:bg-violet-700 transition-colors"
+                        >
+                          <ChevronRight className="w-4 h-4" />
+                          Approve & Send to BU
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => handleDecision(approval, "approved")}
+                          disabled={updateApproval.isPending}
+                          className="flex items-center gap-2 px-5 py-2.5 rounded-lg text-white text-sm font-medium bg-emerald-600 hover:bg-emerald-700 transition-colors"
+                        >
+                          <CheckCircle className="w-4 h-4" />
+                          Final Approve
+                        </button>
+                      )}
                       <button
-                        onClick={() => handleDecision(approval.id, "approved")}
-                        disabled={updateApproval.isPending}
-                        className="flex items-center gap-2 px-5 py-2.5 rounded-lg text-white text-sm font-medium bg-emerald-600 hover:bg-emerald-700 transition-colors"
-                      >
-                        <CheckCircle className="w-4 h-4" />
-                        Approve Deal
-                      </button>
-                      <button
-                        onClick={() => handleDecision(approval.id, "rejected")}
+                        onClick={() => handleDecision(approval, "rejected")}
                         disabled={updateApproval.isPending}
                         className="flex items-center gap-2 px-5 py-2.5 rounded-lg text-white text-sm font-medium bg-red-600 hover:bg-red-700 transition-colors"
                       >
@@ -2164,10 +2257,11 @@ function ApprovalStep({ deal }: { deal: any }) {
 
                 <div className="flex items-center gap-4 mt-3 pt-3 border-t border-border">
                   <span className="text-xs text-muted-foreground">Submitted: {new Date(approval.submittedAt).toLocaleDateString()}</span>
-                  {approval.decidedAt && <span className="text-xs text-muted-foreground">Decided: {new Date(approval.decidedAt).toLocaleDateString()}</span>}
+                  {approval.decidedAt && isFinal && <span className="text-xs text-muted-foreground">Decided: {new Date(approval.decidedAt).toLocaleDateString()}</span>}
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

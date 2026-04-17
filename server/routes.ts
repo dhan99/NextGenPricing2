@@ -1395,20 +1395,59 @@ export function registerRoutes(app: Express) {
   });
 
   app.patch("/api/approvals/:id", async (req: Request, res: Response) => {
-    const [updated] = await db.update(approvals).set({
-      ...req.body,
-      decidedAt: new Date(),
-    }).where(eq(approvals.id, parseInt(req.params.id))).returning();
+    const id = parseInt(req.params.id);
+    const existing = await db.query.approvals.findFirst({ where: eq(approvals.id, id) });
+    if (!existing) return res.status(404).json({ error: "approval_not_found" });
 
-    if (updated && updated.dealId && (req.body.status === "approved" || req.body.status === "rejected")) {
-      await db.update(deals).set({ status: req.body.status }).where(eq(deals.id, updated.dealId));
-      await db.insert(activityLog).values({
-        dealId: updated.dealId,
-        action: `deal_${req.body.status}`,
-        description: `Deal ${req.body.status} by ${updated.approverName || "reviewer"}`,
-        userName: updated.approverName || "System",
-      });
-      autoPushDeal(updated.dealId, ["status"], updated.approverName || undefined).catch(() => {});
+    // Enforce stage transition graph:
+    //   pending_lead_review | pending  ->  pending_bu_approval | approved | rejected
+    //   pending_bu_approval            ->  approved | rejected
+    //   approved | rejected            ->  (terminal — no further status changes)
+    const next = req.body.status;
+    if (next && next !== existing.status) {
+      const allowed: Record<string, string[]> = {
+        pending: ["pending_bu_approval", "approved", "rejected"],
+        pending_lead_review: ["pending_bu_approval", "approved", "rejected"],
+        pending_bu_approval: ["approved", "rejected"],
+        approved: [],
+        rejected: [],
+      };
+      const ok = (allowed[existing.status] || []).includes(next);
+      if (!ok) {
+        return res.status(409).json({
+          error: "illegal_approval_transition",
+          message: `Cannot move approval from "${existing.status}" to "${next}".`,
+          from: existing.status,
+          to: next,
+        });
+      }
+    }
+
+    const isFinal = next === "approved" || next === "rejected";
+    const patch: any = { ...req.body };
+    if (isFinal) patch.decidedAt = new Date();
+
+    const [updated] = await db.update(approvals).set(patch)
+      .where(eq(approvals.id, id)).returning();
+
+    if (updated && updated.dealId) {
+      if (isFinal) {
+        await db.update(deals).set({ status: req.body.status }).where(eq(deals.id, updated.dealId));
+        await db.insert(activityLog).values({
+          dealId: updated.dealId,
+          action: `deal_${req.body.status}`,
+          description: `Deal ${req.body.status} by ${updated.approverName || "reviewer"}`,
+          userName: updated.approverName || "System",
+        });
+        autoPushDeal(updated.dealId, ["status"], updated.approverName || undefined).catch(() => {});
+      } else if (req.body.status === "pending_bu_approval") {
+        await db.insert(activityLog).values({
+          dealId: updated.dealId,
+          action: "approval_advanced",
+          description: `Lead review complete — advanced to BU Approver`,
+          userName: req.body.userName || updated.approverName || "System",
+        });
+      }
     }
 
     res.json(updated);
