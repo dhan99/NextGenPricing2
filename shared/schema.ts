@@ -180,6 +180,95 @@ export const changeOrders = pgTable("change_orders", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+// ============ DYNAMICS 365 SIMULATION (persistent) ============
+export const dynamicsOwners = pgTable("dynamics_owners", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  email: text("email").notNull(),
+  quota: decimal("quota", { precision: 14, scale: 2 }).default("2500000"),
+});
+
+export const dynamicsAccounts = pgTable("dynamics_accounts", {
+  id: serial("id").primaryKey(),
+  dynamicsId: text("dynamics_id").notNull().unique(),
+  accountNumber: text("account_number").notNull().unique(),
+  dealpadClientId: integer("dealpad_client_id").references(() => clients.id),
+  name: text("name").notNull(),
+  industry: text("industry"),
+  industryCode: text("industry_code"),
+  segment: text("segment"),
+  annualRevenue: decimal("annual_revenue", { precision: 16, scale: 2 }).default("0"),
+  numberOfEmployees: integer("number_of_employees").default(0),
+  ownerName: text("owner_name"),
+  ownerEmail: text("owner_email"),
+  parentAccount: text("parent_account"),
+  contactName: text("contact_name"),
+  contactTitle: text("contact_title"),
+  contactEmail: text("contact_email"),
+  contactPhone: text("contact_phone"),
+  billingStreet: text("billing_street"),
+  billingCity: text("billing_city"),
+  billingState: text("billing_state"),
+  billingZip: text("billing_zip"),
+  billingCountry: text("billing_country").default("USA"),
+  relationshipType: text("relationship_type").default("Customer"),
+  customerSince: text("customer_since"),
+  syncStatus: text("sync_status").default("synced"),
+  lastSyncedAt: timestamp("last_synced_at").defaultNow(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const dynamicsOpportunities = pgTable("dynamics_opportunities", {
+  id: serial("id").primaryKey(),
+  dynamicsId: text("dynamics_id").notNull().unique(),
+  opportunityNumber: text("opportunity_number").notNull().unique(),
+  dealpadDealId: integer("dealpad_deal_id").references(() => deals.id),
+  dynamicsAccountId: integer("dynamics_account_id").references(() => dynamicsAccounts.id),
+  name: text("name").notNull(),
+  accountName: text("account_name"),
+  estimatedValue: decimal("estimated_value", { precision: 14, scale: 2 }).default("0"),
+  actualValue: decimal("actual_value", { precision: 14, scale: 2 }),
+  stage: text("stage").default("Qualify"),
+  probability: integer("probability").default(20),
+  estimatedCloseDate: text("estimated_close_date"),
+  actualCloseDate: text("actual_close_date"),
+  ownerName: text("owner_name"),
+  salesProcess: text("sales_process").default("Armanino NextGenApp Sales Process"),
+  forecastCategory: text("forecast_category").default("Pipeline"),
+  rating: text("rating").default("Warm"),
+  syncStatus: text("sync_status").default("synced"),
+  syncDirection: text("sync_direction").default("bidirectional"),
+  lastPushedAt: timestamp("last_pushed_at"),
+  lastPulledAt: timestamp("last_pulled_at").defaultNow(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const dynamicsSyncLog = pgTable("dynamics_sync_log", {
+  id: serial("id").primaryKey(),
+  direction: text("direction").notNull(),
+  entity: text("entity").notNull(),
+  entityName: text("entity_name").notNull(),
+  entityRefId: integer("entity_ref_id"),
+  action: text("action").notNull(),
+  fields: jsonb("fields"),
+  status: text("status").default("success"),
+  message: text("message"),
+  actorName: text("actor_name"),
+  trigger: text("trigger").default("manual"),
+  timestamp: timestamp("timestamp").defaultNow().notNull(),
+});
+
+export const dynamicsSettings = pgTable("dynamics_settings", {
+  id: serial("id").primaryKey(),
+  autoPushEnabled: boolean("auto_push_enabled").default(false),
+  autoPushOnStageChange: boolean("auto_push_on_stage_change").default(true),
+  autoPushOnFeeChange: boolean("auto_push_on_fee_change").default(true),
+  nightlyBatchEnabled: boolean("nightly_batch_enabled").default(true),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
 export const dealsRelations = relations(deals, ({ one, many }) => ({
   client: one(clients, { fields: [deals.clientId], references: [clients.id] }),
   scopeItems: many(dealScopeItems),

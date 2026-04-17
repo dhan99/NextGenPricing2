@@ -101,7 +101,7 @@ async function recalcPricingFromScope(dealId: number) {
   await db.delete(scenarios).where(eq(scenarios.dealId, dealId));
 }
 
-import { registerDynamicsRoutes } from "./dynamics";
+import { registerDynamicsRoutes, autoPushDeal } from "./dynamics";
 
 export function registerRoutes(app: Express) {
   registerDynamicsRoutes(app);
@@ -201,9 +201,13 @@ export function registerRoutes(app: Express) {
       .where(eq(deals.id, dealId))
       .returning();
     if (!updated) return res.status(404).json({ error: "Deal not found" });
+    const changedFields = Object.keys(req.body || {});
     if (req.body.complexity) {
       await recalcPricingFromScope(dealId);
+      // Recalc changes derived totals; mark them changed so auto-push fee trigger fires
+      if (!changedFields.includes("totalFee")) changedFields.push("totalFee", "totalCost", "totalHours");
     }
+    autoPushDeal(dealId, changedFields, req.body?.userName).catch(() => {});
     res.json(updated);
   });
 
@@ -391,6 +395,7 @@ export function registerRoutes(app: Express) {
       userName: req.body.userName || "System",
     });
 
+    autoPushDeal(dealId, ["totalFee", "totalCost", "marginPercent"], req.body?.userName).catch(() => {});
     res.json({ success: true, factor, totalFee: calcFee, totalCost: calcCost, totalHours: calcHours });
   });
 
@@ -670,6 +675,7 @@ export function registerRoutes(app: Express) {
     }).returning();
 
     await db.update(deals).set({ status: "submitted" }).where(eq(deals.id, dealId));
+    autoPushDeal(dealId, ["status"], req.body?.userName).catch(() => {});
 
     await db.insert(activityLog).values({
       dealId,
@@ -695,6 +701,7 @@ export function registerRoutes(app: Express) {
         description: `Deal ${req.body.status} by ${updated.approverName || "reviewer"}`,
         userName: updated.approverName || "System",
       });
+      autoPushDeal(updated.dealId, ["status"], updated.approverName || undefined).catch(() => {});
     }
 
     res.json(updated);

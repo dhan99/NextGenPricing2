@@ -212,6 +212,90 @@ async function pushSchema() {
       approved_at TIMESTAMP,
       created_at TIMESTAMP DEFAULT NOW() NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS dynamics_owners (
+      id SERIAL PRIMARY KEY,
+      name TEXT NOT NULL,
+      email TEXT NOT NULL,
+      quota DECIMAL(14,2) DEFAULT '2500000'
+    );
+    CREATE TABLE IF NOT EXISTS dynamics_accounts (
+      id SERIAL PRIMARY KEY,
+      dynamics_id TEXT NOT NULL UNIQUE,
+      account_number TEXT NOT NULL UNIQUE,
+      dealpad_client_id INTEGER REFERENCES clients(id),
+      name TEXT NOT NULL,
+      industry TEXT, industry_code TEXT, segment TEXT,
+      annual_revenue DECIMAL(16,2) DEFAULT '0',
+      number_of_employees INTEGER DEFAULT 0,
+      owner_name TEXT, owner_email TEXT, parent_account TEXT,
+      contact_name TEXT, contact_title TEXT, contact_email TEXT, contact_phone TEXT,
+      billing_street TEXT, billing_city TEXT, billing_state TEXT, billing_zip TEXT, billing_country TEXT DEFAULT 'USA',
+      relationship_type TEXT DEFAULT 'Customer',
+      customer_since TEXT,
+      sync_status TEXT DEFAULT 'synced',
+      last_synced_at TIMESTAMP DEFAULT NOW(),
+      created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+      updated_at TIMESTAMP DEFAULT NOW() NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS dynamics_opportunities (
+      id SERIAL PRIMARY KEY,
+      dynamics_id TEXT NOT NULL UNIQUE,
+      opportunity_number TEXT NOT NULL UNIQUE,
+      dealpad_deal_id INTEGER REFERENCES deals(id) UNIQUE,
+      dynamics_account_id INTEGER REFERENCES dynamics_accounts(id),
+      name TEXT NOT NULL, account_name TEXT,
+      estimated_value DECIMAL(14,2) DEFAULT '0',
+      actual_value DECIMAL(14,2),
+      stage TEXT DEFAULT 'Qualify',
+      probability INTEGER DEFAULT 20,
+      estimated_close_date TEXT, actual_close_date TEXT,
+      owner_name TEXT,
+      sales_process TEXT DEFAULT 'Armanino NextGenApp Sales Process',
+      forecast_category TEXT DEFAULT 'Pipeline',
+      rating TEXT DEFAULT 'Warm',
+      sync_status TEXT DEFAULT 'synced',
+      sync_direction TEXT DEFAULT 'bidirectional',
+      last_pushed_at TIMESTAMP,
+      last_pulled_at TIMESTAMP DEFAULT NOW(),
+      created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+      updated_at TIMESTAMP DEFAULT NOW() NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS dynamics_sync_log (
+      id SERIAL PRIMARY KEY,
+      direction TEXT NOT NULL,
+      entity TEXT NOT NULL,
+      entity_name TEXT NOT NULL,
+      entity_ref_id INTEGER,
+      action TEXT NOT NULL,
+      fields JSONB,
+      status TEXT DEFAULT 'success',
+      message TEXT,
+      actor_name TEXT,
+      trigger TEXT DEFAULT 'manual',
+      timestamp TIMESTAMP DEFAULT NOW() NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS dynamics_settings (
+      id SERIAL PRIMARY KEY,
+      auto_push_enabled BOOLEAN DEFAULT FALSE,
+      auto_push_on_stage_change BOOLEAN DEFAULT TRUE,
+      auto_push_on_fee_change BOOLEAN DEFAULT TRUE,
+      nightly_batch_enabled BOOLEAN DEFAULT TRUE,
+      updated_at TIMESTAMP DEFAULT NOW() NOT NULL
+    );
+  `);
+
+  // Backfill: ensure unique constraint on dealpad_deal_id even if table pre-existed
+  await db.execute(sql`
+    DO $$ BEGIN
+      IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = 'dynamics_opportunities_dealpad_deal_id_unique'
+      ) THEN
+        BEGIN
+          ALTER TABLE dynamics_opportunities ADD CONSTRAINT dynamics_opportunities_dealpad_deal_id_unique UNIQUE (dealpad_deal_id);
+        EXCEPTION WHEN OTHERS THEN NULL;
+        END;
+      END IF;
+    END $$;
   `);
 }
 

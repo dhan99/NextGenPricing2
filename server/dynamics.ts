@@ -1,229 +1,560 @@
 import type { Request, Response, Express } from "express";
 import { db } from "./db";
-import { clients, deals } from "../shared/schema";
-import { eq } from "drizzle-orm";
+import {
+  clients, deals, dynamicsAccounts, dynamicsOpportunities, dynamicsSyncLog,
+  dynamicsSettings, dynamicsOwners,
+} from "../shared/schema";
+import { eq, desc, sql } from "drizzle-orm";
 
-type SyncStatus = "synced" | "pending" | "conflict" | "queued";
-type SyncDirection = "inbound" | "outbound" | "bidirectional";
-
-interface DynamicsAccount {
-  dynamicsId: string;
-  accountNumber: string;
-  dealpadClientId: number | null;
-  name: string;
-  industry: string;
-  industryCode: string;
-  segment: string;
-  annualRevenue: number;
-  numberOfEmployees: number;
-  ownerName: string;
-  ownerEmail: string;
-  parentAccount: string | null;
-  primaryContact: { name: string; title: string; email: string; phone: string };
-  billingAddress: { street: string; city: string; state: string; zip: string; country: string };
-  relationshipType: "Customer" | "Prospect" | "Partner";
-  customerSince: string;
-  syncStatus: SyncStatus;
-  lastSyncedAt: string;
-  source: "Dynamics 365";
-}
-
-interface DynamicsOpportunity {
-  dynamicsId: string;
-  opportunityNumber: string;
-  dealpadDealId: number | null;
-  name: string;
-  accountName: string;
-  estimatedValue: number;
-  actualValue: number | null;
-  stage: "Qualify" | "Develop" | "Propose" | "Close" | "Won" | "Lost";
-  probability: number;
-  estimatedCloseDate: string;
-  ownerName: string;
-  salesProcess: string;
-  forecastCategory: "Pipeline" | "Best Case" | "Commit" | "Closed";
-  rating: "Hot" | "Warm" | "Cold";
-  syncStatus: SyncStatus;
-  syncDirection: SyncDirection;
-  lastPushedAt: string;
-  lastPulledAt: string;
-}
-
-interface SyncEvent {
-  id: number;
-  timestamp: string;
-  direction: SyncDirection;
-  entity: "Account" | "Opportunity" | "Contact";
-  entityName: string;
-  action: string;
-  fields?: string[];
-  status: "success" | "failure" | "warning";
-  message: string;
-}
-
-let nextSyncEventId = 1;
-const syncLog: SyncEvent[] = [];
-
-function uuid(seed: string): string {
-  let h = 0;
-  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
-  const hex = (n: number) => n.toString(16).padStart(8, "0");
-  return `${hex(h)}-${hex(h ^ 0x1234)}-${hex(h ^ 0xabcd).slice(0, 4)}-${hex(h ^ 0xbeef).slice(0, 4)}-${hex(h ^ 0xcafebabe).slice(0, 12)}`;
-}
-
-function recordEvent(e: Omit<SyncEvent, "id" | "timestamp">) {
-  syncLog.unshift({ id: nextSyncEventId++, timestamp: new Date().toISOString(), ...e });
-  if (syncLog.length > 200) syncLog.length = 200;
-}
-
-const INDUSTRY_CODES: Record<string, string> = {
-  "Technology": "541512",
-  "Manufacturing": "333000",
-  "Healthcare": "621000",
-  "Financial Services": "522000",
-  "Retail": "445000",
-  "Real Estate": "531000",
-  "Professional Services": "541000",
-  "Consumer Goods": "311000",
-  "Energy": "211000",
-  "Media": "511000",
-};
-
-const OWNERS = [
-  { name: "Jennifer Walsh", email: "jwalsh@armanino.com" },
-  { name: "Marcus Chen", email: "mchen@armanino.com" },
-  { name: "Priya Anand", email: "panand@armanino.com" },
-  { name: "Tom Becker", email: "tbecker@armanino.com" },
-  { name: "Lisa Hartmann", email: "lhartmann@armanino.com" },
-];
-
-const STAGES: DynamicsOpportunity["stage"][] = ["Qualify", "Develop", "Propose", "Close"];
+const STAGES = ["Qualify", "Develop", "Propose", "Close", "Won", "Lost"] as const;
 const STAGE_PROBABILITY: Record<string, number> = {
   Qualify: 20, Develop: 40, Propose: 65, Close: 85, Won: 100, Lost: 0,
 };
 
-function pick<T>(arr: T[], idx: number): T { return arr[idx % arr.length]; }
+const INDUSTRY_CODES: Record<string, string> = {
+  "Technology": "541512", "Manufacturing": "333000", "Healthcare": "621000",
+  "Financial Services": "522000", "Retail": "445000", "Real Estate": "531000",
+  "Professional Services": "541000", "Consumer Goods": "311000",
+  "Energy": "211000", "Media": "511000",
+};
+
+const SEED_OWNERS = [
+  { name: "Jennifer Walsh", email: "jwalsh@armanino.com", quota: "2500000" },
+  { name: "Marcus Chen", email: "mchen@armanino.com", quota: "2500000" },
+  { name: "Priya Anand", email: "panand@armanino.com", quota: "2500000" },
+  { name: "Tom Becker", email: "tbecker@armanino.com", quota: "2500000" },
+  { name: "Lisa Hartmann", email: "lhartmann@armanino.com", quota: "2500000" },
+];
+
+function uuid(seed: string): string {
+  let h = 0;
+  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
+  const hex = (n: number, len = 8) => n.toString(16).padStart(len, "0").slice(0, len);
+  return `${hex(h)}-${hex(h ^ 0x1234, 4)}-${hex(h ^ 0xabcd, 4)}-${hex(h ^ 0xbeef, 4)}-${hex(h ^ 0xcafebabe, 12)}`;
+}
+
 function rnd(seed: number, lo: number, hi: number): number {
   const x = Math.sin(seed * 99991) * 10000;
   const f = x - Math.floor(x);
   return Math.floor(lo + f * (hi - lo));
 }
 
-async function buildAccounts(): Promise<DynamicsAccount[]> {
-  const rows = await db.select().from(clients);
-  return rows.map((c, i) => {
-    const industry = c.industry || pick(Object.keys(INDUSTRY_CODES), i);
-    const owner = pick(OWNERS, i);
-    const revenueMillions = c.revenueSize?.includes("$") ? parseFloat(c.revenueSize.replace(/[^0-9.]/g, "")) || 50 : 50 + rnd(c.id, 10, 500);
-    return {
-      dynamicsId: uuid(`acct-${c.id}`),
-      accountNumber: `ACC-${String(c.id).padStart(6, "0")}`,
-      dealpadClientId: c.id,
-      name: c.name,
-      industry,
-      industryCode: INDUSTRY_CODES[industry] || "541000",
-      segment: c.segment || (revenueMillions > 250 ? "Enterprise" : revenueMillions > 50 ? "Mid-Market" : "SMB"),
-      annualRevenue: Math.round(revenueMillions * 1_000_000),
-      numberOfEmployees: rnd(c.id + 1, 50, 5000),
-      ownerName: owner.name,
-      ownerEmail: owner.email,
-      parentAccount: null,
-      primaryContact: {
-        name: c.contactName || `Contact ${i + 1}`,
-        title: pick(["CFO", "Controller", "VP Finance", "Director of Accounting", "CEO"], i),
-        email: c.contactEmail || `contact${i}@example.com`,
-        phone: `(415) 555-${String(1000 + rnd(c.id, 100, 9999)).slice(0, 4)}`,
-      },
-      billingAddress: {
-        street: `${rnd(c.id, 100, 999)} Market St`,
-        city: c.region?.split(",")[0] || "San Francisco",
-        state: c.region?.split(",")[1]?.trim() || "CA",
-        zip: String(94000 + rnd(c.id, 0, 999)).padStart(5, "0"),
-        country: "USA",
-      },
-      relationshipType: (c.relationshipYears || 0) > 0 ? "Customer" : "Prospect",
-      customerSince: `${2026 - (c.relationshipYears || 1)}-01-15`,
-      syncStatus: "synced",
-      lastSyncedAt: new Date(Date.now() - rnd(c.id, 60, 86400) * 1000).toISOString(),
-      source: "Dynamics 365",
-    };
+function pick<T>(arr: T[], idx: number): T { return arr[Math.abs(idx) % arr.length]; }
+
+async function logEvent(e: {
+  direction: "inbound" | "outbound" | "bidirectional";
+  entity: "Account" | "Opportunity" | "Contact" | "System";
+  entityName: string;
+  entityRefId?: number;
+  action: string;
+  fields?: string[];
+  status?: "success" | "failure" | "warning";
+  message: string;
+  actorName?: string;
+  trigger?: "manual" | "auto" | "batch";
+}) {
+  await db.insert(dynamicsSyncLog).values({
+    direction: e.direction, entity: e.entity, entityName: e.entityName,
+    entityRefId: e.entityRefId, action: e.action,
+    fields: e.fields ? (e.fields as any) : null,
+    status: e.status || "success",
+    message: e.message, actorName: e.actorName || "System",
+    trigger: e.trigger || "manual",
   });
 }
 
-async function buildOpportunities(): Promise<DynamicsOpportunity[]> {
-  const dealRows = await db.select().from(deals);
+async function getSettings() {
+  const [s] = await db.select().from(dynamicsSettings).limit(1);
+  if (s) return s;
+  const [created] = await db.insert(dynamicsSettings).values({}).returning();
+  return created;
+}
+
+export async function seedDynamics() {
+  // Idempotent: only seed if empty
+  const [{ count: ownerCount }] = await db.select({ count: sql<number>`count(*)::int` }).from(dynamicsOwners);
+  if (ownerCount === 0) {
+    await db.insert(dynamicsOwners).values(SEED_OWNERS);
+  }
+  await getSettings();
+
+  const [{ count: acctCount }] = await db.select({ count: sql<number>`count(*)::int` }).from(dynamicsAccounts);
   const clientRows = await db.select().from(clients);
-  const clientById = new Map(clientRows.map((c) => [c.id, c]));
 
-  const opps: DynamicsOpportunity[] = dealRows.map((d, i) => {
-    const client = clientById.get(d.clientId);
-    let stage: DynamicsOpportunity["stage"];
-    if (d.status === "won") stage = "Won";
-    else if (d.status === "lost") stage = "Lost";
-    else if (d.status === "approved") stage = "Close";
-    else if (d.status === "submitted") stage = "Propose";
-    else if (d.status === "in_review") stage = "Propose";
-    else if ((d.currentStep || 1) >= 3) stage = "Develop";
-    else stage = "Qualify";
+  if (acctCount === 0 && clientRows.length > 0) {
+    const owners = await db.select().from(dynamicsOwners);
+    for (let i = 0; i < clientRows.length; i++) {
+      const c = clientRows[i];
+      const industry = c.industry || pick(Object.keys(INDUSTRY_CODES), i);
+      const owner = pick(owners, i);
+      const revenueMillions = c.revenueSize?.includes("$")
+        ? parseFloat(c.revenueSize.replace(/[^0-9.]/g, "")) || 50
+        : 50 + rnd(c.id, 10, 500);
+      await db.insert(dynamicsAccounts).values({
+        dynamicsId: uuid(`acct-${c.id}`),
+        accountNumber: `ACC-${String(c.id).padStart(6, "0")}`,
+        dealpadClientId: c.id,
+        name: c.name,
+        industry,
+        industryCode: INDUSTRY_CODES[industry] || "541000",
+        segment: c.segment || (revenueMillions > 250 ? "Enterprise" : revenueMillions > 50 ? "Mid-Market" : "SMB"),
+        annualRevenue: String(Math.round(revenueMillions * 1_000_000)),
+        numberOfEmployees: rnd(c.id + 1, 50, 5000),
+        ownerName: owner.name, ownerEmail: owner.email,
+        contactName: c.contactName || `Contact ${i + 1}`,
+        contactTitle: pick(["CFO", "Controller", "VP Finance", "Director of Accounting", "CEO"], i),
+        contactEmail: c.contactEmail || `contact${i}@example.com`,
+        contactPhone: `(415) 555-${String(1000 + rnd(c.id, 100, 9999)).slice(0, 4)}`,
+        billingStreet: `${rnd(c.id, 100, 999)} Market St`,
+        billingCity: c.region?.split(",")[0] || "San Francisco",
+        billingState: c.region?.split(",")[1]?.trim() || "CA",
+        billingZip: String(94000 + rnd(c.id, 0, 999)).padStart(5, "0"),
+        relationshipType: (c.relationshipYears || 0) > 0 ? "Customer" : "Prospect",
+        customerSince: `${2026 - (c.relationshipYears || 1)}-01-15`,
+      });
+    }
+  }
 
-    const owner = OWNERS.find((o) => o.name === d.pdlName) || pick(OWNERS, i);
-    const fee = parseFloat(d.totalFee || "0");
-    const probability = STAGE_PROBABILITY[stage];
-    const forecastCat: DynamicsOpportunity["forecastCategory"] =
-      stage === "Won" || stage === "Lost" ? "Closed" :
-      probability >= 80 ? "Commit" : probability >= 50 ? "Best Case" : "Pipeline";
+  const [{ count: oppCount }] = await db.select({ count: sql<number>`count(*)::int` }).from(dynamicsOpportunities);
+  if (oppCount === 0) {
+    const dealRows = await db.select().from(deals);
+    const acctRows = await db.select().from(dynamicsAccounts);
+    const acctByClient = new Map(acctRows.map((a) => [a.dealpadClientId, a]));
+    const owners = await db.select().from(dynamicsOwners);
 
-    return {
-      dynamicsId: uuid(`opp-${d.id}`),
-      opportunityNumber: `OPP-${String(d.id).padStart(6, "0")}`,
-      dealpadDealId: d.id,
-      name: d.title,
-      accountName: client?.name || "Unknown",
-      estimatedValue: fee || rnd(d.id, 50000, 750000),
-      actualValue: stage === "Won" ? fee : null,
-      stage,
-      probability,
-      estimatedCloseDate: d.endDate || new Date(Date.now() + rnd(d.id, 30, 180) * 86400 * 1000).toISOString().slice(0, 10),
-      ownerName: owner.name,
-      salesProcess: "Armanino NextGenApp Sales Process",
-      forecastCategory: forecastCat,
-      rating: probability >= 70 ? "Hot" : probability >= 40 ? "Warm" : "Cold",
+    for (let i = 0; i < dealRows.length; i++) {
+      const d = dealRows[i];
+      const acct = acctByClient.get(d.clientId);
+      const stage = inferStage(d);
+      const owner = owners.find((o) => o.name === d.pdlName) || pick(owners, i);
+      const fee = parseFloat(d.totalFee || "0");
+      const probability = STAGE_PROBABILITY[stage];
+
+      await db.insert(dynamicsOpportunities).values({
+        dynamicsId: uuid(`opp-${d.id}`),
+        opportunityNumber: `OPP-${String(d.id).padStart(6, "0")}`,
+        dealpadDealId: d.id,
+        dynamicsAccountId: acct?.id || null,
+        name: d.title,
+        accountName: acct?.name || "Unknown",
+        estimatedValue: String(fee || rnd(d.id, 50000, 750000)),
+        actualValue: stage === "Won" ? String(fee) : null,
+        stage, probability,
+        estimatedCloseDate: d.endDate || new Date(Date.now() + rnd(d.id, 30, 180) * 86400 * 1000).toISOString().slice(0, 10),
+        ownerName: owner.name,
+        forecastCategory: forecastFor(stage, probability),
+        rating: probability >= 70 ? "Hot" : probability >= 40 ? "Warm" : "Cold",
+        lastPushedAt: d.updatedAt || new Date(),
+      });
+    }
+
+    // Dynamics-only opps not yet imported into DealPad
+    const extras = [
+      {
+        dynamicsId: uuid("opp-x1"), opportunityNumber: "OPP-100201",
+        name: "Pacific Logistics Co - Tax Provision Outsourcing", accountName: "Pacific Logistics Co",
+        estimatedValue: "285000", stage: "Qualify", probability: 20,
+        estimatedCloseDate: "2026-09-30", ownerName: "Jennifer Walsh",
+        forecastCategory: "Pipeline", rating: "Warm",
+        syncStatus: "queued", syncDirection: "inbound",
+      },
+      {
+        dynamicsId: uuid("opp-x2"), opportunityNumber: "OPP-100202",
+        name: "Helios Energy Inc - SOX Readiness", accountName: "Helios Energy Inc",
+        estimatedValue: "540000", stage: "Develop", probability: 40,
+        estimatedCloseDate: "2026-08-15", ownerName: "Marcus Chen",
+        forecastCategory: "Best Case", rating: "Hot",
+        syncStatus: "queued", syncDirection: "inbound",
+      },
+      {
+        dynamicsId: uuid("opp-x3"), opportunityNumber: "OPP-100203",
+        name: "Crestwood Holdings - 2026 Annual Audit", accountName: "Crestwood Holdings",
+        estimatedValue: "412000", stage: "Qualify", probability: 20,
+        estimatedCloseDate: "2026-11-01", ownerName: "Priya Anand",
+        forecastCategory: "Pipeline", rating: "Warm",
+        syncStatus: "queued", syncDirection: "inbound",
+      },
+    ];
+    for (const e of extras) {
+      await db.insert(dynamicsOpportunities).values(e as any);
+    }
+  }
+
+  const [{ count: logCount }] = await db.select({ count: sql<number>`count(*)::int` }).from(dynamicsSyncLog);
+  if (logCount === 0) {
+    await logEvent({ direction: "inbound", entity: "System", entityName: "Initial seed",
+      action: "Bootstrapped Dynamics 365 simulation", status: "success",
+      message: "Dynamics 365 PoC simulation initialized with accounts, opportunities, and pipeline data",
+      trigger: "batch" });
+  }
+}
+
+function inferStage(d: any): "Qualify" | "Develop" | "Propose" | "Close" | "Won" | "Lost" {
+  if (d.status === "won") return "Won";
+  if (d.status === "lost") return "Lost";
+  if (d.status === "approved") return "Close";
+  if (d.status === "submitted" || d.status === "in_review") return "Propose";
+  if ((d.currentStep || 1) >= 3) return "Develop";
+  return "Qualify";
+}
+
+function forecastFor(stage: string, probability: number): "Pipeline" | "Best Case" | "Commit" | "Closed" {
+  if (stage === "Won" || stage === "Lost") return "Closed";
+  if (probability >= 80) return "Commit";
+  if (probability >= 50) return "Best Case";
+  return "Pipeline";
+}
+
+// Auto-push hook called from deals routes when a deal changes
+export async function autoPushDeal(dealId: number, changedFields: string[], actorName?: string) {
+  const settings = await getSettings();
+  if (!settings.autoPushEnabled) return;
+
+  const wantsStage = changedFields.some((f) => ["status", "stage", "currentStep"].includes(f));
+  const wantsFee = changedFields.some((f) => ["totalFee", "totalCost", "totalHours", "marginPercent"].includes(f));
+  if (wantsStage && !settings.autoPushOnStageChange) return;
+  if (wantsFee && !settings.autoPushOnFeeChange && !wantsStage) return;
+  if (!wantsStage && !wantsFee) return;
+
+  await pushDealToDynamics(dealId, actorName, "auto");
+}
+
+async function pushDealToDynamics(dealId: number, actorName: string | undefined, trigger: "manual" | "auto") {
+  const deal = await db.query.deals.findFirst({ where: eq(deals.id, dealId) });
+  if (!deal) return { ok: false, reason: "deal not found" };
+  const [opp] = await db.select().from(dynamicsOpportunities).where(eq(dynamicsOpportunities.dealpadDealId, dealId));
+  if (!opp) return { ok: false, reason: "no linked opportunity" };
+
+  const stage = inferStage(deal);
+  const probability = STAGE_PROBABILITY[stage];
+  const forecastCategory = forecastFor(stage, probability);
+  const fee = parseFloat(deal.totalFee || "0");
+
+  await db.update(dynamicsOpportunities).set({
+    estimatedValue: String(fee),
+    actualValue: stage === "Won" ? String(fee) : null,
+    stage, probability, forecastCategory,
+    estimatedCloseDate: deal.endDate || opp.estimatedCloseDate,
+    actualCloseDate: stage === "Won" || stage === "Lost" ? new Date().toISOString().slice(0, 10) : null,
+    lastPushedAt: new Date(), updatedAt: new Date(),
+  }).where(eq(dynamicsOpportunities.id, opp.id));
+
+  await logEvent({
+    direction: "outbound", entity: "Opportunity", entityName: deal.title, entityRefId: opp.id,
+    action: trigger === "auto" ? "Auto-pushed deal updates to D365" : "Manual push to D365",
+    fields: ["estimatedValue", "stage", "probability", "forecastCategory", "estimatedCloseDate"],
+    status: "success", actorName, trigger,
+    message: `Outbound sync (${trigger}): ${deal.title} → D365 ${opp.opportunityNumber} (${stage}, $${fee.toLocaleString()})`,
+  });
+  return { ok: true, opportunityId: opp.id };
+}
+
+export function registerDynamicsRoutes(app: Express) {
+  // Kick off seed asynchronously after server start
+  seedDynamics().catch((e) => console.error("Dynamics seed error:", e));
+
+  // ============ READ ============
+  app.get("/api/dynamics/accounts", async (_req, res) => {
+    const rows = await db.select().from(dynamicsAccounts).orderBy(dynamicsAccounts.name);
+    res.json(rows.map(formatAccount));
+  });
+
+  app.get("/api/dynamics/accounts/:id", async (req, res) => {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) return res.status(400).json({ error: "Invalid id" });
+    const [row] = await db.select().from(dynamicsAccounts).where(eq(dynamicsAccounts.id, id));
+    if (!row) return res.status(404).json({ error: "Not found" });
+    res.json(formatAccount(row));
+  });
+
+  app.get("/api/dynamics/opportunities", async (_req, res) => {
+    const rows = await db.select().from(dynamicsOpportunities).orderBy(desc(dynamicsOpportunities.updatedAt));
+    res.json(rows.map(formatOpp));
+  });
+
+  app.get("/api/dynamics/pipeline", async (_req, res) => {
+    const opps = await db.select().from(dynamicsOpportunities);
+    const owners = await db.select().from(dynamicsOwners);
+    res.json(buildPipelineSummary(opps, owners));
+  });
+
+  app.get("/api/dynamics/sync-log", async (_req, res) => {
+    const rows = await db.select().from(dynamicsSyncLog).orderBy(desc(dynamicsSyncLog.timestamp)).limit(100);
+    res.json(rows);
+  });
+
+  app.get("/api/dynamics/settings", async (_req, res) => {
+    res.json(await getSettings());
+  });
+
+  app.get("/api/dynamics/owners", async (_req, res) => {
+    res.json(await db.select().from(dynamicsOwners).orderBy(dynamicsOwners.name));
+  });
+
+  // ============ WRITE: Settings ============
+  app.patch("/api/dynamics/settings", async (req, res) => {
+    const { autoPushEnabled, autoPushOnStageChange, autoPushOnFeeChange, nightlyBatchEnabled } = req.body || {};
+    const current = await getSettings();
+    const patch: any = { updatedAt: new Date() };
+    if (typeof autoPushEnabled === "boolean") patch.autoPushEnabled = autoPushEnabled;
+    if (typeof autoPushOnStageChange === "boolean") patch.autoPushOnStageChange = autoPushOnStageChange;
+    if (typeof autoPushOnFeeChange === "boolean") patch.autoPushOnFeeChange = autoPushOnFeeChange;
+    if (typeof nightlyBatchEnabled === "boolean") patch.nightlyBatchEnabled = nightlyBatchEnabled;
+    await db.update(dynamicsSettings).set(patch).where(eq(dynamicsSettings.id, current.id));
+    await logEvent({
+      direction: "outbound", entity: "System", entityName: "Integration settings",
+      action: "Updated sync settings",
+      fields: Object.keys(patch).filter((k) => k !== "updatedAt"),
+      message: `Sync settings updated: auto-push=${patch.autoPushEnabled ?? current.autoPushEnabled}`,
+      actorName: req.body?.userName,
+    });
+    const [updated] = await db.select().from(dynamicsSettings).where(eq(dynamicsSettings.id, current.id));
+    res.json(updated);
+  });
+
+  // ============ WRITE: Account edit ============
+  app.patch("/api/dynamics/accounts/:id", async (req, res) => {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) return res.status(400).json({ error: "Invalid id" });
+    const allowed = [
+      "name", "industry", "industryCode", "segment", "annualRevenue", "numberOfEmployees",
+      "ownerName", "ownerEmail", "contactName", "contactTitle", "contactEmail", "contactPhone",
+      "billingStreet", "billingCity", "billingState", "billingZip", "relationshipType",
+    ];
+    const patch: any = { updatedAt: new Date(), lastSyncedAt: new Date() };
+    const changed: string[] = [];
+    for (const k of allowed) {
+      if (req.body?.[k] !== undefined) {
+        patch[k] = typeof req.body[k] === "number" ? String(req.body[k]) : req.body[k];
+        changed.push(k);
+      }
+    }
+    if (changed.length === 0) return res.status(400).json({ error: "No fields to update" });
+    await db.update(dynamicsAccounts).set(patch).where(eq(dynamicsAccounts.id, id));
+    const [updated] = await db.select().from(dynamicsAccounts).where(eq(dynamicsAccounts.id, id));
+    await logEvent({
+      direction: "inbound", entity: "Account", entityName: updated.name, entityRefId: id,
+      action: "Account record edited in D365",
+      fields: changed, status: "success", actorName: req.body?.userName,
+      message: `Inbound sync: ${changed.length} field(s) updated on ${updated.name} from D365`,
+    });
+    res.json(formatAccount(updated));
+  });
+
+  // ============ WRITE: Opportunity edit ============
+  app.patch("/api/dynamics/opportunities/:id", async (req, res) => {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) return res.status(400).json({ error: "Invalid id" });
+    const allowed = ["name", "estimatedValue", "stage", "probability", "estimatedCloseDate",
+                     "ownerName", "forecastCategory", "rating"];
+    const patch: any = { updatedAt: new Date(), lastPulledAt: new Date() };
+    const changed: string[] = [];
+    for (const k of allowed) {
+      if (req.body?.[k] !== undefined) {
+        patch[k] = ["estimatedValue"].includes(k) ? String(req.body[k]) :
+                   k === "probability" ? parseInt(req.body[k]) : req.body[k];
+        changed.push(k);
+      }
+    }
+    if (patch.stage && !patch.probability) {
+      patch.probability = STAGE_PROBABILITY[patch.stage] ?? 20;
+      changed.push("probability");
+    }
+    if (patch.stage || patch.probability) {
+      patch.forecastCategory = forecastFor(patch.stage || "Qualify", patch.probability ?? 20);
+    }
+    await db.update(dynamicsOpportunities).set(patch).where(eq(dynamicsOpportunities.id, id));
+    const [updated] = await db.select().from(dynamicsOpportunities).where(eq(dynamicsOpportunities.id, id));
+    await logEvent({
+      direction: "inbound", entity: "Opportunity", entityName: updated.name, entityRefId: id,
+      action: "Opportunity edited in D365",
+      fields: changed, status: "success", actorName: req.body?.userName,
+      message: `Inbound sync: ${updated.name} updated in D365 (${changed.join(", ")})`,
+    });
+    res.json(formatOpp(updated));
+  });
+
+  // ============ WRITE: Import opportunity → DealPad draft ============
+  app.post("/api/dynamics/opportunities/:id/import", async (req, res) => {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) return res.status(400).json({ error: "Invalid id" });
+    const [opp] = await db.select().from(dynamicsOpportunities).where(eq(dynamicsOpportunities.id, id));
+    if (!opp) return res.status(404).json({ error: "Opportunity not found" });
+    if (opp.dealpadDealId) return res.status(400).json({ error: "Already imported", dealId: opp.dealpadDealId });
+
+    // Find or create matching client
+    let clientId: number | null = null;
+    if (opp.dynamicsAccountId) {
+      const [acct] = await db.select().from(dynamicsAccounts).where(eq(dynamicsAccounts.id, opp.dynamicsAccountId));
+      clientId = acct?.dealpadClientId ?? null;
+    }
+    if (!clientId) {
+      // Try match by name
+      const [matched] = await db.select().from(clients).where(eq(clients.name, opp.accountName || ""));
+      if (matched) clientId = matched.id;
+      else {
+        const [newClient] = await db.insert(clients).values({
+          name: opp.accountName || "Unknown",
+          industry: "Professional Services",
+          segment: "Mid-Market",
+          region: "San Francisco, CA",
+        }).returning();
+        clientId = newClient.id;
+        await logEvent({
+          direction: "inbound", entity: "Account", entityName: newClient.name, entityRefId: newClient.id,
+          action: "Auto-created DealPad client from D365 account",
+          status: "success", actorName: req.body?.userName,
+          message: `Inbound sync: Created DealPad client ${newClient.name} during opportunity import`,
+        });
+      }
+    }
+
+    const dealNumber = `D-${Date.now().toString().slice(-7)}`;
+    const [newDeal] = await db.insert(deals).values({
+      dealNumber,
+      title: opp.name,
+      clientId: clientId!,
+      status: "draft",
+      dealType: "new",
+      totalFee: opp.estimatedValue || "0",
+      endDate: opp.estimatedCloseDate || null,
+      pdlName: opp.ownerName || null,
+      currentStep: 1,
+    }).returning();
+
+    await db.update(dynamicsOpportunities).set({
+      dealpadDealId: newDeal.id,
       syncStatus: "synced",
       syncDirection: "bidirectional",
-      lastPushedAt: new Date(d.updatedAt || Date.now()).toISOString(),
-      lastPulledAt: new Date(Date.now() - rnd(d.id + 7, 60, 7200) * 1000).toISOString(),
-    };
+      lastPulledAt: new Date(),
+      updatedAt: new Date(),
+    }).where(eq(dynamicsOpportunities.id, id));
+
+    await logEvent({
+      direction: "inbound", entity: "Opportunity", entityName: opp.name, entityRefId: id,
+      action: "Imported D365 opportunity as DealPad draft",
+      fields: ["name", "accountName", "estimatedValue", "stage", "estimatedCloseDate", "ownerName"],
+      status: "success", actorName: req.body?.userName,
+      message: `Inbound sync: D365 opportunity ${opp.opportunityNumber} created DealPad deal ${dealNumber}`,
+    });
+
+    res.json({ success: true, dealId: newDeal.id, dealNumber });
   });
 
-  // Add a few "Dynamics-only" opportunities not yet pulled into DealPad
-  const extras: DynamicsOpportunity[] = [
-    {
-      dynamicsId: uuid("opp-x1"), opportunityNumber: "OPP-100201", dealpadDealId: null,
-      name: "Pacific Logistics Co - Tax Provision Outsourcing", accountName: "Pacific Logistics Co",
-      estimatedValue: 285000, actualValue: null, stage: "Qualify", probability: 20,
-      estimatedCloseDate: "2026-09-30", ownerName: "Jennifer Walsh",
-      salesProcess: "Armanino NextGenApp Sales Process", forecastCategory: "Pipeline", rating: "Warm",
-      syncStatus: "queued", syncDirection: "inbound",
-      lastPushedAt: "—", lastPulledAt: new Date(Date.now() - 1800000).toISOString(),
-    },
-    {
-      dynamicsId: uuid("opp-x2"), opportunityNumber: "OPP-100202", dealpadDealId: null,
-      name: "Helios Energy Inc - SOX Readiness", accountName: "Helios Energy Inc",
-      estimatedValue: 540000, actualValue: null, stage: "Develop", probability: 40,
-      estimatedCloseDate: "2026-08-15", ownerName: "Marcus Chen",
-      salesProcess: "Armanino NextGenApp Sales Process", forecastCategory: "Best Case", rating: "Hot",
-      syncStatus: "queued", syncDirection: "inbound",
-      lastPushedAt: "—", lastPulledAt: new Date(Date.now() - 600000).toISOString(),
-    },
-  ];
+  // ============ WRITE: Manual push deal → D365 ============
+  app.post("/api/dynamics/deals/:id/push", async (req, res) => {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) return res.status(400).json({ error: "Invalid id" });
+    const result = await pushDealToDynamics(id, req.body?.userName, "manual");
+    if (!result.ok) return res.status(404).json(result);
+    res.json(result);
+  });
 
-  return [...opps, ...extras];
+  // ============ WRITE: Bulk sync simulation ============
+  app.post("/api/dynamics/sync", async (req, res) => {
+    const { entity = "All", direction = "bidirectional", userName } = req.body || {};
+    let pulled = 0, pushed = 0;
+
+    if (direction !== "outbound") {
+      // Inbound: refresh lastSyncedAt timestamps and log
+      await db.update(dynamicsAccounts).set({ lastSyncedAt: new Date() });
+      const accts = await db.select().from(dynamicsAccounts).limit(2);
+      for (const a of accts) {
+        await logEvent({
+          direction: "inbound", entity: "Account", entityName: a.name, entityRefId: a.id,
+          action: "Pulled account record from D365",
+          fields: ["annualRevenue", "primaryContact"],
+          actorName: userName, trigger: "manual",
+          message: `Inbound sync by ${userName || "User"}: refreshed ${a.name} from Dynamics 365`,
+        });
+        pulled++;
+      }
+    }
+    if (direction !== "inbound") {
+      // Outbound: push linked deals
+      const opps = await db.select().from(dynamicsOpportunities).limit(3);
+      for (const o of opps) {
+        if (!o.dealpadDealId) continue;
+        await pushDealToDynamics(o.dealpadDealId, userName, "manual");
+        pushed++;
+      }
+    }
+
+    res.json({
+      success: true, entity, direction, pulled, pushed,
+      durationMs: 1200 + Math.floor(Math.random() * 800),
+      timestamp: new Date().toISOString(),
+    });
+  });
+
+  // ============ Nightly batch trigger ============
+  app.post("/api/dynamics/nightly-batch", async (req, res) => {
+    const settings = await getSettings();
+    if (!settings.nightlyBatchEnabled) {
+      return res.status(400).json({ error: "Nightly batch is disabled in Settings" });
+    }
+    const startedAt = Date.now();
+
+    // INBOUND: refresh timestamps (real implementation would pull updates)
+    const acctCount = await db.select({ c: sql<number>`count(*)::int` }).from(dynamicsAccounts);
+    const oppCount = await db.select({ c: sql<number>`count(*)::int` }).from(dynamicsOpportunities);
+    await db.update(dynamicsAccounts).set({ lastSyncedAt: new Date() });
+    await db.update(dynamicsOpportunities).set({ lastPulledAt: new Date() });
+
+    // OUTBOUND: push every linked DealPad deal back to D365
+    const linkedOpps = await db.select().from(dynamicsOpportunities)
+      .where(sql`${dynamicsOpportunities.dealpadDealId} IS NOT NULL`);
+    let pushed = 0, failed = 0;
+    for (const o of linkedOpps) {
+      if (!o.dealpadDealId) continue;
+      try {
+        const r = await pushDealToDynamics(o.dealpadDealId, req.body?.userName, "manual");
+        if (r.ok) pushed++; else failed++;
+      } catch {
+        failed++;
+      }
+    }
+
+    await logEvent({
+      direction: "bidirectional", entity: "System", entityName: "Nightly batch",
+      action: "Completed nightly D365 ⇄ DealPad sync",
+      fields: ["accounts", "opportunities", "deals"],
+      status: failed > 0 ? "warning" : "success",
+      actorName: req.body?.userName, trigger: "batch",
+      message: `Nightly batch: pulled ${acctCount[0].c} accounts + ${oppCount[0].c} opps, pushed ${pushed} deals${failed > 0 ? `, ${failed} failed` : ""} (${Date.now() - startedAt}ms)`,
+    });
+    res.json({ success: true, pulled: acctCount[0].c + oppCount[0].c, pushed, failed });
+  });
 }
 
-async function buildPipelineSummary() {
-  const opps = await buildOpportunities();
+function formatAccount(a: any) {
+  return {
+    ...a,
+    annualRevenue: parseFloat(a.annualRevenue || "0"),
+    primaryContact: {
+      name: a.contactName, title: a.contactTitle,
+      email: a.contactEmail, phone: a.contactPhone,
+    },
+    billingAddress: {
+      street: a.billingStreet, city: a.billingCity,
+      state: a.billingState, zip: a.billingZip, country: a.billingCountry,
+    },
+    source: "Dynamics 365",
+  };
+}
+
+function formatOpp(o: any) {
+  return {
+    ...o,
+    estimatedValue: parseFloat(o.estimatedValue || "0"),
+    actualValue: o.actualValue !== null && o.actualValue !== undefined ? parseFloat(o.actualValue) : null,
+  };
+}
+
+function buildPipelineSummary(rawOpps: any[], owners: any[]) {
+  const opps = rawOpps.map(formatOpp);
   const open = opps.filter((o) => o.stage !== "Won" && o.stage !== "Lost");
-  const byStage = STAGES.map((s) => {
+  const byStage = ["Qualify", "Develop", "Propose", "Close"].map((s) => {
     const items = open.filter((o) => o.stage === s);
     return {
       stage: s,
@@ -232,14 +563,13 @@ async function buildPipelineSummary() {
       weighted: items.reduce((sum, o) => sum + o.estimatedValue * (o.probability / 100), 0),
     };
   });
-  const byOwner = OWNERS.map((o) => {
+  const byOwner = owners.map((o) => {
     const items = open.filter((opp) => opp.ownerName === o.name);
     return {
-      owner: o.name,
-      count: items.length,
+      owner: o.name, count: items.length,
       value: items.reduce((s, x) => s + x.estimatedValue, 0),
       weighted: items.reduce((s, x) => s + x.estimatedValue * (x.probability / 100), 0),
-      quota: 2_500_000,
+      quota: parseFloat(o.quota || "2500000"),
     };
   });
   const won = opps.filter((o) => o.stage === "Won");
@@ -247,145 +577,21 @@ async function buildPipelineSummary() {
   const wonValue = won.reduce((s, o) => s + (o.actualValue || 0), 0);
   const lostValue = lost.reduce((s, o) => s + o.estimatedValue, 0);
   const winRate = won.length + lost.length > 0 ? (won.length / (won.length + lost.length)) * 100 : 0;
+  const quotaTotal = byOwner.reduce((s, o) => s + o.quota, 0);
 
   return {
     totalPipelineValue: open.reduce((s, o) => s + o.estimatedValue, 0),
     weightedPipelineValue: open.reduce((s, o) => s + o.estimatedValue * (o.probability / 100), 0),
     openOpportunities: open.length,
     avgDealSize: open.length > 0 ? open.reduce((s, o) => s + o.estimatedValue, 0) / open.length : 0,
-    winRate,
-    wonYTD: { count: won.length, value: wonValue },
-    lostYTD: { count: lost.length, value: lostValue },
-    byStage,
-    byOwner,
+    winRate, wonYTD: { count: won.length, value: wonValue }, lostYTD: { count: lost.length, value: lostValue },
+    byStage, byOwner,
     forecast: {
       commit: opps.filter((o) => o.forecastCategory === "Commit").reduce((s, o) => s + o.estimatedValue, 0),
       bestCase: opps.filter((o) => o.forecastCategory === "Best Case").reduce((s, o) => s + o.estimatedValue, 0),
       pipeline: opps.filter((o) => o.forecastCategory === "Pipeline").reduce((s, o) => s + o.estimatedValue, 0),
       closed: opps.filter((o) => o.forecastCategory === "Closed").reduce((s, o) => s + o.estimatedValue, 0),
     },
-    quotaTotal: 12_500_000,
+    quotaTotal,
   };
-}
-
-function seedInitialLog() {
-  if (syncLog.length > 0) return;
-  const samples: Omit<SyncEvent, "id" | "timestamp">[] = [
-    { direction: "inbound", entity: "Account", entityName: "Pacific Logistics Co", action: "Created in DealPad from D365 account",
-      fields: ["name", "industry", "annualRevenue", "primaryContact"], status: "success",
-      message: "Inbound sync: New account record imported from Dynamics 365" },
-    { direction: "outbound", entity: "Opportunity", entityName: "Acme Corp - 2026 Audit", action: "Updated estimatedValue from DealPad pricing",
-      fields: ["estimatedValue", "stage", "probability"], status: "success",
-      message: "Outbound sync: Opportunity stage advanced to Propose, fee updated to $485,000" },
-    { direction: "outbound", entity: "Opportunity", entityName: "TechFlow Industries - Q1 Tax", action: "Closed-Won pushed to D365",
-      fields: ["stage", "actualValue", "actualCloseDate"], status: "success",
-      message: "Outbound sync: Opportunity marked Won, actuals booked to revenue forecast" },
-    { direction: "inbound", entity: "Account", entityName: "Helios Energy Inc", action: "Updated annualRevenue field",
-      fields: ["annualRevenue", "numberOfEmployees"], status: "success",
-      message: "Inbound sync: Account financials refreshed from D365 nightly job" },
-    { direction: "inbound", entity: "Opportunity", entityName: "Helios Energy - SOX Readiness", action: "New opportunity queued for DealPad import",
-      status: "warning", message: "Inbound sync: New opportunity detected; waiting for Pursuit Lead to scope" },
-  ];
-  samples.forEach(recordEvent);
-}
-
-export function registerDynamicsRoutes(app: Express) {
-  seedInitialLog();
-
-  app.get("/api/dynamics/accounts", async (_req: Request, res: Response) => {
-    res.json(await buildAccounts());
-  });
-
-  app.get("/api/dynamics/accounts/:id", async (req: Request, res: Response) => {
-    const accounts = await buildAccounts();
-    const acct = accounts.find((a) => a.dynamicsId === req.params.id || a.accountNumber === req.params.id);
-    if (!acct) return res.status(404).json({ error: "Account not found" });
-    res.json(acct);
-  });
-
-  app.get("/api/dynamics/opportunities", async (_req: Request, res: Response) => {
-    res.json(await buildOpportunities());
-  });
-
-  app.get("/api/dynamics/pipeline", async (_req: Request, res: Response) => {
-    res.json(await buildPipelineSummary());
-  });
-
-  app.get("/api/dynamics/sync-log", async (_req: Request, res: Response) => {
-    res.json(syncLog);
-  });
-
-  app.post("/api/dynamics/sync", async (req: Request, res: Response) => {
-    const { entity = "All", direction = "bidirectional" } = req.body || {};
-    const accounts = await buildAccounts();
-    const opps = await buildOpportunities();
-    const userName = req.body?.userName || "System";
-
-    const samplesIn = [
-      { name: accounts[0]?.name || "Acme Corp", entity: "Account" as const, fields: ["annualRevenue", "primaryContact.email"] },
-      { name: "Helios Energy - SOX Readiness", entity: "Opportunity" as const, fields: ["stage", "probability", "estimatedCloseDate"] },
-    ];
-    const samplesOut = [
-      { name: opps[0]?.name || "Acme - 2026 Audit", entity: "Opportunity" as const, fields: ["estimatedValue", "stage", "forecastCategory"] },
-      { name: opps[1]?.name || "TechFlow - Q1 Tax", entity: "Opportunity" as const, fields: ["estimatedValue", "probability"] },
-    ];
-
-    if (direction !== "outbound") {
-      samplesIn.forEach((s) => recordEvent({
-        direction: "inbound", entity: s.entity, entityName: s.name,
-        action: `Pulled ${s.entity.toLowerCase()} updates from D365`,
-        fields: s.fields, status: "success",
-        message: `Inbound sync by ${userName}: ${s.fields.length} field(s) refreshed from Dynamics 365`,
-      }));
-    }
-    if (direction !== "inbound") {
-      samplesOut.forEach((s) => recordEvent({
-        direction: "outbound", entity: s.entity, entityName: s.name,
-        action: `Pushed ${s.entity.toLowerCase()} updates to D365`,
-        fields: s.fields, status: "success",
-        message: `Outbound sync by ${userName}: ${s.fields.length} field(s) written to Dynamics 365 opportunity record`,
-      }));
-    }
-
-    res.json({
-      success: true,
-      entity, direction,
-      pulled: direction !== "outbound" ? samplesIn.length : 0,
-      pushed: direction !== "inbound" ? samplesOut.length : 0,
-      durationMs: 1200 + Math.floor(Math.random() * 800),
-      timestamp: new Date().toISOString(),
-    });
-  });
-
-  app.post("/api/dynamics/import-opportunity", async (req: Request, res: Response) => {
-    const { dynamicsId } = req.body || {};
-    const opps = await buildOpportunities();
-    const opp = opps.find((o) => o.dynamicsId === dynamicsId);
-    if (!opp) return res.status(404).json({ error: "Opportunity not found" });
-
-    recordEvent({
-      direction: "inbound", entity: "Opportunity", entityName: opp.name,
-      action: "Imported into DealPad as draft deal",
-      fields: ["name", "accountName", "estimatedValue", "stage", "estimatedCloseDate"],
-      status: "success",
-      message: `Inbound sync: Created DealPad draft from D365 opportunity ${opp.opportunityNumber}`,
-    });
-    res.json({ success: true, opportunityNumber: opp.opportunityNumber });
-  });
-
-  app.post("/api/dynamics/push-deal", async (req: Request, res: Response) => {
-    const dealId = parseInt(req.body?.dealId);
-    if (!dealId) return res.status(400).json({ error: "dealId required" });
-    const deal = await db.query.deals.findFirst({ where: eq(deals.id, dealId) });
-    if (!deal) return res.status(404).json({ error: "Deal not found" });
-
-    recordEvent({
-      direction: "outbound", entity: "Opportunity", entityName: deal.title,
-      action: "Manual push to D365",
-      fields: ["estimatedValue", "stage", "probability", "estimatedCloseDate", "forecastCategory"],
-      status: "success",
-      message: `Outbound sync: ${deal.title} written to D365 opportunity record (${deal.totalFee})`,
-    });
-    res.json({ success: true });
-  });
 }

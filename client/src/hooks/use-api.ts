@@ -189,17 +189,74 @@ export function useDynamicsSync() {
 export function useImportOpportunity() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body: { dynamicsId: string }) =>
-      fetchApi("/api/dynamics/import-opportunity", { method: "POST", body: JSON.stringify(body) }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["dyn-synclog"] }),
+    mutationFn: ({ id, userName }: { id: number; userName?: string }) =>
+      fetchApi(`/api/dynamics/opportunities/${id}/import`, { method: "POST", body: JSON.stringify({ userName }) }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["dyn-opps"] });
+      qc.invalidateQueries({ queryKey: ["dyn-synclog"] });
+      qc.invalidateQueries({ queryKey: ["deals"] });
+      qc.invalidateQueries({ queryKey: ["clients"] });
+    },
   });
 }
 export function usePushDealToDynamics() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body: { dealId: number }) =>
-      fetchApi("/api/dynamics/push-deal", { method: "POST", body: JSON.stringify(body) }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["dyn-synclog"] }),
+    mutationFn: ({ dealId, userName }: { dealId: number; userName?: string }) =>
+      fetchApi(`/api/dynamics/deals/${dealId}/push`, { method: "POST", body: JSON.stringify({ userName }) }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["dyn-opps"] });
+      qc.invalidateQueries({ queryKey: ["dyn-pipeline"] });
+      qc.invalidateQueries({ queryKey: ["dyn-synclog"] });
+    },
+  });
+}
+export function useDynamicsSettings() {
+  return useQuery({ queryKey: ["dyn-settings"], queryFn: () => fetchApi("/api/dynamics/settings") });
+}
+export function useUpdateDynamicsSettings() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: any) => fetchApi("/api/dynamics/settings", { method: "PATCH", body: JSON.stringify(body) }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["dyn-settings"] });
+      qc.invalidateQueries({ queryKey: ["dyn-synclog"] });
+    },
+  });
+}
+export function useUpdateDynamicsAccount() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...body }: { id: number; [k: string]: any }) =>
+      fetchApi(`/api/dynamics/accounts/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["dyn-accounts"] });
+      qc.invalidateQueries({ queryKey: ["dyn-synclog"] });
+    },
+  });
+}
+export function useUpdateDynamicsOpportunity() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...body }: { id: number; [k: string]: any }) =>
+      fetchApi(`/api/dynamics/opportunities/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["dyn-opps"] });
+      qc.invalidateQueries({ queryKey: ["dyn-pipeline"] });
+      qc.invalidateQueries({ queryKey: ["dyn-synclog"] });
+    },
+  });
+}
+export function useNightlyBatch() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { userName?: string }) =>
+      fetchApi("/api/dynamics/nightly-batch", { method: "POST", body: JSON.stringify(body) }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["dyn-accounts"] });
+      qc.invalidateQueries({ queryKey: ["dyn-opps"] });
+      qc.invalidateQueries({ queryKey: ["dyn-synclog"] });
+    },
   });
 }
 
