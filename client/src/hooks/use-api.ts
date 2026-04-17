@@ -488,6 +488,8 @@ export function useIntappDashboard() {
     queryFn: () => fetchApi("/api/intapp/dashboard"),
     refetchInterval: 8000,
   });
+}
+
 // ============ WORKDAY ============
 export function useWorkdaySettings() {
   return useQuery({ queryKey: ["wd-settings"], queryFn: () => fetchApi("/api/workday/settings") });
