@@ -8,6 +8,7 @@ import {
   useDeal, useDealScopeItems, useDealPricing, useRateAdjust, useResetPricing, useSubmitApproval,
 } from "@/hooks/use-api";
 import { useAuth } from "@/context/AuthContext";
+import { AskDealPadAI } from "@/components/AskDealPadAI";
 
 function num(v: any): number {
   return parseFloat(v ?? "0") || 0;
@@ -476,6 +477,12 @@ export function RenewalLeadsheet() {
           </button>
         </div>
       </div>
+      <AskDealPadAI context={{
+        screen: "renewal-leadsheet",
+        screenLabel: `Renewal Leadsheet · ${deal?.dealNumber || ""}`,
+        dealId: deal?.id,
+        deal,
+      }} />
     </div>
   );
 }

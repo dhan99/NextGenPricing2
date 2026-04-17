@@ -452,6 +452,10 @@ export function useAIRiskSummary() {
   return useMutation({ mutationFn: (data: any) => fetchApi("/api/ai/risk-summary", { method: "POST", body: JSON.stringify(data) }) });
 }
 
+export function useAskDealPadAI() {
+  return useMutation({ mutationFn: (data: { question: string; context: any; role?: string }) => fetchApi("/api/ai/ask", { method: "POST", body: JSON.stringify(data) }) });
+}
+
 // ============ INTAPP RISK & COMPLIANCE ============
 export function useIntappSettings() {
   return useQuery({ queryKey: ["intapp-settings"], queryFn: () => fetchApi("/api/intapp/settings") });

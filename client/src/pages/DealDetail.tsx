@@ -8,6 +8,9 @@ import { formatCurrency, formatPercent, formatNumber, getStatusColor, getStatusL
 import { ArrowLeft, Check, ChevronRight, Sparkles, AlertTriangle, TrendingUp, Target, FileText, Shield, CheckCircle, XCircle, Clock, Loader2, Plus, Trash2, Lightbulb, Copy, RefreshCw, Pencil, Save, GitBranch } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/context/AuthContext";
+import { AskDealPadAI } from "@/components/AskDealPadAI";
+
+const STEP_KEYS = ["", "wizard-setup", "wizard-scope", "wizard-assumptions", "wizard-pricing", "wizard-scenarios", "wizard-review", "wizard-approval", "wizard-summary"];
 
 const STEPS = [
   { num: 1, label: "Setup" },
@@ -161,6 +164,12 @@ export function DealDetail() {
           )}
         </div>
       </div>
+      <AskDealPadAI context={{
+        screen: STEP_KEYS[currentStep] || "wizard-setup",
+        screenLabel: `${STEPS[currentStep - 1]?.label || "Wizard"} · ${deal.dealNumber}`,
+        dealId: deal.id,
+        deal,
+      }} />
     </div>
   );
 }
@@ -619,40 +628,102 @@ function ScopeStep({ deal }: { deal: any }) {
       </div>
 
       <div className="space-y-6">
-        <div className="card p-6 border-primary/20 bg-primary/5">
-          <div className="flex items-center gap-2 mb-4">
-            <Sparkles className="w-5 h-5 text-primary" />
-            <h3 className="font-semibold text-foreground">AI Effort Estimation</h3>
+        <div className="card p-6">
+          <h3 className="font-semibold text-foreground mb-4">Calculated Scope Preview</h3>
+          {(scopeItems || []).length === 0 ? (
+            <p className="text-xs text-muted-foreground">Add scope items to see the calculated preview.</p>
+          ) : (
+            <>
+              <div className="space-y-2.5">
+                {(scopeItems || []).map((si: any) => {
+                  const qty = si.quantity || 1;
+                  const baseHrs = parseFloat(si.adjustedHours || si.scopeItem?.defaultHours || "0");
+                  const mult = parseFloat(si.complexityMultiplier || "1");
+                  const totalHrs = baseHrs * qty * mult;
+                  return (
+                    <div key={si.id} className="flex items-start justify-between text-sm">
+                      <span className="text-foreground flex-1 pr-2 leading-snug">{si.scopeItem?.name}</span>
+                      <div className="text-right flex-shrink-0">
+                        <div className="text-foreground font-medium">×{qty}</div>
+                        <div className="text-xs text-muted-foreground">~{totalHrs.toFixed(0)} hrs</div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="border-t border-border mt-4 pt-3 flex items-center justify-between">
+                <span className="text-sm font-semibold text-foreground">Total Estimated Hours</span>
+                <span className="text-lg font-bold text-foreground">
+                  {(scopeItems || []).reduce((sum: number, si: any) => {
+                    const qty = si.quantity || 1;
+                    const baseHrs = parseFloat(si.adjustedHours || si.scopeItem?.defaultHours || "0");
+                    const mult = parseFloat(si.complexityMultiplier || "1");
+                    return sum + baseHrs * qty * mult;
+                  }, 0).toLocaleString(undefined, { maximumFractionDigits: 0 })} hrs
+                </span>
+              </div>
+            </>
+          )}
+        </div>
+
+        <div className="rounded-xl p-5 border border-amber-200 bg-amber-50/40">
+          <div className="flex items-center gap-2 mb-3">
+            <Sparkles className="w-4 h-4 text-primary" />
+            <h3 className="font-semibold text-foreground text-sm">AI Suggestion</h3>
           </div>
-          <button onClick={runEstimation} disabled={estimation.isPending} className="btn-primary w-full mb-4">
-            {estimation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-            {estimation.isPending ? "Estimating..." : "Estimate Effort"}
-          </button>
+          {!estimation.data && !estimation.isPending && (
+            <>
+              <p className="text-xs text-foreground leading-relaxed mb-3">
+                Run AI Effort Estimation to size this scope against comparable deals in
+                {deal.serviceLine ? ` ${deal.serviceLine}` : " your practice"}.
+              </p>
+              <button onClick={runEstimation} disabled={estimation.isPending} className="btn-primary w-full text-sm">
+                <Sparkles className="w-3.5 h-3.5" />
+                Estimate Effort
+              </button>
+            </>
+          )}
+          {estimation.isPending && (
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <Loader2 className="w-3.5 h-3.5 animate-spin" /> Sizing against comparable deals...
+            </div>
+          )}
           {scopeError && (
-            <div className="flex items-start gap-2 px-3 py-2.5 mb-4 rounded-lg bg-red-50 border border-red-200 text-red-700">
+            <div className="flex items-start gap-2 px-3 py-2.5 mt-3 rounded-lg bg-red-50 border border-red-200 text-red-700">
               <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
-              <p className="text-sm">{scopeError}</p>
+              <p className="text-xs">{scopeError}</p>
             </div>
           )}
           {estimation.data && (
-            <div className="space-y-4">
-              <p className="text-sm text-foreground leading-relaxed">{estimation.data.narrative}</p>
-              <div className="bg-card rounded-lg p-3">
-                <p className="text-xs text-muted-foreground">Total Estimated Hours</p>
-                <p className="text-2xl font-bold text-foreground">{estimation.data.totalHours?.toLocaleString()}</p>
-              </div>
+            <div className="space-y-3">
+              <p className="text-xs text-foreground leading-relaxed">{estimation.data.narrative}</p>
               <div>
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Role Distribution</p>
+                <p className="text-xs font-semibold text-foreground mb-1.5">Recommended Total Hours</p>
+                <p className="text-2xl font-bold text-foreground">{estimation.data.totalHours?.toLocaleString()} hrs</p>
+              </div>
+              {estimation.data.comparableDeals && estimation.data.comparableDeals.length > 0 && (
+                <div>
+                  <p className="text-xs font-semibold text-foreground mb-1.5">Comparable Deals</p>
+                  <ul className="space-y-1">
+                    {estimation.data.comparableDeals.slice(0, 4).map((d: any, i: number) => (
+                      <li key={i} className="text-xs text-foreground flex items-center gap-1.5">
+                        <span className="w-1 h-1 rounded-full bg-primary flex-shrink-0" />
+                        <span>{d.label || `${d.client} (${d.year})`}: {d.hours?.toLocaleString()} hrs{d.entities ? `, ${d.entities} entities` : ""}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              <div>
+                <p className="text-xs font-semibold text-foreground mb-1">Role Distribution</p>
                 {estimation.data.roleDistribution?.map((r: any) => (
-                  <div key={r.role} className="flex items-center justify-between py-1.5">
-                    <span className="text-sm text-foreground">{r.role}</span>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium text-foreground">{r.hours} hrs</span>
-                      <span className="text-xs text-muted-foreground">{r.percentage}%</span>
-                    </div>
+                  <div key={r.role} className="flex items-center justify-between py-0.5">
+                    <span className="text-xs text-foreground">{r.role}</span>
+                    <span className="text-xs text-muted-foreground">{r.hours} hrs · {r.percentage}%</span>
                   </div>
                 ))}
               </div>
+              <button onClick={runEstimation} disabled={estimation.isPending} className="text-xs text-primary hover:underline">Re-run estimation</button>
             </div>
           )}
         </div>

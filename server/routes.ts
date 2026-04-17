@@ -1703,6 +1703,147 @@ export function registerRoutes(app: Express) {
     });
   });
 
+  // ========== ASK DEALPAD AI (contextual) ==========
+  app.post("/api/ai/ask", async (req: Request, res: Response) => {
+    const { question, context, role } = req.body || {};
+    if (!question || typeof question !== "string" || !question.trim()) {
+      return res.status(400).json({ error: "question is required" });
+    }
+    const rawRole = role || req.headers["x-user-role"];
+    if (!rawRole) {
+      return res.status(401).json({ error: "Authentication required: select a persona to use Ask DealPad AI" });
+    }
+    const r = String(rawRole).toLowerCase();
+    const caps = ROLE_CAPABILITIES[r];
+    if (!caps) {
+      return res.status(403).json({ error: `Unknown role "${r}"` });
+    }
+    const screen = String(context?.screen || "unknown").toLowerCase();
+    const dealId = context?.dealId ? Number(context.dealId) : null;
+    const q = question.toLowerCase();
+
+    // What can each role DO on each screen
+    const screenPermissions: Record<string, { allowed: string[]; readOnly: string[] }> = {
+      "new-deal":   { allowed: ["pdl"], readOnly: ["sll","po","fin","qrm","it"] },
+      "wizard-setup":      { allowed: ["pdl"], readOnly: ["sll","po","fin","qrm","it"] },
+      "wizard-scope":      { allowed: ["pdl"], readOnly: ["sll","po","fin","qrm","it"] },
+      "wizard-assumptions":{ allowed: ["pdl"], readOnly: ["sll","po","fin","qrm","it"] },
+      "wizard-pricing":    { allowed: ["pdl"], readOnly: ["sll","po","fin","qrm","it"] },
+      "wizard-scenarios":  { allowed: ["pdl"], readOnly: ["sll","po","fin","qrm","it"] },
+      "wizard-review":     { allowed: ["pdl"], readOnly: ["sll","po","fin","qrm"] },
+      "wizard-approval":   { allowed: ["sll"], readOnly: ["pdl","po","fin","qrm","it"] },
+      "wizard-summary":    { allowed: ["pdl","sll","po","fin","qrm"], readOnly: [] },
+      "renewal-leadsheet": { allowed: ["pdl"], readOnly: ["sll","po","fin","qrm","it"] },
+    };
+    const perm = screenPermissions[screen] || { allowed: ["pdl"], readOnly: ["sll","po","fin","qrm","it"] };
+    const isEditor = perm.allowed.includes(r);
+    const isReadOnly = perm.readOnly.includes(r);
+
+    // What this user CAN do (role-appropriate alternatives) when read-only
+    const roleAlternatives: Record<string, string[]> = {
+      pdl: ["Create or edit deals", "Run AI estimation, margin advisor, scenario recommendation", "Submit deals for approval"],
+      sll: ["Review submitted deals from the Approval Center", "Approve, reject, or request rework", "View pipeline margins and dashboards"],
+      po:  ["Manage rate cards and the scope catalog", "Configure starter templates", "Audit pricing governance across deals"],
+      fin: ["Validate margins and scenario mix", "Review portfolio analytics and FP&A reports", "Comment on financial assumptions (read-only)"],
+      qrm: ["Review AI Risk Summaries and Intapp screenings", "Audit approval trail and compliance flags", "Flag deals for QRM review"],
+      it:  ["Explore the Architecture Hub and integration map", "Review system health and data flows"],
+    };
+
+    // Screen-specific knowledge base — keyword → answer (only if user can access)
+    const screenKB: Record<string, { keys: string[]; answer: (ctx: any) => string }[]> = {
+      "wizard-setup": [
+        { keys: ["title","name"], answer: () => "Pick a deal title that names the engagement and phase, e.g. 'ERP Modernization — Phase 1'. The PDL email auto-routes notifications." },
+        { keys: ["complexity","multiplier"], answer: () => "Complexity drives the global hours multiplier (Low 0.9 → Very High 1.3). Set it now; it cascades through scope hours and pricing." },
+        { keys: ["pdl","owner"], answer: () => "The PDL owns the deal end-to-end and is the only persona that can edit scope/pricing. Other personas review or approve." },
+        { keys: ["margin","target"], answer: (c) => `Standard BU target is 31%. ${c.deal?.marginPercent ? `Current deal margin: ${parseFloat(c.deal.marginPercent).toFixed(1)}%.` : "Margin will calculate after Pricing step."}` },
+      ],
+      "wizard-scope": [
+        { keys: ["template","starter"], answer: () => "Apply a starter template to bulk-add a curated set of scope items. Existing items are preserved; duplicates are skipped." },
+        { keys: ["assembly","cascade","child"], answer: () => "Assemblies are parent items that auto-add their children when added. Removing a parent does not remove children — they stay independently." },
+        { keys: ["hour","effort","estimate"], answer: (c) => `Total estimated hours for this scope: ${c.totalHours || 0}. Click 'Estimate Effort' to run AI distribution across roles.` },
+        { keys: ["catalog","item","add"], answer: () => "Browse the Scope Catalog on the left; click + to add. Items are filtered to your service line by default — toggle 'Show all practices' to see everything." },
+        { keys: ["inactive","deactivat"], answer: () => "Inactive scope items are hidden from new deals. Practice leads manage activation in the Scope Catalog admin page." },
+        { keys: ["compar","similar","benchmark"], answer: (c) => `Comparable deals for ${c.deal?.serviceLine || "this practice"}: pull from Dashboard analytics or run AI Estimation here for a sized recommendation.` },
+      ],
+      "wizard-assumptions": [
+        { keys: ["multiplier","impact"], answer: () => "Each prompt response carries a multiplier (e.g. 1.0 baseline, 1.2 for added complexity). Multipliers compound and feed the Pricing step." },
+        { keys: ["regulator","compliance","sox","hipaa"], answer: () => "If SOX/HIPAA applies, choose the matching compliance option — it adds 15% effort uplift and flags the deal for QRM review." },
+        { keys: ["integration"], answer: () => "Each integration above 2 adds ~5–10% effort. Document them now to avoid scope creep later." },
+      ],
+      "wizard-pricing": [
+        { keys: ["rate","blended"], answer: (c) => `Blended rate is computed from role hours × role rate cards. ${c.deal?.totalFee ? `Current total fee: $${parseFloat(c.deal.totalFee).toLocaleString()}.` : ""}` },
+        { keys: ["margin","advisor"], answer: () => "Run Margin Advisor to see recommended adjustments. Below 25% margin triggers an SLL approval gate." },
+        { keys: ["role","mix","staff"], answer: () => "Adjust the role mix to shift hours from senior to mid-level for margin lift, or the reverse for delivery confidence." },
+      ],
+      "wizard-scenarios": [
+        { keys: ["which","best","recommend"], answer: () => "Run AI Scenario Recommendation. Premium typically lifts margin +10pts vs Standard but reduces win probability by ~15%." },
+        { keys: ["premium","value","standard"], answer: () => "Standard = baseline. Premium = senior-heavy mix, higher fee. Value = offshore-heavy mix, lower fee, tighter margin." },
+      ],
+      "wizard-review": [
+        { keys: ["risk","intapp","screen"], answer: () => "Run Intapp screening before submitting. High-risk findings require QRM mitigation notes." },
+        { keys: ["workday","cost center"], answer: () => "Link the Workday cost center so post-award accounting flows. Validation runs automatically on link." },
+        { keys: ["submit","approval"], answer: () => "Submitting routes the deal to your Service Line Leader. They cannot edit — only approve, reject, or request rework." },
+      ],
+      "wizard-approval": [
+        { keys: ["approve","reject","rework"], answer: () => "As SLL, you can Approve, Reject, or Request Rework. Rework returns the deal to the PDL with your notes — they can resubmit after edits." },
+        { keys: ["margin","threshold"], answer: () => "Deals below 25% margin require explicit justification. Below 20% require a second approver." },
+      ],
+      "wizard-summary": [
+        { keys: ["change order","amend"], answer: () => "Approved deals can have Change Orders added. Each CO captures incremental scope/fee and routes for re-approval." },
+        { keys: ["export","pdf"], answer: () => "Use the Summary view as the canonical engagement record. PDF export is available from the action menu." },
+      ],
+      "new-deal": [
+        { keys: ["renewal","fast"], answer: () => "Renewal Fast-Track clones the prior deal's scope, pricing, and assumptions, then opens the Renewal Leadsheet for PY vs CY review." },
+        { keys: ["dynamics","crm","opportunity"], answer: () => "Linking a Dynamics opportunity auto-fills client, value, and notes — and keeps the deal bi-directionally synced with CRM." },
+        { keys: ["client","new"], answer: () => "Add new clients from the Clients admin page first, then return here to scope a deal against them." },
+      ],
+      "renewal-leadsheet": [
+        { keys: ["uplift","increase","raise"], answer: () => "Recommended renewal uplift is 4.2% (illustrative market avg). Apply per line or globally from the toolbar." },
+        { keys: ["compare","prior","py"], answer: () => "PY columns are read-only snapshots from the source deal. CY columns are editable; deltas highlight changes >10%." },
+      ],
+    };
+
+    let answer: string;
+    let restricted = false;
+
+    if (isReadOnly) {
+      restricted = true;
+      const altLines = (roleAlternatives[r] || []).map(a => `• ${a}`).join("\n");
+      answer = `As ${caps.label}, you can view this screen but not make changes here. What you CAN do:\n${altLines}`;
+
+      // Still try to answer informational questions
+      const kb = screenKB[screen] || [];
+      const matched = kb.find(t => t.keys.some(k => q.includes(k)));
+      if (matched) {
+        const info = matched.answer({ deal: context?.deal, totalHours: context?.totalHours });
+        answer = `${info}\n\n(Read-only context for ${caps.label}.) What you CAN do here:\n${altLines}`;
+      }
+    } else if (isEditor) {
+      const kb = screenKB[screen] || [];
+      const matched = kb.find(t => t.keys.some(k => q.includes(k)));
+      if (matched) {
+        answer = matched.answer({ deal: context?.deal, totalHours: context?.totalHours });
+      } else {
+        const suggestions = (kb.slice(0, 3).map(t => `"${t.keys[0]}"`).join(", ")) || "the screen above";
+        answer = `I'm not sure how to answer that for this screen. Try asking about: ${suggestions}, or use the suggested prompts below.`;
+      }
+    } else {
+      answer = `Your role (${caps.label}) is not configured for this screen. What you CAN do:\n${(roleAlternatives[r] || []).map(a => `• ${a}`).join("\n")}`;
+      restricted = true;
+    }
+
+    res.json({
+      answer,
+      role: r,
+      capability: caps.label,
+      screen,
+      restricted,
+      canPerform: isEditor,
+      alternatives: isReadOnly || !isEditor ? (roleAlternatives[r] || []) : [],
+      timestamp: new Date().toISOString(),
+    });
+  });
+
   // ========== CHANGE ORDERS ==========
   app.get("/api/deals/:dealId/change-orders", async (req: Request, res: Response) => {
     const dealId = parseInt(req.params.dealId);
