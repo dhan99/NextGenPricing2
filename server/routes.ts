@@ -280,6 +280,33 @@ export function registerRoutes(app: Express) {
     res.json({ ...result, dynamicsLink: link || null });
   });
 
+  // Lightweight: re-sum pricing lines and write totals back to the deal header.
+  // Used by the Review checklist "Recalculate" action to clear calc-parity mismatches.
+  app.post("/api/deals/:id/recalc-totals", async (req: Request, res: Response) => {
+    const dealId = parseInt(req.params.id);
+    if (isNaN(dealId)) return res.status(400).json({ error: "Invalid deal id" });
+    const lines = await db.select().from(pricingLines).where(eq(pricingLines.dealId, dealId));
+    const sumFee = lines.reduce((s, l) => s + parseFloat(l.fee || "0"), 0);
+    const sumCost = lines.reduce((s, l) => s + parseFloat(l.cost || "0"), 0);
+    const sumHours = lines.reduce((s, l) => s + parseFloat(l.hours || "0"), 0);
+    const margin = sumFee > 0 ? ((sumFee - sumCost) / sumFee) * 100 : 0;
+    const blended = sumHours > 0 ? sumFee / sumHours : 0;
+    await db.update(deals).set({
+      totalFee: sumFee.toFixed(2),
+      totalCost: sumCost.toFixed(2),
+      totalHours: sumHours.toFixed(2),
+      marginPercent: margin.toFixed(2),
+      blendedRate: blended.toFixed(2),
+      updatedAt: new Date(),
+    }).where(eq(deals.id, dealId));
+    await db.insert(activityLog).values({
+      dealId, action: "totals_recalculated",
+      description: `Header totals refreshed from ${lines.length} pricing line${lines.length === 1 ? "" : "s"} (fee ${sumFee.toFixed(2)}, hrs ${sumHours.toFixed(2)})`,
+      userName: "System",
+    });
+    res.json({ success: true, totalFee: sumFee, totalCost: sumCost, totalHours: sumHours, marginPercent: margin, blendedRate: blended });
+  });
+
   app.post("/api/deals", async (req: Request, res: Response) => {
     const dealCount = await db.select({ count: count() }).from(deals);
     const dealNumber = `DL-2026-${String(dealCount[0].count + 1).padStart(3, "0")}`;

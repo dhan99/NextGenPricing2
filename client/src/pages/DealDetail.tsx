@@ -1725,9 +1725,16 @@ function ReviewStep({ deal, navigateToStep, onReadiness, override, setOverride }
   type Check = { ok: boolean | "warn" | "info"; label: string; hint?: string; action?: CheckAction };
   const recalcAction: CheckAction = {
     label: "Recalculate",
-    onClick: () => {
-      qc.invalidateQueries({ queryKey: ["deal", deal.id] });
-      qc.invalidateQueries({ queryKey: ["deal-pricing", deal.id] });
+    onClick: async () => {
+      try {
+        const r = await fetch(`/api/deals/${deal.id}/recalc-totals`, { method: "POST" });
+        if (!r.ok) throw new Error(await r.text());
+      } catch (e) {
+        console.error("recalc failed", e);
+      } finally {
+        qc.invalidateQueries({ queryKey: ["deal", deal.id] });
+        qc.invalidateQueries({ queryKey: ["deal-pricing", deal.id] });
+      }
     },
   };
   const checks: Check[] = [
