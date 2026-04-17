@@ -247,6 +247,29 @@ export function useUpdateDynamicsOpportunity() {
     },
   });
 }
+export function useEligibleOpportunities(clientId?: number | string | null) {
+  const id = clientId ? Number(clientId) : null;
+  return useQuery({
+    queryKey: ["dyn-opps-eligible", id],
+    queryFn: () => fetchApi(`/api/dynamics/opportunities/eligible${id ? `?clientId=${id}` : ""}`),
+    enabled: clientId !== undefined,
+  });
+}
+export function useScopeTemplates() {
+  return useQuery({ queryKey: ["dyn-scope-templates"], queryFn: () => fetchApi("/api/dynamics/scope-templates") });
+}
+export function useCreateOpportunity() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: any) => fetchApi("/api/dynamics/opportunities", { method: "POST", body: JSON.stringify(body) }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["dyn-opps"] });
+      qc.invalidateQueries({ queryKey: ["dyn-opps-eligible"] });
+      qc.invalidateQueries({ queryKey: ["dyn-pipeline"] });
+      qc.invalidateQueries({ queryKey: ["dyn-synclog"] });
+    },
+  });
+}
 export function useNightlyBatch() {
   const qc = useQueryClient();
   return useMutation({

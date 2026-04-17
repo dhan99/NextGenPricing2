@@ -249,6 +249,75 @@ async function pushDealToDynamics(dealId: number, actorName: string | undefined,
   return { ok: true, opportunityId: opp.id };
 }
 
+// Match opportunity name to a scope template by keyword
+function tmplKey(name: string): string | null {
+  const n = (name || "").toLowerCase();
+  if (n.includes("audit")) return "Annual Audit";
+  if (n.includes("tax provision") || n.includes("tax outsourc")) return "Tax Provision Outsourcing";
+  if (n.includes("erp")) return "ERP Implementation";
+  if (n.includes("sox")) return "SOX Readiness";
+  if (n.includes("cloud") || n.includes("migration")) return "Cloud Migration";
+  if (n.includes("analytics") || n.includes("data warehouse") || n.includes("bi ")) return "Data Analytics Platform";
+  if (n.includes("cyber") || n.includes("security")) return "Cybersecurity Assessment";
+  return null;
+}
+function pickTemplateForName(name: string) {
+  const k = tmplKey(name);
+  return k ? SCOPE_TEMPLATES[k] : null;
+}
+
+// Called from POST /api/deals when dynamicsOpportunityId is provided
+export async function linkDealToOpportunity(opportunityId: number, dealId: number, actorName?: string) {
+  const [opp] = await db.select().from(dynamicsOpportunities).where(eq(dynamicsOpportunities.id, opportunityId));
+  if (!opp || opp.dealpadDealId) return { ok: false };
+  await db.update(dynamicsOpportunities).set({
+    dealpadDealId: dealId,
+    syncStatus: "synced",
+    syncDirection: "bidirectional",
+    lastPulledAt: new Date(),
+    updatedAt: new Date(),
+  }).where(eq(dynamicsOpportunities.id, opportunityId));
+  await logEvent({
+    direction: "inbound", entity: "Opportunity", entityName: opp.name, entityRefId: opp.id,
+    action: "Linked D365 opportunity to new DealPad deal",
+    fields: ["dealpadDealId"], status: "success", actorName, trigger: "manual",
+    message: `Inbound link: D365 ${opp.opportunityNumber} now bi-directionally synced with DealPad deal #${dealId}`,
+  });
+  return { ok: true };
+}
+
+// Templates that pre-populate scope hints so an opp is "scope-ready" (Develop/Propose-eligible)
+const SCOPE_TEMPLATES: Record<string, { businessUnit: string; serviceLine: string; complexity: string; scopeNotes: string }> = {
+  "Annual Audit": {
+    businessUnit: "Audit & Assurance", serviceLine: "Financial Audit", complexity: "medium",
+    scopeNotes: "Full-year audit. Estimated 6-month engagement, ~1,200 hours. Includes planning, fieldwork, sample testing, and issuance of opinion.",
+  },
+  "Tax Provision Outsourcing": {
+    businessUnit: "Tax Services", serviceLine: "Tax Planning", complexity: "medium",
+    scopeNotes: "Quarterly tax provision support + year-end true-up. Multi-state, ~600 hours/year.",
+  },
+  "ERP Implementation": {
+    businessUnit: "Technology Consulting", serviceLine: "ERP Implementation", complexity: "high",
+    scopeNotes: "Phase 1 implementation: architecture, configuration, integration, testing, training. ~2,400 hours over 9 months.",
+  },
+  "SOX Readiness": {
+    businessUnit: "Risk & Compliance", serviceLine: "Cybersecurity", complexity: "high",
+    scopeNotes: "SOX 404(b) readiness assessment + control design. ~900 hours, 4-month sprint.",
+  },
+  "Cloud Migration": {
+    businessUnit: "Technology Consulting", serviceLine: "Cloud Services", complexity: "high",
+    scopeNotes: "Lift-and-shift migration for core workloads. Includes assessment, migration plan, execution, cutover. ~1,800 hours.",
+  },
+  "Data Analytics Platform": {
+    businessUnit: "Advisory Services", serviceLine: "Data Analytics", complexity: "medium",
+    scopeNotes: "Modern data warehouse + BI dashboards. ~1,000 hours over 6 months.",
+  },
+  "Cybersecurity Assessment": {
+    businessUnit: "Risk & Compliance", serviceLine: "Cybersecurity", complexity: "medium",
+    scopeNotes: "NIST CSF-based assessment, gap analysis, and remediation roadmap. ~400 hours.",
+  },
+};
+
 export function registerDynamicsRoutes(app: Express) {
   // Kick off seed asynchronously after server start
   seedDynamics().catch((e) => console.error("Dynamics seed error:", e));
@@ -270,6 +339,80 @@ export function registerDynamicsRoutes(app: Express) {
   app.get("/api/dynamics/opportunities", async (_req, res) => {
     const rows = await db.select().from(dynamicsOpportunities).orderBy(desc(dynamicsOpportunities.updatedAt));
     res.json(rows.map(formatOpp));
+  });
+
+  // Opportunities eligible to be turned into a DealPad deal:
+  // Develop or Propose stage, not yet linked. Filter by client when ?clientId is provided.
+  app.get("/api/dynamics/opportunities/eligible", async (req, res) => {
+    const clientId = req.query.clientId ? parseInt(String(req.query.clientId)) : null;
+    let rows = await db.select().from(dynamicsOpportunities)
+      .where(sql`${dynamicsOpportunities.dealpadDealId} IS NULL AND ${dynamicsOpportunities.stage} IN ('Develop','Propose')`);
+    if (clientId) {
+      const accts = await db.select().from(dynamicsAccounts).where(eq(dynamicsAccounts.dealpadClientId, clientId));
+      const acctIds = new Set(accts.map((a) => a.id));
+      rows = rows.filter((o) => o.dynamicsAccountId && acctIds.has(o.dynamicsAccountId));
+    }
+    // Enrich with template scope hints when available
+    const enriched = rows.map((o) => {
+      const tmpl = pickTemplateForName(o.name);
+      return { ...formatOpp(o), scopeTemplate: tmpl ? { ...tmpl, key: tmplKey(o.name) } : null };
+    });
+    res.json(enriched);
+  });
+
+  app.get("/api/dynamics/scope-templates", (_req, res) => {
+    res.json(Object.entries(SCOPE_TEMPLATES).map(([key, v]) => ({ key, ...v })));
+  });
+
+  // Create new D365 opportunity. Optional `seedScope: true` makes it Develop-eligible
+  // by attaching a service-line template + complexity hint that flows into the deal on import.
+  app.post("/api/dynamics/opportunities", async (req, res) => {
+    const {
+      accountId, name, estimatedValue, stage = "Qualify",
+      estimatedCloseDate, ownerName, scopeTemplateKey, userName,
+    } = req.body || {};
+    if (!accountId || !name) return res.status(400).json({ error: "accountId and name are required" });
+    const [acct] = await db.select().from(dynamicsAccounts).where(eq(dynamicsAccounts.id, parseInt(accountId)));
+    if (!acct) return res.status(404).json({ error: "Account not found" });
+
+    const probability = STAGE_PROBABILITY[stage] ?? 20;
+    const tmpl = scopeTemplateKey ? SCOPE_TEMPLATES[scopeTemplateKey] : null;
+    // If scope template is provided, the opp is automatically scope-ready and bumped to Develop
+    const finalStage = tmpl && stage === "Qualify" ? "Develop" : stage;
+    const finalProbability = STAGE_PROBABILITY[finalStage] ?? probability;
+
+    const [{ count: existingCount }] = await db.select({ count: sql<number>`count(*)::int` }).from(dynamicsOpportunities);
+    const oppNumber = `OPP-${String(100000 + existingCount + 1).padStart(6, "0")}`;
+    const dynId = `${Date.now().toString(16)}-${Math.random().toString(16).slice(2, 10)}`;
+
+    const [created] = await db.insert(dynamicsOpportunities).values({
+      dynamicsId: dynId,
+      opportunityNumber: oppNumber,
+      dynamicsAccountId: acct.id,
+      name,
+      accountName: acct.name,
+      estimatedValue: String(estimatedValue || 0),
+      stage: finalStage,
+      probability: finalProbability,
+      forecastCategory: forecastFor(finalStage, finalProbability),
+      estimatedCloseDate: estimatedCloseDate || new Date(Date.now() + 90 * 86400 * 1000).toISOString().slice(0, 10),
+      ownerName: ownerName || acct.ownerName,
+      rating: finalProbability >= 70 ? "Hot" : finalProbability >= 40 ? "Warm" : "Cold",
+      syncStatus: "queued",
+      syncDirection: "inbound",
+    }).returning();
+
+    await logEvent({
+      direction: "inbound", entity: "Opportunity", entityName: name, entityRefId: created.id,
+      action: tmpl ? "Created scope-ready D365 opportunity" : "Created D365 opportunity",
+      fields: ["name", "accountName", "stage", "estimatedValue", "estimatedCloseDate", "ownerName"],
+      status: "success", actorName: userName, trigger: "manual",
+      message: tmpl
+        ? `Inbound: New D365 opp ${oppNumber} (${name}) seeded with ${scopeTemplateKey} template — eligible for DealPad scoping`
+        : `Inbound: New D365 opp ${oppNumber} (${name}) created in ${finalStage}`,
+    });
+
+    res.status(201).json({ ...formatOpp(created), scopeTemplate: tmpl ? { key: scopeTemplateKey, ...tmpl } : null });
   });
 
   app.get("/api/dynamics/pipeline", async (_req, res) => {

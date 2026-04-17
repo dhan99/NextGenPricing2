@@ -1,8 +1,8 @@
 import { useState, useMemo } from "react";
 import { useLocation } from "wouter";
-import { useClients, useCreateDeal, useDeals, useCloneDeal } from "@/hooks/use-api";
+import { useClients, useCreateDeal, useDeals, useCloneDeal, useEligibleOpportunities } from "@/hooks/use-api";
 import { useAuth } from "@/context/AuthContext";
-import { ArrowLeft, FileText, Loader2, Sparkles, Repeat } from "lucide-react";
+import { ArrowLeft, FileText, Loader2, Sparkles, Repeat, Briefcase, Database } from "lucide-react";
 import { Link } from "wouter";
 
 export function NewDeal() {
@@ -26,9 +26,17 @@ export function NewDeal() {
     pdlEmail: "",
     notes: "",
     sourceDealId: "",
+    dynamicsOpportunityId: "",
   });
 
   const isRenewal = form.dealType === "renewal";
+  const isNewEngagement = form.dealType === "new";
+  const { data: eligibleOpps = [] } = useEligibleOpportunities(isNewEngagement ? form.clientId || null : undefined);
+
+  const selectedOpp = useMemo(() => {
+    if (!form.dynamicsOpportunityId) return null;
+    return (eligibleOpps as any[]).find((o) => o.id === parseInt(form.dynamicsOpportunityId)) || null;
+  }, [eligibleOpps, form.dynamicsOpportunityId]);
 
   const renewalCandidates = useMemo(() => {
     if (!form.clientId || !allDeals) return [];
@@ -99,6 +107,82 @@ export function NewDeal() {
               </select>
             </div>
           </div>
+
+          {isNewEngagement && form.clientId && eligibleOpps.length > 0 && (
+            <div className="mt-5 p-4 rounded-lg border border-primary/30 bg-primary/5">
+              <div className="flex items-start gap-2 mb-3">
+                <Database className="w-4 h-4 text-primary mt-0.5" />
+                <div>
+                  <p className="text-sm font-semibold text-foreground">Linked Dynamics 365 Opportunity (recommended)</p>
+                  <p className="text-xs text-muted-foreground">
+                    {eligibleOpps.length} scope-ready {eligibleOpps.length === 1 ? "opportunity" : "opportunities"} in
+                    Develop/Propose for this client. Linking auto-fills the form and keeps the deal bi-directionally synced.
+                  </p>
+                </div>
+              </div>
+              <select
+                value={form.dynamicsOpportunityId}
+                onChange={(e) => {
+                  const opp = (eligibleOpps as any[]).find((o) => o.id === parseInt(e.target.value));
+                  if (!opp) {
+                    setForm({ ...form, dynamicsOpportunityId: "" });
+                    return;
+                  }
+                  const t = opp.scopeTemplate;
+                  setForm({
+                    ...form,
+                    dynamicsOpportunityId: e.target.value,
+                    title: opp.name,
+                    endDate: opp.estimatedCloseDate || form.endDate,
+                    pdlName: opp.ownerName || form.pdlName,
+                    businessUnit: t?.businessUnit || form.businessUnit,
+                    serviceLine: t?.serviceLine || form.serviceLine,
+                    complexity: t?.complexity || form.complexity,
+                    notes: t?.scopeNotes ? `${t.scopeNotes}${form.notes ? "\n\n" + form.notes : ""}` : form.notes,
+                  });
+                }}
+                className="input-field mt-1"
+              >
+                <option value="">Don't link (start fresh)</option>
+                {(eligibleOpps as any[]).map((o: any) => (
+                  <option key={o.id} value={o.id}>
+                    {o.opportunityNumber} — {o.name} · {o.stage} · ${(o.estimatedValue / 1000).toFixed(0)}K
+                  </option>
+                ))}
+              </select>
+              {selectedOpp && (
+                <div className="mt-3 grid grid-cols-3 gap-3 text-xs">
+                  <div className="bg-white border border-stone-200 rounded-md p-2">
+                    <div className="text-muted-foreground">D365 Stage</div>
+                    <div className="font-semibold text-foreground">{selectedOpp.stage} ({selectedOpp.probability}%)</div>
+                  </div>
+                  <div className="bg-white border border-stone-200 rounded-md p-2">
+                    <div className="text-muted-foreground">Est. Value</div>
+                    <div className="font-semibold text-foreground">${selectedOpp.estimatedValue.toLocaleString()}</div>
+                  </div>
+                  <div className="bg-white border border-stone-200 rounded-md p-2">
+                    <div className="text-muted-foreground">Owner</div>
+                    <div className="font-semibold text-foreground">{selectedOpp.ownerName}</div>
+                  </div>
+                  {selectedOpp.scopeTemplate && (
+                    <div className="col-span-3 bg-white border border-stone-200 rounded-md p-2">
+                      <div className="text-muted-foreground flex items-center gap-1">
+                        <Sparkles className="w-3 h-3 text-primary" /> Scope template applied
+                      </div>
+                      <div className="text-foreground mt-0.5">{selectedOpp.scopeTemplate.scopeNotes}</div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {isNewEngagement && form.clientId && eligibleOpps.length === 0 && (
+            <div className="mt-5 p-3 rounded-lg border border-stone-200 bg-stone-50 text-xs text-muted-foreground flex items-start gap-2">
+              <Briefcase className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
+              <span>No Develop/Propose-stage Dynamics opportunities for this client. Create one in the CRM tab to link, or proceed without linking.</span>
+            </div>
+          )}
 
           {isRenewal && (
             <div className="mt-5 p-4 rounded-lg border border-primary/30 bg-primary/5">

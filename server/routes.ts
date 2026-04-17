@@ -177,8 +177,9 @@ export function registerRoutes(app: Express) {
   app.post("/api/deals", async (req: Request, res: Response) => {
     const dealCount = await db.select({ count: count() }).from(deals);
     const dealNumber = `DL-2026-${String(dealCount[0].count + 1).padStart(3, "0")}`;
+    const { dynamicsOpportunityId, ...dealBody } = req.body || {};
     const [newDeal] = await db.insert(deals).values({
-      ...req.body,
+      ...dealBody,
       dealNumber,
     }).returning();
 
@@ -190,6 +191,11 @@ export function registerRoutes(app: Express) {
       description: `Deal "${newDeal.title}" created`,
       userName: req.body.pdlName || "System",
     });
+
+    if (dynamicsOpportunityId) {
+      const { linkDealToOpportunity } = await import("./dynamics");
+      await linkDealToOpportunity(parseInt(dynamicsOpportunityId), newDeal.id, req.body.pdlName).catch(() => {});
+    }
 
     res.status(201).json(newDeal);
   });
