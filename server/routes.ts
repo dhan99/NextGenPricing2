@@ -522,9 +522,172 @@ export function registerRoutes(app: Express) {
   });
 
   // ========== SCOPE CATALOG ==========
-  app.get("/api/scope-catalog", async (_req: Request, res: Response) => {
-    const result = await db.select().from(scopeCatalog).orderBy(scopeCatalog.sortOrder);
-    res.json(result);
+  app.get("/api/scope-catalog", async (req: Request, res: Response) => {
+    const includeInactive = req.query.includeInactive === "1" || req.query.includeInactive === "true";
+    const rows = await db.select().from(scopeCatalog).orderBy(scopeCatalog.sortOrder);
+    res.json(includeInactive ? rows : rows.filter(r => r.isActive !== false));
+  });
+
+  // Validate that a proposed parentId is (a) an existing assembly and (b) does not introduce a cycle.
+  async function validateScopeParent(parentId: number, selfId: number | null): Promise<string | null> {
+    const [parent] = await db.select().from(scopeCatalog).where(eq(scopeCatalog.id, parentId));
+    if (!parent) return "Parent assembly not found";
+    if (!parent.isAssembly) return "Parent must be an assembly item";
+    // Walk up the chain from the parent — if we hit `selfId`, it's a cycle
+    let cursor: number | null = parent.parentId;
+    const visited = new Set<number>([parentId]);
+    while (cursor) {
+      if (selfId !== null && cursor === selfId) return "Cannot set parent: would create a cycle";
+      if (visited.has(cursor)) return "Existing hierarchy contains a cycle"; // defensive
+      visited.add(cursor);
+      const [next]: any[] = await db.select().from(scopeCatalog).where(eq(scopeCatalog.id, cursor));
+      cursor = next?.parentId ?? null;
+    }
+    return null;
+  }
+
+  function parseIntOrError(v: any, label: string): { value: number | null; error?: string } {
+    if (v === null || v === undefined || v === "") return { value: null };
+    const n = parseInt(v);
+    if (Number.isNaN(n)) return { value: null, error: `${label} must be a number` };
+    return { value: n };
+  }
+
+  app.post("/api/scope-catalog", async (req: Request, res: Response) => {
+    try {
+      const body = req.body || {};
+      const code = String(body.code ?? "").trim();
+      const name = String(body.name ?? "").trim();
+      const category = String(body.category ?? "").trim();
+      if (!code || !name || !category) {
+        return res.status(400).json({ error: "code, name, and category are required" });
+      }
+      const parentParse = parseIntOrError(body.parentId, "parentId");
+      if (parentParse.error) return res.status(400).json({ error: parentParse.error });
+      const sortParse = parseIntOrError(body.sortOrder, "sortOrder");
+      if (sortParse.error) return res.status(400).json({ error: sortParse.error });
+      const isAssembly = !!body.isAssembly;
+      if (parentParse.value !== null) {
+        if (isAssembly) return res.status(400).json({ error: "Assembly items cannot have a parent" });
+        const cycleErr = await validateScopeParent(parentParse.value, null);
+        if (cycleErr) return res.status(400).json({ error: cycleErr });
+      }
+      const [row] = await db.insert(scopeCatalog).values({
+        code,
+        name,
+        category,
+        description: body.description || null,
+        defaultHours: body.defaultHours != null && body.defaultHours !== "" ? String(body.defaultHours) : null,
+        isAssembly,
+        parentId: parentParse.value,
+        serviceLines: body.serviceLines || null,
+        sortOrder: sortParse.value ?? 0,
+        isActive: body.isActive !== false,
+      }).returning();
+      await db.insert(activityLog).values({
+        action: "scope_catalog_created",
+        description: `Created scope item ${row.code} — ${row.name}`,
+        userName: body.userName || null,
+        metadata: { scopeItemId: row.id },
+      });
+      res.status(201).json(row);
+    } catch (err: any) {
+      if (err?.code === "23505") return res.status(409).json({ error: "Code already exists" });
+      res.status(500).json({ error: err?.message || "Failed to create scope item" });
+    }
+  });
+
+  app.patch("/api/scope-catalog/:id", async (req: Request, res: Response) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (Number.isNaN(id)) return res.status(400).json({ error: "Invalid id" });
+      const body = req.body || {};
+      const [current] = await db.select().from(scopeCatalog).where(eq(scopeCatalog.id, id));
+      if (!current) return res.status(404).json({ error: "Not found" });
+
+      const updates: any = {};
+      if (body.code !== undefined) {
+        const v = String(body.code).trim();
+        if (!v) return res.status(400).json({ error: "code cannot be empty" });
+        updates.code = v;
+      }
+      if (body.name !== undefined) {
+        const v = String(body.name).trim();
+        if (!v) return res.status(400).json({ error: "name cannot be empty" });
+        updates.name = v;
+      }
+      if (body.category !== undefined) {
+        const v = String(body.category).trim();
+        if (!v) return res.status(400).json({ error: "category cannot be empty" });
+        updates.category = v;
+      }
+      if (body.description !== undefined) updates.description = body.description || null;
+      if (body.defaultHours !== undefined) {
+        updates.defaultHours = body.defaultHours != null && body.defaultHours !== "" ? String(body.defaultHours) : null;
+      }
+      if (body.isAssembly !== undefined) updates.isAssembly = !!body.isAssembly;
+      if (body.parentId !== undefined) {
+        const p = parseIntOrError(body.parentId, "parentId");
+        if (p.error) return res.status(400).json({ error: p.error });
+        updates.parentId = p.value;
+      }
+      if (body.serviceLines !== undefined) updates.serviceLines = body.serviceLines || null;
+      if (body.sortOrder !== undefined) {
+        const s = parseIntOrError(body.sortOrder, "sortOrder");
+        if (s.error) return res.status(400).json({ error: s.error });
+        updates.sortOrder = s.value ?? 0;
+      }
+      if (body.isActive !== undefined) updates.isActive = !!body.isActive;
+
+      const finalIsAssembly = updates.isAssembly ?? current.isAssembly;
+      const finalParentId = updates.parentId !== undefined ? updates.parentId : current.parentId;
+
+      if (finalParentId !== null && finalParentId !== undefined) {
+        if (finalIsAssembly) return res.status(400).json({ error: "Assembly items cannot have a parent" });
+        if (finalParentId === id) return res.status(400).json({ error: "An item cannot be its own parent" });
+        const cycleErr = await validateScopeParent(finalParentId, id);
+        if (cycleErr) return res.status(400).json({ error: cycleErr });
+      }
+
+      // If toggling assembly -> non-assembly, ensure no items still reference it as parent
+      if (current.isAssembly && updates.isAssembly === false) {
+        const children = await db.select({ id: scopeCatalog.id, code: scopeCatalog.code })
+          .from(scopeCatalog).where(eq(scopeCatalog.parentId, id));
+        if (children.length > 0) {
+          return res.status(400).json({
+            error: `Cannot un-mark as assembly: ${children.length} child item(s) still reference this as parent (${children.slice(0, 3).map(c => c.code).join(", ")}${children.length > 3 ? "..." : ""}). Re-parent or remove them first.`,
+          });
+        }
+      }
+
+      const [row] = await db.update(scopeCatalog).set(updates).where(eq(scopeCatalog.id, id)).returning();
+      if (!row) return res.status(404).json({ error: "Not found" });
+      await db.insert(activityLog).values({
+        action: "scope_catalog_updated",
+        description: `Updated scope item ${row.code}`,
+        userName: body.userName || null,
+        metadata: { scopeItemId: id, changedFields: Object.keys(updates) },
+      });
+      res.json(row);
+    } catch (err: any) {
+      if (err?.code === "23505") return res.status(409).json({ error: "Code already exists" });
+      res.status(500).json({ error: err?.message || "Failed to update scope item" });
+    }
+  });
+
+  app.delete("/api/scope-catalog/:id", async (req: Request, res: Response) => {
+    const id = parseInt(req.params.id);
+    const userName = (req.body?.userName as string) || null;
+    // Always soft-delete (deactivate) — preserve historical references on existing deals
+    const [row] = await db.update(scopeCatalog).set({ isActive: false }).where(eq(scopeCatalog.id, id)).returning();
+    if (!row) return res.status(404).json({ error: "Not found" });
+    await db.insert(activityLog).values({
+      action: "scope_catalog_deactivated",
+      description: `Deactivated scope item ${row.code} — ${row.name}`,
+      userName,
+      metadata: { scopeItemId: id },
+    });
+    res.json({ ok: true, item: row });
   });
 
   // ========== DEAL SCOPE ITEMS ==========
@@ -539,6 +702,10 @@ export function registerRoutes(app: Express) {
   app.post("/api/deals/:dealId/scope-items", async (req: Request, res: Response) => {
     const dealId = parseInt(req.params.dealId);
     const cascade = req.body?.cascade !== false; // default true
+    const [check] = await db.select({ isActive: scopeCatalog.isActive, code: scopeCatalog.code })
+      .from(scopeCatalog).where(eq(scopeCatalog.id, req.body.scopeItemId));
+    if (!check) return res.status(404).json({ error: "Scope item not found" });
+    if (check.isActive === false) return res.status(400).json({ error: `Scope item ${check.code} is inactive and cannot be added` });
     const [item] = await db.insert(dealScopeItems).values({
       dealId,
       scopeItemId: req.body.scopeItemId,
@@ -614,9 +781,14 @@ export function registerRoutes(app: Express) {
       .from(dealScopeItems).where(eq(dealScopeItems.dealId, dealId));
     const existingIds = new Set(existing.map(e => e.scopeItemId));
     const inserted: any[] = [];
+    const skippedInactive: string[] = [];
     for (const ti of items) {
       if (existingIds.has(ti.scopeItemId)) continue;
       const [catalogItem] = await db.select().from(scopeCatalog).where(eq(scopeCatalog.id, ti.scopeItemId));
+      if (!catalogItem || catalogItem.isActive === false) {
+        if (catalogItem) skippedInactive.push(catalogItem.code);
+        continue;
+      }
       const [row] = await db.insert(dealScopeItems).values({
         dealId,
         scopeItemId: ti.scopeItemId,
@@ -628,11 +800,12 @@ export function registerRoutes(app: Express) {
         inserted.push(row);
         existingIds.add(ti.scopeItemId);
       }
-      // Cascade assembly children
+      // Cascade assembly children (skip inactive)
       if (catalogItem?.isAssembly) {
         const children = await db.select().from(scopeCatalog).where(eq(scopeCatalog.parentId, catalogItem.id));
         for (const child of children) {
           if (existingIds.has(child.id)) continue;
+          if (child.isActive === false) { skippedInactive.push(child.code); continue; }
           const [ci] = await db.insert(dealScopeItems).values({
             dealId, scopeItemId: child.id, quantity: 1,
             adjustedHours: child.defaultHours, complexityMultiplier: "1.0",
@@ -652,7 +825,7 @@ export function registerRoutes(app: Express) {
       userName: req.body?.userName || null,
       metadata: { templateId, itemsAdded: inserted.length },
     }).catch(() => {});
-    res.status(201).json({ insertedCount: inserted.length, items: inserted });
+    res.status(201).json({ insertedCount: inserted.length, items: inserted, skippedInactive });
   });
 
   app.delete("/api/deals/:dealId/scope-items/:id", async (req: Request, res: Response) => {

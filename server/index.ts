@@ -94,6 +94,7 @@ async function pushSchema() {
     );
     ALTER TABLE scope_catalog ADD COLUMN IF NOT EXISTS service_lines TEXT;
     ALTER TABLE scope_catalog ADD COLUMN IF NOT EXISTS parent_id INTEGER;
+    ALTER TABLE scope_catalog ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE;
     DO $$ BEGIN
       IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'scope_catalog_parent_id_fkey') THEN
         ALTER TABLE scope_catalog

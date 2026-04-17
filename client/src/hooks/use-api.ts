@@ -90,8 +90,47 @@ export function useUpdateDeal() {
   });
 }
 
-export function useScopeCatalog() {
-  return useQuery({ queryKey: ["scope-catalog"], queryFn: () => fetchApi("/api/scope-catalog") });
+export function useScopeCatalog(opts?: { includeInactive?: boolean }) {
+  const includeInactive = opts?.includeInactive ? "?includeInactive=1" : "";
+  return useQuery({
+    queryKey: ["scope-catalog", includeInactive ? "all" : "active"],
+    queryFn: () => fetchApi(`/api/scope-catalog${includeInactive}`),
+  });
+}
+
+export function useCreateScopeItem() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: any) => fetchApi("/api/scope-catalog", { method: "POST", body: JSON.stringify(data) }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["scope-catalog"] });
+      qc.invalidateQueries({ queryKey: ["activity"] });
+    },
+  });
+}
+
+export function useUpdateScopeItem() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, data }: { id: number; data: any }) =>
+      fetchApi(`/api/scope-catalog/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["scope-catalog"] });
+      qc.invalidateQueries({ queryKey: ["activity"] });
+    },
+  });
+}
+
+export function useDeactivateScopeItem() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, userName }: { id: number; userName?: string }) =>
+      fetchApi(`/api/scope-catalog/${id}`, { method: "DELETE", body: JSON.stringify({ userName }) }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["scope-catalog"] });
+      qc.invalidateQueries({ queryKey: ["activity"] });
+    },
+  });
 }
 
 export function useScopeTemplates(serviceLine?: string | null) {

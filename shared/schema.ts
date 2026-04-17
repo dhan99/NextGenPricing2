@@ -57,6 +57,7 @@ export const scopeCatalog = pgTable("scope_catalog", {
   parentId: integer("parent_id").references((): any => scopeCatalog.id),
   serviceLines: text("service_lines"),
   sortOrder: integer("sort_order").default(0),
+  isActive: boolean("is_active").default(true),
 });
 
 export const scopeTemplates = pgTable("scope_templates", {
