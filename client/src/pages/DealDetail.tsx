@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useRoute } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import { useDeal, useUpdateDeal, useScopeCatalog, useScopeTemplates, useApplyScopeTemplate, useDealScopeItems, useAddScopeItem, useRemoveScopeItem, useRoles, useDealPricing, useUpdatePricingLine, useDealScenarios, useSelectScenario, useDealApprovals, useSubmitApproval, useUpdateApproval, useDealPrompts, useUpdatePrompt, useEngagementInputSpec, useAIDealSimilarity, useAIEffortEstimation, useAIMarginAdvisor, useAIScenarioRecommendation, useAIRiskSummary, useDealIntappScreening, useRunIntappScreening, useIntappOverride, useAddIntappMitigation, useUpdateIntappMitigation, useWorkdayLatestValidation, useWorkdayCostCenters, useRunWorkdayValidation, useLinkWorkdayCostCenter, useOverrideWorkdayValidation } from "@/hooks/use-api";
@@ -1071,8 +1071,8 @@ function ScopeBreakdownPanel({ dealId, pricingLines }: { dealId: number; pricing
               const groupHours = groupItems.reduce((s, i) => s + parseFloat(i.adjustedHours || 0) * parseFloat(i.complexityMultiplier || 1) * (i.quantity || 1), 0);
               const groupFee = itemRowFee(groupHours);
               return (
-                <>
-                  <tr key={`grp-${g}`} className="bg-amber-50/40">
+                <React.Fragment key={`grp-${g}`}>
+                  <tr className="bg-amber-50/40">
                     <td className="px-6 py-2 text-xs font-bold text-foreground uppercase tracking-wide" colSpan={2 + lines.length + 1}>
                       <span className="text-primary">{g}</span>
                       <span className="text-muted-foreground ml-2 normal-case font-medium">{groupLabel[g] || g}</span>
@@ -1104,7 +1104,7 @@ function ScopeBreakdownPanel({ dealId, pricingLines }: { dealId: number; pricing
                       </tr>
                     );
                   })}
-                </>
+                </React.Fragment>
               );
             })}
           </tbody>
