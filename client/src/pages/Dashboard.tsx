@@ -2,7 +2,7 @@ import { useState, useMemo, useRef, useEffect } from "react";
 import { useDashboardSummary, useDeals, useWorkdayDashboard } from "@/hooks/use-api";
 import { formatCurrency, formatPercent, getStatusColor, getStatusLabel } from "@/lib/utils";
 import { Link } from "wouter";
-import { TrendingUp, DollarSign, AlertCircle, ArrowRight, FileText, ShieldCheck, Layers, Network, BarChart3, Shield, CheckCircle, Search, Sparkles, Send, Bot, Lightbulb, RefreshCw, Lock } from "lucide-react";
+import { TrendingUp, DollarSign, AlertCircle, ArrowRight, FileText, ShieldCheck, Layers, Network, BarChart3, Shield, CheckCircle, Search, Sparkles, Send, Bot, Lightbulb, RefreshCw, Lock, Briefcase, Settings2 } from "lucide-react";
 import { useAuth, type PersonaRole } from "@/context/AuthContext";
 import { useQuery, useMutation } from "@tanstack/react-query";
 
@@ -187,6 +187,25 @@ export function Dashboard() {
 
   const kpis = kpiSets[role];
   const showWorkday = role === "fin" || role === "sll" || role === "po" || role === "pdl";
+  const showIntapp = role === "qrm";
+  const hasOpsTab = showWorkday || showIntapp;
+
+  type TabKey = "pipeline" | "ai" | "ops";
+  const visibleTabs = useMemo(() => {
+    const all: { key: TabKey; label: string; icon: any; visible: boolean }[] = [
+      { key: "pipeline", label: "Pipeline", icon: Briefcase, visible: hasPermission("viewDeals") },
+      { key: "ai", label: "AI Assistant", icon: Sparkles, visible: true },
+      { key: "ops", label: "Operations", icon: Settings2, visible: hasOpsTab },
+    ];
+    return all.filter((t) => t.visible);
+  }, [hasPermission, hasOpsTab]);
+  const visibleKeys = useMemo(() => visibleTabs.map((t) => t.key).join(","), [visibleTabs]);
+  const [activeTab, setActiveTab] = useState<TabKey>(visibleTabs[0]?.key || "ai");
+  useEffect(() => {
+    if (!visibleTabs.find((t) => t.key === activeTab) && visibleTabs[0]) {
+      setActiveTab(visibleTabs[0].key);
+    }
+  }, [visibleKeys, activeTab, visibleTabs]);
 
   return (
     <div className="p-6 max-w-[1600px] mx-auto">
@@ -221,8 +240,52 @@ export function Dashboard() {
         })}
       </div>
 
-      {showWorkday && <WorkdaySurface />}
-      {role === "qrm" && intappDash && (
+      {/* Tab bar */}
+      {visibleTabs.length > 1 && (
+        <div role="tablist" aria-label="Dashboard sections" className="border-b border-border mb-5 flex items-center gap-1 overflow-x-auto">
+          {visibleTabs.map((t, idx) => {
+            const Icon = t.icon;
+            const isActive = t.key === activeTab;
+            return (
+              <button
+                key={t.key}
+                id={`dash-tab-${t.key}`}
+                role="tab"
+                aria-selected={isActive}
+                aria-controls={`dash-panel-${t.key}`}
+                tabIndex={isActive ? 0 : -1}
+                onClick={() => setActiveTab(t.key)}
+                onKeyDown={(e) => {
+                  if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
+                    e.preventDefault();
+                    const dir = e.key === "ArrowRight" ? 1 : -1;
+                    const nextIdx = (idx + dir + visibleTabs.length) % visibleTabs.length;
+                    setActiveTab(visibleTabs[nextIdx].key);
+                    document.getElementById(`dash-tab-${visibleTabs[nextIdx].key}`)?.focus();
+                  }
+                }}
+                className={`inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px whitespace-nowrap focus:outline-none focus:ring-2 focus:ring-primary/30 rounded-t-md ${
+                  isActive
+                    ? "border-primary text-primary"
+                    : "border-transparent text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <Icon className="w-4 h-4" />
+                {t.label}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {/* OPERATIONS TAB */}
+      {activeTab === "ops" && (
+        <div role="tabpanel" id="dash-panel-ops" aria-labelledby="dash-tab-ops">
+          {showWorkday && <WorkdaySurface />}
+          {showIntapp && !intappDash && (
+            <div className="card p-8 text-center text-sm text-muted-foreground mb-6">Loading Intapp risk data…</div>
+          )}
+          {showIntapp && intappDash && (
         <div className="card mb-6">
           <div className="px-5 py-3 border-b border-border flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -270,13 +333,12 @@ export function Dashboard() {
             </div>
           </div>
         </div>
+          )}
+        </div>
       )}
-      {showWorkday && <WorkdaySurface />}
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left: Deals list with search + filter */}
-        {hasPermission("viewDeals") && (
-          <div className="lg:col-span-2 card">
+      {/* PIPELINE TAB */}
+      {activeTab === "pipeline" && hasPermission("viewDeals") && (
+        <div role="tabpanel" id="dash-panel-pipeline" aria-labelledby="dash-tab-pipeline" className="card mb-6">
             <div className="px-5 py-3 border-b border-border flex items-center gap-3">
               <div className="flex-1 relative">
                 <Search className="w-4 h-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
@@ -334,11 +396,37 @@ export function Dashboard() {
                 </div>
               )}
             </div>
-          </div>
-        )}
+        </div>
+      )}
 
-        {/* Right: AI Insights + Chat */}
-        <div className="flex flex-col gap-6">
+      {activeTab === "pipeline" && summary?.statusBreakdown && summary.statusBreakdown.length > 0 && hasPermission("viewDeals") && (
+        <div className="card p-6 mb-6">
+          <h2 className="font-semibold text-foreground mb-4 flex items-center gap-2">
+            <BarChart3 className="w-4 h-4 text-muted-foreground" />
+            Pipeline by Status
+          </h2>
+          <div className="flex items-center gap-3">
+            {summary.statusBreakdown.map((s: any) => (
+              <div key={s.status} className="flex-1">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs font-medium text-muted-foreground">{getStatusLabel(s.status)}</span>
+                  <span className="text-xs font-bold text-foreground">{s.count}</span>
+                </div>
+                <div className="h-2 bg-muted rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-primary rounded-full transition-all"
+                    style={{ width: `${Math.min((s.count / (summary.totalDeals || 1)) * 100, 100)}%` }}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* AI ASSISTANT TAB */}
+      {activeTab === "ai" && (
+        <div role="tabpanel" id="dash-panel-ai" aria-labelledby="dash-tab-ai" className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div className="card">
             <div className="px-5 py-3 border-b border-border flex items-center justify-between">
               <h2 className="font-semibold text-foreground flex items-center gap-2 text-sm">
@@ -419,30 +507,11 @@ export function Dashboard() {
             </div>
           </div>
         </div>
-      </div>
+      )}
 
-      {summary?.statusBreakdown && summary.statusBreakdown.length > 0 && hasPermission("viewDeals") && (
-        <div className="mt-6 card p-6">
-          <h2 className="font-semibold text-foreground mb-4 flex items-center gap-2">
-            <BarChart3 className="w-4 h-4 text-muted-foreground" />
-            Pipeline by Status
-          </h2>
-          <div className="flex items-center gap-3">
-            {summary.statusBreakdown.map((s: any) => (
-              <div key={s.status} className="flex-1">
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs font-medium text-muted-foreground">{getStatusLabel(s.status)}</span>
-                  <span className="text-xs font-bold text-foreground">{s.count}</span>
-                </div>
-                <div className="h-2 bg-muted rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-primary rounded-full transition-all"
-                    style={{ width: `${Math.min((s.count / (summary.totalDeals || 1)) * 100, 100)}%` }}
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
+      {activeTab === "ops" && !showWorkday && !showIntapp && (
+        <div className="card p-12 text-center text-muted-foreground text-sm">
+          No operations surfaces available for this role.
         </div>
       )}
     </div>
