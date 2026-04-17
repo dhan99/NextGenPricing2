@@ -2385,18 +2385,83 @@ export function registerRoutes(app: Express) {
       stepNeedsReview,
     );
 
-    // 6. UC-2: pick scope items via service-line template (or fallback)
+    // 6. UC-2: pick scope items. Layered selection so the agent reliably drafts
+    //    4–8 relevant items even when serviceLine tagging is sparse:
+    //      (a) prefer items from a matching scopeTemplates row,
+    //      (b) merge in catalog rows tagged with the serviceLine OR any
+    //          businessUnit-implied keyword,
+    //      (c) round out with universal helpers (PMO/Training) so the draft
+    //          always lands in the 4–8 range.
     const allCatalog = await db.select().from(scopeCatalog).where(eq(scopeCatalog.isActive, true));
+    const catalogById = new Map(allCatalog.map((c) => [c.id, c]));
     const slLower = serviceLine.toLowerCase();
-    let candidateScope = allCatalog.filter((c) => {
-      const sls = (c.serviceLines || "").toLowerCase();
-      return sls && (sls.includes(slLower) || slLower.split(" ").some(w => w.length > 3 && sls.includes(w)));
-    }).filter(c => !c.isAssembly);
-    if (candidateScope.length === 0) {
-      candidateScope = allCatalog.filter(c => !c.isAssembly).slice(0, 5);
-    } else {
-      candidateScope = candidateScope.slice(0, 8);
+    const buLower = (businessUnit || "").toLowerCase();
+    const buKeywordMap: Record<string, string[]> = {
+      "audit & assurance": ["financial audit", "risk assurance", "audit"],
+      "tax services": ["tax planning", "tax"],
+      "technology consulting": [
+        "digital transformation", "cloud services", "erp implementation",
+        "netsuite", "sage intacct", "data analytics",
+      ],
+      "risk & compliance": [
+        "cybersecurity", "compliance consulting", "risk assurance", "security",
+      ],
+      "advisory services": ["strategy consulting", "data analytics", "advisory"],
+    };
+    const expansionTerms = new Set<string>([slLower, ...(buKeywordMap[buLower] || [])]);
+    for (const w of slLower.split(/\s+/)) if (w.length > 3) expansionTerms.add(w);
+
+    const picked = new Map<number, typeof allCatalog[number]>();
+    const sources: Record<string, string[]> = { template: [], tag: [], universal: [] };
+
+    // 6a. Pull non-assembly items from any active template for this serviceLine.
+    const matchingTemplates = await db.select().from(scopeTemplates)
+      .where(and(eq(scopeTemplates.isActive, true), eq(scopeTemplates.serviceLine, serviceLine)));
+    if (matchingTemplates.length > 0) {
+      const tplIds = matchingTemplates.map((t) => t.id);
+      const tItems = await db.select().from(scopeTemplateItems)
+        .where(inArray(scopeTemplateItems.templateId, tplIds))
+        .orderBy(scopeTemplateItems.sortOrder);
+      for (const ti of tItems) {
+        const cat = catalogById.get(ti.scopeItemId);
+        if (!cat || cat.isActive === false || cat.isAssembly) continue;
+        if (picked.has(cat.id)) continue;
+        picked.set(cat.id, cat);
+        sources.template.push(cat.code);
+      }
     }
+
+    // 6b. Catalog rows tagged with the serviceLine or a BU-implied keyword.
+    for (const c of allCatalog) {
+      if (c.isAssembly) continue;
+      if (picked.has(c.id)) continue;
+      const tags = (c.serviceLines || "").toLowerCase();
+      if (!tags) continue;
+      const hit = [...expansionTerms].some((term) => term && tags.includes(term));
+      if (hit) {
+        picked.set(c.id, c);
+        sources.tag.push(c.code);
+      }
+    }
+
+    // 6c. Universal helpers — PM/Training/Testing — to ensure ≥4 items and
+    //     give the reviewer a realistic baseline to trim from.
+    const universalCodes = ["PMO-001", "TRN-001", "PMO-002", "TEST-002"];
+    for (const code of universalCodes) {
+      if (picked.size >= 4) break;
+      const c = allCatalog.find((x) => x.code === code && !x.isAssembly && x.isActive !== false);
+      if (c && !picked.has(c.id)) {
+        picked.set(c.id, c);
+        sources.universal.push(c.code);
+      }
+    }
+
+    // Cap at 8, preserving insertion order (template > tag > universal).
+    let candidateScope = [...picked.values()].slice(0, 8);
+    if (candidateScope.length === 0) {
+      candidateScope = allCatalog.filter((c) => !c.isAssembly).slice(0, 5);
+    }
+
     const insertedScope: any[] = [];
     for (const item of candidateScope) {
       const [row] = await db.insert(dealScopeItems).values({
@@ -2408,13 +2473,22 @@ export function registerRoutes(app: Express) {
       }).onConflictDoNothing({ target: [dealScopeItems.dealId, dealScopeItems.scopeItemId] }).returning();
       if (row) insertedScope.push({ id: row.id, code: item.code, name: item.name, defaultHours: item.defaultHours });
     }
+    const sourceSummary =
+      `template:${sources.template.length} tag:${sources.tag.length} universal:${sources.universal.length}`;
     await logStep(
       "scope",
       "Scope assembled",
-      `Added ${insertedScope.length} scope item${insertedScope.length === 1 ? "" : "s"} matched to ${serviceLine}.`,
-      { items: insertedScope, serviceLine, totalCandidates: candidateScope.length },
-      insertedScope.length >= 5 ? 0.8 : 0.55,
-      insertedScope.length === 0,
+      `Added ${insertedScope.length} scope item${insertedScope.length === 1 ? "" : "s"} for ${serviceLine} (${sourceSummary}).`,
+      {
+        items: insertedScope,
+        serviceLine,
+        businessUnit,
+        totalCandidates: candidateScope.length,
+        sources,
+        templateMatches: matchingTemplates.map((t) => ({ id: t.id, name: t.name })),
+      },
+      insertedScope.length >= 4 ? 0.8 : insertedScope.length > 0 ? 0.55 : 0.3,
+      insertedScope.length < 4,
     );
 
     // 7. Seed pricing lines (mirror GET /pricing lazy-init) so recalc has a

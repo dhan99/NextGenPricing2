@@ -89,4 +89,31 @@ export async function loadSeedSnapshot() {
   } else {
     console.log("[snapshot] all rows already present");
   }
+
+  // Re-align scope_catalog.service_lines tagging from the snapshot. This is the
+  // catalog metadata the autonomous agent relies on for scope matching, and we
+  // want broader tagging changes to propagate into existing dev DBs (which
+  // would otherwise be skipped by ON CONFLICT DO NOTHING above).
+  const catalogRows = snapshot["scope_catalog"];
+  if (Array.isArray(catalogRows)) {
+    let realigned = 0;
+    for (const row of catalogRows) {
+      if (typeof row.id !== "number") continue;
+      try {
+        const result = await pool.query(
+          `UPDATE scope_catalog
+             SET service_lines = $2
+           WHERE id = $1
+             AND COALESCE(service_lines, '') IS DISTINCT FROM COALESCE($2, '')`,
+          [row.id, row.service_lines ?? null]
+        );
+        realigned += result.rowCount ?? 0;
+      } catch (err: any) {
+        console.error(`[snapshot] scope_catalog tag realign id=${row.id} failed:`, err.message);
+      }
+    }
+    if (realigned > 0) {
+      console.log(`[snapshot] scope_catalog: realigned service_lines on ${realigned} row(s)`);
+    }
+  }
 }
