@@ -161,6 +161,48 @@ export function useCloneDeal() {
   });
 }
 
+export function useDynamicsAccounts() {
+  return useQuery({ queryKey: ["dyn-accounts"], queryFn: () => fetchApi("/api/dynamics/accounts") });
+}
+export function useDynamicsOpportunities() {
+  return useQuery({ queryKey: ["dyn-opps"], queryFn: () => fetchApi("/api/dynamics/opportunities") });
+}
+export function useDynamicsPipeline() {
+  return useQuery({ queryKey: ["dyn-pipeline"], queryFn: () => fetchApi("/api/dynamics/pipeline") });
+}
+export function useDynamicsSyncLog() {
+  return useQuery({ queryKey: ["dyn-synclog"], queryFn: () => fetchApi("/api/dynamics/sync-log"), refetchInterval: 5000 });
+}
+export function useDynamicsSync() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { entity?: string; direction?: string; userName?: string }) =>
+      fetchApi("/api/dynamics/sync", { method: "POST", body: JSON.stringify(body) }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["dyn-accounts"] });
+      qc.invalidateQueries({ queryKey: ["dyn-opps"] });
+      qc.invalidateQueries({ queryKey: ["dyn-pipeline"] });
+      qc.invalidateQueries({ queryKey: ["dyn-synclog"] });
+    },
+  });
+}
+export function useImportOpportunity() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { dynamicsId: string }) =>
+      fetchApi("/api/dynamics/import-opportunity", { method: "POST", body: JSON.stringify(body) }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["dyn-synclog"] }),
+  });
+}
+export function usePushDealToDynamics() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { dealId: number }) =>
+      fetchApi("/api/dynamics/push-deal", { method: "POST", body: JSON.stringify(body) }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["dyn-synclog"] }),
+  });
+}
+
 export function useResetPricing() {
   const qc = useQueryClient();
   return useMutation({

@@ -13,6 +13,7 @@ import { ArchitectureInteractive } from "./pages/ArchitectureInteractive";
 import { ArchitectureHub } from "./pages/ArchitectureHub";
 import { Analytics } from "./pages/Analytics";
 import { ChangeOrders } from "./pages/ChangeOrders";
+import { DynamicsCRM } from "./pages/DynamicsCRM";
 import { Login } from "./pages/Login";
 import { Shield } from "lucide-react";
 
@@ -63,6 +64,7 @@ function AuthenticatedApp() {
         <Route path="/deals/:id/change-orders">
           {hasPermission("viewDeals") ? <ChangeOrders /> : <NoAccess feature="change orders" />}
         </Route>
+        <Route path="/integrations/dynamics" component={DynamicsCRM} />
         <Route path="/architecture" component={ArchitectureHub} />
         <Route path="/architecture-i" component={ArchitectureInteractive} />
         <Route>

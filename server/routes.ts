@@ -101,7 +101,11 @@ async function recalcPricingFromScope(dealId: number) {
   await db.delete(scenarios).where(eq(scenarios.dealId, dealId));
 }
 
+import { registerDynamicsRoutes } from "./dynamics";
+
 export function registerRoutes(app: Express) {
+  registerDynamicsRoutes(app);
+
 
   // ========== DASHBOARD ==========
   app.get("/api/dashboard/summary", async (_req: Request, res: Response) => {
