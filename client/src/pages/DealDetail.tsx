@@ -19,7 +19,7 @@ const STEPS = [
   { num: 3, label: "Assumptions" },
   { num: 4, label: "Pricing" },
   { num: 5, label: "Review" },
-  { num: 6, label: "Submit for Approval" },
+  { num: 6, label: "Approve" },
   { num: 7, label: "Summary" },
 ];
 
