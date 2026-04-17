@@ -1217,17 +1217,65 @@ export function registerRoutes(app: Express) {
     const dealId = parseInt(req.params.dealId);
     const scenarioId = parseInt(req.params.id);
 
+    // Validate scenario belongs to this deal BEFORE mutating any state.
+    const target = await db.query.scenarios.findFirst({
+      where: and(eq(scenarios.id, scenarioId), eq(scenarios.dealId, dealId)),
+    });
+    if (!target) return res.status(404).json({ error: "Scenario not found for this deal" });
+
     await db.update(scenarios).set({ isRecommended: false }).where(eq(scenarios.dealId, dealId));
     const [selected] = await db.update(scenarios).set({ isRecommended: true })
-      .where(eq(scenarios.id, scenarioId)).returning();
+      .where(and(eq(scenarios.id, scenarioId), eq(scenarios.dealId, dealId))).returning();
     if (!selected) return res.status(404).json({ error: "Scenario not found" });
 
+    // Scale every pricing line so the per-row grid (and all derived KPIs / role
+    // & scope breakdowns) reflects the chosen option. Multipliers are computed
+    // from the current line totals → the scenario's targets, so re-selecting a
+    // different option later re-scales correctly.
+    const lines = await db.select().from(pricingLines).where(eq(pricingLines.dealId, dealId));
+    const curHours = lines.reduce((s, l) => s + parseFloat(l.hours || "0"), 0);
+    const curFee = lines.reduce((s, l) => s + parseFloat(l.fee || "0"), 0);
+    const curCost = lines.reduce((s, l) => s + parseFloat(l.cost || "0"), 0);
+    const tgtHours = parseFloat(selected.totalHours || "0");
+    const tgtFee = parseFloat(selected.totalFee || "0");
+    const tgtCost = parseFloat(selected.totalCost || "0");
+    const hMul = curHours > 0 && tgtHours > 0 ? tgtHours / curHours : 1;
+    const fMul = curFee > 0 && tgtFee > 0 ? tgtFee / curFee : 1;
+    const cMul = curCost > 0 && tgtCost > 0 ? tgtCost / curCost : 1;
+    for (const l of lines) {
+      const newHours = parseFloat(l.hours || "0") * hMul;
+      const newFee = parseFloat(l.fee || "0") * fMul;
+      const newCost = parseFloat(l.cost || "0") * cMul;
+      const newRate = newHours > 0 ? newFee / newHours : parseFloat(l.rate || "0");
+      const newCostRate = newHours > 0 ? newCost / newHours : parseFloat(l.costRate || "0");
+      await db.update(pricingLines).set({
+        hours: newHours.toFixed(2),
+        rate: newRate.toFixed(2),
+        costRate: newCostRate.toFixed(2),
+        fee: newFee.toFixed(2),
+        cost: newCost.toFixed(2),
+        margin: (newFee - newCost).toFixed(2),
+      }).where(eq(pricingLines.id, l.id));
+    }
+
+    // Single source of truth: derive deal-level totals from the persisted
+    // (post-scale) pricing lines so the banner / KPI strip / grid never drift.
+    const updatedLines = await db.select().from(pricingLines).where(eq(pricingLines.dealId, dealId));
+    const sumHours = updatedLines.reduce((s, l) => s + parseFloat(l.hours || "0"), 0);
+    const sumFee = updatedLines.reduce((s, l) => s + parseFloat(l.fee || "0"), 0);
+    const sumCost = updatedLines.reduce((s, l) => s + parseFloat(l.cost || "0"), 0);
+    const dealTotalFee = updatedLines.length > 0 ? sumFee : parseFloat(selected.totalFee || "0");
+    const dealTotalCost = updatedLines.length > 0 ? sumCost : parseFloat(selected.totalCost || "0");
+    const dealTotalHours = updatedLines.length > 0 ? sumHours : parseFloat(selected.totalHours || "0");
+    const dealMargin = dealTotalFee > 0 ? ((dealTotalFee - dealTotalCost) / dealTotalFee) * 100 : 0;
+    const dealBlended = dealTotalHours > 0 ? dealTotalFee / dealTotalHours : 0;
+
     await db.update(deals).set({
-      totalFee: selected.totalFee,
-      totalCost: selected.totalCost,
-      totalHours: selected.totalHours,
-      marginPercent: selected.marginPercent,
-      blendedRate: selected.blendedRate,
+      totalFee: dealTotalFee.toFixed(2),
+      totalCost: dealTotalCost.toFixed(2),
+      totalHours: dealTotalHours.toFixed(2),
+      marginPercent: dealMargin.toFixed(2),
+      blendedRate: dealBlended.toFixed(2),
       updatedAt: new Date(),
     }).where(eq(deals.id, dealId));
 

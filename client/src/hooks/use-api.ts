@@ -211,6 +211,7 @@ export function useSelectScenario() {
     onSuccess: (_, { dealId }) => {
       qc.invalidateQueries({ queryKey: ["deal-scenarios", dealId] });
       qc.invalidateQueries({ queryKey: ["deal", dealId] });
+      qc.invalidateQueries({ queryKey: ["deal-pricing", dealId] });
       qc.invalidateQueries({ queryKey: ["deals"] });
     },
   });
