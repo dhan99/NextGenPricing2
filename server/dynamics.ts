@@ -286,6 +286,28 @@ export async function linkDealToOpportunity(opportunityId: number, dealId: numbe
   return { ok: true };
 }
 
+// Unlink a D365 opportunity from its DealPad deal (does not delete the deal).
+// Frees the opp to be re-linked or re-scoped.
+export async function unlinkOpportunity(opportunityId: number, actorName?: string) {
+  const [opp] = await db.select().from(dynamicsOpportunities).where(eq(dynamicsOpportunities.id, opportunityId));
+  if (!opp || !opp.dealpadDealId) return { ok: false, reason: "not-linked" };
+  const previousDealId = opp.dealpadDealId;
+  await db.update(dynamicsOpportunities).set({
+    dealpadDealId: null,
+    syncStatus: "queued",
+    syncDirection: "inbound",
+    lastPushedAt: null,
+    updatedAt: new Date(),
+  }).where(eq(dynamicsOpportunities.id, opportunityId));
+  await logEvent({
+    direction: "inbound", entity: "Opportunity", entityName: opp.name, entityRefId: opp.id,
+    action: "Unlinked D365 opportunity from DealPad deal",
+    fields: ["dealpadDealId"], status: "success", actorName, trigger: "manual",
+    message: `D365 ${opp.opportunityNumber} unlinked from DealPad deal #${previousDealId}. Opportunity is now available for re-linking.`,
+  });
+  return { ok: true, previousDealId };
+}
+
 // Templates that pre-populate scope hints so an opp is "scope-ready" (Develop/Propose-eligible)
 const SCOPE_TEMPLATES: Record<string, { businessUnit: string; serviceLine: string; complexity: string; scopeNotes: string }> = {
   "Annual Audit": {
@@ -358,6 +380,14 @@ export function registerDynamicsRoutes(app: Express) {
       return { ...formatOpp(o), scopeTemplate: tmpl ? { ...tmpl, key: tmplKey(o.name) } : null };
     });
     res.json(enriched);
+  });
+
+  app.post("/api/dynamics/opportunities/:id/unlink", async (req, res) => {
+    const id = parseInt(req.params.id);
+    if (Number.isNaN(id)) return res.status(400).json({ error: "Invalid id" });
+    const result = await unlinkOpportunity(id, req.body?.userName);
+    if (!result.ok) return res.status(400).json({ error: result.reason || "unlink-failed" });
+    res.json(result);
   });
 
   app.get("/api/dynamics/scope-templates", (_req, res) => {

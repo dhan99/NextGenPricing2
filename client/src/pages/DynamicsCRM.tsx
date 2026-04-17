@@ -2,14 +2,14 @@ import { useState, useEffect } from "react";
 import {
   RefreshCw, ArrowDownToLine, ArrowUpFromLine, Building2, Briefcase,
   TrendingUp, CheckCircle2, AlertTriangle, Database, Loader2,
-  Download, Upload, Settings, Pencil, Save, X, Moon, Zap, Plus, Sparkles,
+  Download, Upload, Settings, Pencil, Save, X, Moon, Zap, Plus, Sparkles, Unlink,
 } from "lucide-react";
 import {
   useDynamicsAccounts, useDynamicsOpportunities, useDynamicsPipeline,
   useDynamicsSyncLog, useDynamicsSync, useImportOpportunity,
   useDynamicsSettings, useUpdateDynamicsSettings,
   useUpdateDynamicsAccount, useUpdateDynamicsOpportunity,
-  useNightlyBatch, usePushDealToDynamics,
+  useNightlyBatch, usePushDealToDynamics, useUnlinkOpportunity,
   useScopeTemplates, useCreateOpportunity,
 } from "@/hooks/use-api";
 import { useAuth } from "@/context/AuthContext";
@@ -328,6 +328,7 @@ function OpportunitiesTab() {
   const importOpp = useImportOpportunity();
   const update = useUpdateDynamicsOpportunity();
   const push = usePushDealToDynamics();
+  const unlink = useUnlinkOpportunity();
   const { persona } = useAuth();
   const [editingId, setEditingId] = useState<number | null>(null);
   const [draft, setDraft] = useState<any>({});
@@ -496,6 +497,19 @@ function OpportunitiesTab() {
                             disabled={push.isPending} title="Push DealPad → D365"
                             className="text-muted-foreground hover:text-emerald-700 p-1 disabled:opacity-50">
                             <ArrowUpFromLine className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                        {o.dealpadDealId && (
+                          <button
+                            onClick={() => {
+                              if (confirm(`Unlink ${o.opportunityNumber} from DealPad deal #${o.dealpadDealId}?\n\nThe deal stays intact, but the opportunity becomes available again in the New Deal flow.`)) {
+                                unlink.mutate({ id: o.id, userName: persona?.name });
+                              }
+                            }}
+                            disabled={unlink.isPending}
+                            title={`Unlink from deal #${o.dealpadDealId}`}
+                            className="text-muted-foreground hover:text-amber-700 p-1 disabled:opacity-50">
+                            <Unlink className="w-3.5 h-3.5" />
                           </button>
                         )}
                       </div>

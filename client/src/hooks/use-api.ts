@@ -255,6 +255,19 @@ export function useEligibleOpportunities(clientId?: number | string | null) {
     enabled: clientId !== undefined,
   });
 }
+export function useUnlinkOpportunity() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, userName }: { id: number; userName?: string }) =>
+      fetchApi(`/api/dynamics/opportunities/${id}/unlink`, { method: "POST", body: JSON.stringify({ userName }) }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["dyn-opps"] });
+      qc.invalidateQueries({ queryKey: ["dyn-opps-eligible"] });
+      qc.invalidateQueries({ queryKey: ["dyn-pipeline"] });
+      qc.invalidateQueries({ queryKey: ["dyn-synclog"] });
+    },
+  });
+}
 export function useScopeTemplates() {
   return useQuery({ queryKey: ["dyn-scope-templates"], queryFn: () => fetchApi("/api/dynamics/scope-templates") });
 }
