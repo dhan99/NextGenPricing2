@@ -41,6 +41,7 @@ export const deals = pgTable("deals", {
   riskScore: decimal("risk_score", { precision: 3, scale: 1 }),
   archivedAt: timestamp("archived_at"),
   archivedBy: text("archived_by"),
+  workdayCostCenterId: integer("workday_cost_center_id"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -346,6 +347,112 @@ export const intappEvents = pgTable("intapp_events", {
   message: text("message"),
   metadata: jsonb("metadata"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// ============ WORKDAY SIMULATION (persistent) ============
+export const workdaySettings = pgTable("workday_settings", {
+  id: serial("id").primaryKey(),
+  mode: text("mode").notNull().default("simulated"), // 'simulated' | 'live'
+  tenantUrl: text("tenant_url"),
+  isuUsername: text("isu_username"),
+  apiClientId: text("api_client_id"),
+  apiClientSecret: text("api_client_secret"),
+  autoValidateOnSave: boolean("auto_validate_on_save").default(true),
+  autoCheckOnSubmit: boolean("auto_check_on_submit").default(true),
+  nightlyRefreshEnabled: boolean("nightly_refresh_enabled").default(true),
+  rateVarianceTolerancePct: decimal("rate_variance_tolerance_pct", { precision: 5, scale: 2 }).default("10.00"),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const workdayCostCenters = pgTable("workday_cost_centers", {
+  id: serial("id").primaryKey(),
+  workdayId: text("workday_id").notNull().unique(),
+  code: text("code").notNull().unique(),
+  name: text("name").notNull(),
+  fiscalYear: text("fiscal_year").notNull().default("FY2026"),
+  totalBudget: decimal("total_budget", { precision: 14, scale: 2 }).notNull().default("0"),
+  committed: decimal("committed", { precision: 14, scale: 2 }).notNull().default("0"),
+  currency: text("currency").default("USD"),
+  businessUnit: text("business_unit"),
+  source: text("source").notNull().default("simulated"),
+  lastSyncedAt: timestamp("last_synced_at").defaultNow(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const workdayWorkers = pgTable("workday_workers", {
+  id: serial("id").primaryKey(),
+  workdayId: text("workday_id").notNull().unique(),
+  employeeNumber: text("employee_number").notNull().unique(),
+  name: text("name").notNull(),
+  roleName: text("role_name").notNull(),
+  region: text("region"),
+  weeklyCapacityHours: decimal("weekly_capacity_hours", { precision: 6, scale: 2 }).notNull().default("40"),
+  availableHours: decimal("available_hours", { precision: 8, scale: 2 }).notNull().default("0"),
+  standardCostRate: decimal("standard_cost_rate", { precision: 8, scale: 2 }).notNull().default("0"),
+  source: text("source").notNull().default("simulated"),
+  lastSyncedAt: timestamp("last_synced_at").defaultNow(),
+});
+
+export const workdayRateCards = pgTable("workday_rate_cards", {
+  id: serial("id").primaryKey(),
+  roleName: text("role_name").notNull(),
+  standardCostRate: decimal("standard_cost_rate", { precision: 8, scale: 2 }).notNull(),
+  effectiveDate: text("effective_date").notNull().default("2025-07-01"),
+  expirationDate: text("expiration_date"),
+  source: text("source").notNull().default("simulated"),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const workdayValidations = pgTable("workday_validations", {
+  id: serial("id").primaryKey(),
+  dealId: integer("deal_id").references(() => deals.id).notNull(),
+  costCenterId: integer("cost_center_id"),
+  status: text("status").notNull().default("pending"), // pending | clean | over_budget | staffing_shortfall | rate_variance | failed
+  source: text("source").notNull().default("simulated"),
+  trigger: text("trigger").default("manual"), // manual | save | submit | nightly
+  budgetHeadroom: decimal("budget_headroom", { precision: 14, scale: 2 }),
+  budgetUsedPct: decimal("budget_used_pct", { precision: 5, scale: 2 }),
+  staffingShortfallHours: decimal("staffing_shortfall_hours", { precision: 10, scale: 2 }).default("0"),
+  rateVarianceMaxPct: decimal("rate_variance_max_pct", { precision: 6, scale: 2 }).default("0"),
+  summary: text("summary"),
+  overrideJustification: text("override_justification"),
+  overriddenBy: text("overridden_by"),
+  overriddenAt: timestamp("overridden_at"),
+  requestedBy: text("requested_by"),
+  requestedAt: timestamp("requested_at").defaultNow().notNull(),
+  completedAt: timestamp("completed_at"),
+});
+
+export const workdayValidationFindings = pgTable("workday_validation_findings", {
+  id: serial("id").primaryKey(),
+  validationId: integer("validation_id").references(() => workdayValidations.id).notNull(),
+  findingType: text("finding_type").notNull(), // budget | staffing | rate
+  severity: text("severity").notNull().default("info"), // info | warning | blocker
+  roleName: text("role_name"),
+  requiredHours: decimal("required_hours", { precision: 10, scale: 2 }),
+  availableHours: decimal("available_hours", { precision: 10, scale: 2 }),
+  shortfallHours: decimal("shortfall_hours", { precision: 10, scale: 2 }),
+  dealCostRate: decimal("deal_cost_rate", { precision: 8, scale: 2 }),
+  workdayCostRate: decimal("workday_cost_rate", { precision: 8, scale: 2 }),
+  variancePct: decimal("variance_pct", { precision: 6, scale: 2 }),
+  amount: decimal("amount", { precision: 14, scale: 2 }),
+  message: text("message"),
+});
+
+export const workdayEvents = pgTable("workday_events", {
+  id: serial("id").primaryKey(),
+  eventType: text("event_type").notNull(), // pull | validate | override | link | unlink | settings | seed
+  entity: text("entity").notNull(), // CostCenter | Worker | RateCard | Validation | Settings | System
+  entityName: text("entity_name"),
+  entityRefId: integer("entity_ref_id"),
+  dealId: integer("deal_id"),
+  status: text("status").default("success"),
+  source: text("source").notNull().default("simulated"),
+  trigger: text("trigger").default("manual"),
+  message: text("message"),
+  fields: jsonb("fields"),
+  actorName: text("actor_name"),
+  timestamp: timestamp("timestamp").defaultNow().notNull(),
 });
 
 export const dealsRelations = relations(deals, ({ one, many }) => ({

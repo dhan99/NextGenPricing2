@@ -1,5 +1,5 @@
 import { useState, useMemo, useRef, useEffect } from "react";
-import { useDashboardSummary, useDeals } from "@/hooks/use-api";
+import { useDashboardSummary, useDeals, useWorkdayDashboard } from "@/hooks/use-api";
 import { formatCurrency, formatPercent, getStatusColor, getStatusLabel } from "@/lib/utils";
 import { Link } from "wouter";
 import { TrendingUp, DollarSign, AlertCircle, ArrowRight, FileText, ShieldCheck, Layers, Network, BarChart3, Shield, CheckCircle, Search, Sparkles, Send, Bot, Lightbulb, RefreshCw, Lock } from "lucide-react";
@@ -186,6 +186,7 @@ export function Dashboard() {
   };
 
   const kpis = kpiSets[role];
+  const showWorkday = role === "fin" || role === "sll" || role === "po" || role === "pdl";
 
   return (
     <div className="p-6 max-w-[1600px] mx-auto">
@@ -228,6 +229,7 @@ export function Dashboard() {
         })}
       </div>
 
+      {showWorkday && <WorkdaySurface />}
       {role === "qrm" && intappDash && (
         <div className="card mb-6">
           <div className="px-5 py-3 border-b border-border flex items-center justify-between">
@@ -277,6 +279,7 @@ export function Dashboard() {
           </div>
         </div>
       )}
+      {showWorkday && <WorkdaySurface />}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left: Deals list with search + filter */}
@@ -446,6 +449,68 @@ export function Dashboard() {
                   />
                 </div>
               </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function WorkdaySurface() {
+  const { data } = useWorkdayDashboard();
+  if (!data) return null;
+  const c = data.counts || {};
+  const items: Array<[string, number, string]> = [
+    ["Clean", c.clean || 0, "bg-emerald-100 text-emerald-700"],
+    ["Over Budget", c.over_budget || 0, "bg-red-100 text-red-700"],
+    ["Staffing Short", c.staffing_shortfall || 0, "bg-red-100 text-red-700"],
+    ["Rate Variance", c.rate_variance || 0, "bg-amber-100 text-amber-700"],
+    ["Unvalidated", c.unvalidated || 0, "bg-stone-100 text-stone-600"],
+  ];
+  return (
+    <div className="card mb-6 overflow-hidden">
+      <div className="px-5 py-3 border-b border-border flex items-center justify-between bg-amber-50/40">
+        <div className="flex items-center gap-2">
+          <ShieldCheck className="w-4 h-4 text-primary" />
+          <h2 className="font-semibold text-sm text-foreground">Workday Validation Status</h2>
+          <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-100 text-amber-800">Pilot · Simulation</span>
+        </div>
+        <Link href="/integrations/workday">
+          <span className="text-xs font-medium text-primary inline-flex items-center gap-1 hover:underline cursor-pointer">
+            Open Workday <ArrowRight className="w-3 h-3" />
+          </span>
+        </Link>
+      </div>
+      <div className="grid grid-cols-5 divide-x divide-border">
+        {items.map(([label, n, cls]) => (
+          <div key={label} className="p-4 text-center">
+            <p className="text-xs text-muted-foreground">{label}</p>
+            <p className={`mt-1 inline-block text-lg font-bold px-3 py-0.5 rounded-md ${cls}`}>{n}</p>
+          </div>
+        ))}
+      </div>
+      {data.attention?.length > 0 && (
+        <div className="border-t border-border">
+          <div className="px-5 py-2 bg-stone-50 border-b border-border">
+            <p className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">Deals Needing Attention</p>
+          </div>
+          <div className="divide-y divide-border max-h-56 overflow-y-auto">
+            {data.attention.slice(0, 5).map((a: any) => (
+              <Link key={a.dealId} href={`/deals/${a.dealId}`}>
+                <div className="px-5 py-2.5 hover:bg-stone-50 cursor-pointer flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-foreground truncate">{a.title}</p>
+                    <p className="text-xs text-muted-foreground truncate">{a.dealNumber} · {a.summary}</p>
+                  </div>
+                  <span className={`badge whitespace-nowrap ${
+                    a.status === "over_budget" || a.status === "staffing_shortfall" ? "bg-red-100 text-red-700"
+                    : a.status === "rate_variance" ? "bg-amber-100 text-amber-700"
+                    : "bg-stone-100 text-stone-600"}`}>
+                    {a.overridden ? "Overridden · " : ""}{a.status.replace(/_/g, " ")}
+                  </span>
+                </div>
+              </Link>
             ))}
           </div>
         </div>

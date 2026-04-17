@@ -488,4 +488,120 @@ export function useIntappDashboard() {
     queryFn: () => fetchApi("/api/intapp/dashboard"),
     refetchInterval: 8000,
   });
+// ============ WORKDAY ============
+export function useWorkdaySettings() {
+  return useQuery({ queryKey: ["wd-settings"], queryFn: () => fetchApi("/api/workday/settings") });
+}
+export function useUpdateWorkdaySettings() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: any) => fetchApi("/api/workday/settings", { method: "PATCH", body: JSON.stringify(body) }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["wd-settings"] }); qc.invalidateQueries({ queryKey: ["wd-events"] }); },
+  });
+}
+export function useWorkdayCostCenters() {
+  return useQuery({ queryKey: ["wd-cost-centers"], queryFn: () => fetchApi("/api/workday/cost-centers") });
+}
+export function useUpdateWorkdayCostCenter() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...body }: { id: number; [k: string]: any }) =>
+      fetchApi(`/api/workday/cost-centers/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["wd-cost-centers"] }); qc.invalidateQueries({ queryKey: ["wd-events"] }); qc.invalidateQueries({ queryKey: ["wd-validation-latest"] }); qc.invalidateQueries({ queryKey: ["wd-dashboard"] }); },
+  });
+}
+export function useCreateWorkdayCostCenter() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: any) => fetchApi("/api/workday/cost-centers", { method: "POST", body: JSON.stringify(body) }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["wd-cost-centers"] }); qc.invalidateQueries({ queryKey: ["wd-events"] }); },
+  });
+}
+export function useWorkdayWorkers() {
+  return useQuery({ queryKey: ["wd-workers"], queryFn: () => fetchApi("/api/workday/workers") });
+}
+export function useCreateWorkdayWorker() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: any) => fetchApi("/api/workday/workers", { method: "POST", body: JSON.stringify(body) }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["wd-workers"] }); qc.invalidateQueries({ queryKey: ["wd-events"] }); },
+  });
+}
+export function useUpdateWorkdayWorker() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...body }: { id: number; [k: string]: any }) =>
+      fetchApi(`/api/workday/workers/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["wd-workers"] }); },
+  });
+}
+export function useWorkdayRateCard() {
+  return useQuery({ queryKey: ["wd-rate-card"], queryFn: () => fetchApi("/api/workday/rate-card") });
+}
+export function useUpdateWorkdayRateCard() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...body }: { id: number; [k: string]: any }) =>
+      fetchApi(`/api/workday/rate-card/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["wd-rate-card"] }); qc.invalidateQueries({ queryKey: ["wd-events"] }); },
+  });
+}
+export function useWorkdayValidations(params?: { dealId?: number; status?: string }) {
+  const qs = new URLSearchParams();
+  if (params?.dealId) qs.set("dealId", String(params.dealId));
+  if (params?.status) qs.set("status", params.status);
+  const q = qs.toString();
+  return useQuery({ queryKey: ["wd-validations", params || {}], queryFn: () => fetchApi(`/api/workday/validations${q ? `?${q}` : ""}`) });
+}
+export function useWorkdayValidation(id?: number | null) {
+  return useQuery({ queryKey: ["wd-validation", id], queryFn: () => fetchApi(`/api/workday/validations/${id}`), enabled: !!id });
+}
+export function useWorkdayLatestValidation(dealId?: number) {
+  return useQuery({ queryKey: ["wd-validation-latest", dealId], queryFn: () => fetchApi(`/api/workday/deals/${dealId}/latest`), enabled: !!dealId });
+}
+export function useRunWorkdayValidation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ dealId, userName }: { dealId: number; userName?: string }) =>
+      fetchApi(`/api/workday/deals/${dealId}/validate`, { method: "POST", body: JSON.stringify({ userName }) }),
+    onSuccess: (_, { dealId }) => {
+      qc.invalidateQueries({ queryKey: ["wd-validations"] });
+      qc.invalidateQueries({ queryKey: ["wd-validation-latest", dealId] });
+      qc.invalidateQueries({ queryKey: ["wd-events"] });
+      qc.invalidateQueries({ queryKey: ["wd-dashboard"] });
+    },
+  });
+}
+export function useLinkWorkdayCostCenter() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ dealId, costCenterId, userName }: { dealId: number; costCenterId: number | null; userName?: string }) =>
+      fetchApi(`/api/workday/deals/${dealId}/link`, { method: "POST", body: JSON.stringify({ costCenterId, userName }) }),
+    onSuccess: (_, { dealId }) => {
+      qc.invalidateQueries({ queryKey: ["wd-validation-latest", dealId] });
+      qc.invalidateQueries({ queryKey: ["wd-validations"] });
+      qc.invalidateQueries({ queryKey: ["wd-events"] });
+      qc.invalidateQueries({ queryKey: ["wd-dashboard"] });
+      qc.invalidateQueries({ queryKey: ["deal", dealId] });
+    },
+  });
+}
+export function useOverrideWorkdayValidation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, justification, userName, role }: { id: number; justification: string; userName?: string; role?: string }) =>
+      fetchApi(`/api/workday/validations/${id}/override`, { method: "POST", body: JSON.stringify({ justification, userName, role }) }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["wd-validations"] });
+      qc.invalidateQueries({ queryKey: ["wd-validation-latest"] });
+      qc.invalidateQueries({ queryKey: ["wd-events"] });
+      qc.invalidateQueries({ queryKey: ["wd-dashboard"] });
+    },
+  });
+}
+export function useWorkdayEvents() {
+  return useQuery({ queryKey: ["wd-events"], queryFn: () => fetchApi("/api/workday/events"), refetchInterval: 8000 });
+}
+export function useWorkdayDashboard() {
+  return useQuery({ queryKey: ["wd-dashboard"], queryFn: () => fetchApi("/api/workday/dashboard") });
 }

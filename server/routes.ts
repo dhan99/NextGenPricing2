@@ -109,10 +109,12 @@ import {
   onClientChangedTrigger,
   startNightlyRescreenLoop,
 } from "./intapp";
+import { registerWorkdayRoutes, onDealSaved, onDealSubmitted } from "./workday";
 
 export function registerRoutes(app: Express) {
   registerDynamicsRoutes(app);
   registerIntappRoutes(app);
+  registerWorkdayRoutes(app);
 
 
   // ========== DASHBOARD ==========
@@ -793,14 +795,25 @@ export function registerRoutes(app: Express) {
     // SERVER-SIDE GATING: refuse to create the approval (and refuse to flip
     // the deal to "submitted") if the latest Intapp screening is a conflict
     // and gating is enabled. Override path is /api/intapp/.../override.
-    const gate = await assertSubmissionAllowed(dealId, actor);
-    if (!gate.allow) {
+    const intappGate = await assertSubmissionAllowed(dealId, actor);
+    if (!intappGate.allow) {
       return res.status(409).json({
-        error: gate.reason,
+        error: intappGate.reason,
         code: "intapp_conflict",
-        screening: gate.screening,
+        screening: intappGate.screening,
       });
     }
+
+    // Workday pre-submit gating: blocks if budget or staffing fails AND not yet overridden
+    const wdGate = await onDealSubmitted(dealId, actor);
+    if (wdGate.blocked) {
+      return res.status(409).json({
+        error: "WORKDAY_VALIDATION_BLOCKED",
+        message: wdGate.reason,
+        validationId: wdGate.validationId,
+      });
+    }
+
     const [approval] = await db.insert(approvals).values({
       dealId,
       ...req.body,

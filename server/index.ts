@@ -362,6 +362,112 @@ async function pushSchema() {
     ALTER TABLE intapp_settings ADD COLUMN IF NOT EXISTS live_tenant_url TEXT;
     ALTER TABLE intapp_settings ADD COLUMN IF NOT EXISTS live_client_id TEXT;
     ALTER TABLE intapp_settings ADD COLUMN IF NOT EXISTS live_api_key_secret TEXT;
+    ALTER TABLE deals ADD COLUMN IF NOT EXISTS workday_cost_center_id INTEGER;
+
+    CREATE TABLE IF NOT EXISTS workday_settings (
+      id SERIAL PRIMARY KEY,
+      mode TEXT NOT NULL DEFAULT 'simulated',
+      tenant_url TEXT,
+      isu_username TEXT,
+      api_client_id TEXT,
+      api_client_secret TEXT,
+      auto_validate_on_save BOOLEAN DEFAULT TRUE,
+      auto_check_on_submit BOOLEAN DEFAULT TRUE,
+      nightly_refresh_enabled BOOLEAN DEFAULT TRUE,
+      rate_variance_tolerance_pct DECIMAL(5,2) DEFAULT 10.00,
+      updated_at TIMESTAMP DEFAULT NOW() NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS workday_cost_centers (
+      id SERIAL PRIMARY KEY,
+      workday_id TEXT NOT NULL UNIQUE,
+      code TEXT NOT NULL UNIQUE,
+      name TEXT NOT NULL,
+      fiscal_year TEXT NOT NULL DEFAULT 'FY2026',
+      total_budget DECIMAL(14,2) NOT NULL DEFAULT 0,
+      committed DECIMAL(14,2) NOT NULL DEFAULT 0,
+      currency TEXT DEFAULT 'USD',
+      business_unit TEXT,
+      source TEXT NOT NULL DEFAULT 'simulated',
+      last_synced_at TIMESTAMP DEFAULT NOW(),
+      created_at TIMESTAMP DEFAULT NOW() NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS workday_workers (
+      id SERIAL PRIMARY KEY,
+      workday_id TEXT NOT NULL UNIQUE,
+      employee_number TEXT NOT NULL UNIQUE,
+      name TEXT NOT NULL,
+      role_name TEXT NOT NULL,
+      region TEXT,
+      weekly_capacity_hours DECIMAL(6,2) NOT NULL DEFAULT 40,
+      available_hours DECIMAL(8,2) NOT NULL DEFAULT 0,
+      standard_cost_rate DECIMAL(8,2) NOT NULL DEFAULT 0,
+      source TEXT NOT NULL DEFAULT 'simulated',
+      last_synced_at TIMESTAMP DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS workday_rate_cards (
+      id SERIAL PRIMARY KEY,
+      role_name TEXT NOT NULL,
+      standard_cost_rate DECIMAL(8,2) NOT NULL,
+      effective_date TEXT NOT NULL DEFAULT '2025-07-01',
+      expiration_date TEXT,
+      source TEXT NOT NULL DEFAULT 'simulated',
+      updated_at TIMESTAMP DEFAULT NOW() NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS workday_validations (
+      id SERIAL PRIMARY KEY,
+      deal_id INTEGER REFERENCES deals(id) NOT NULL,
+      cost_center_id INTEGER,
+      status TEXT NOT NULL DEFAULT 'pending',
+      source TEXT NOT NULL DEFAULT 'simulated',
+      trigger TEXT DEFAULT 'manual',
+      budget_headroom DECIMAL(14,2),
+      budget_used_pct DECIMAL(5,2),
+      staffing_shortfall_hours DECIMAL(10,2) DEFAULT 0,
+      rate_variance_max_pct DECIMAL(6,2) DEFAULT 0,
+      summary TEXT,
+      override_justification TEXT,
+      overridden_by TEXT,
+      overridden_at TIMESTAMP,
+      requested_by TEXT,
+      requested_at TIMESTAMP DEFAULT NOW() NOT NULL,
+      completed_at TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS workday_validation_findings (
+      id SERIAL PRIMARY KEY,
+      validation_id INTEGER REFERENCES workday_validations(id) NOT NULL,
+      finding_type TEXT NOT NULL,
+      severity TEXT NOT NULL DEFAULT 'info',
+      role_name TEXT,
+      required_hours DECIMAL(10,2),
+      available_hours DECIMAL(10,2),
+      shortfall_hours DECIMAL(10,2),
+      deal_cost_rate DECIMAL(8,2),
+      workday_cost_rate DECIMAL(8,2),
+      variance_pct DECIMAL(6,2),
+      amount DECIMAL(14,2),
+      message TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS workday_events (
+      id SERIAL PRIMARY KEY,
+      event_type TEXT NOT NULL,
+      entity TEXT NOT NULL,
+      entity_name TEXT,
+      entity_ref_id INTEGER,
+      deal_id INTEGER,
+      status TEXT DEFAULT 'success',
+      source TEXT NOT NULL DEFAULT 'simulated',
+      trigger TEXT DEFAULT 'manual',
+      message TEXT,
+      fields JSONB,
+      actor_name TEXT,
+      timestamp TIMESTAMP DEFAULT NOW() NOT NULL
+    );
   `);
 
   // Backfill: ensure unique constraint on dealpad_deal_id even if table pre-existed

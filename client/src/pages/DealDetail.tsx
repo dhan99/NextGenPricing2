@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRoute } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
-import { useDeal, useUpdateDeal, useScopeCatalog, useDealScopeItems, useAddScopeItem, useRemoveScopeItem, useRoles, useDealPricing, useUpdatePricingLine, useDealScenarios, useSelectScenario, useDealApprovals, useSubmitApproval, useUpdateApproval, useDealPrompts, useUpdatePrompt, useCloneDeal, useAIDealSimilarity, useAIEffortEstimation, useAIMarginAdvisor, useAIScenarioRecommendation, useAIRiskSummary, useDealIntappScreening, useRunIntappScreening, useIntappOverride, useAddIntappMitigation, useUpdateIntappMitigation } from "@/hooks/use-api";
+import { useDeal, useUpdateDeal, useScopeCatalog, useDealScopeItems, useAddScopeItem, useRemoveScopeItem, useRoles, useDealPricing, useUpdatePricingLine, useDealScenarios, useSelectScenario, useDealApprovals, useSubmitApproval, useUpdateApproval, useDealPrompts, useUpdatePrompt, useCloneDeal, useAIDealSimilarity, useAIEffortEstimation, useAIMarginAdvisor, useAIScenarioRecommendation, useAIRiskSummary, useDealIntappScreening, useRunIntappScreening, useIntappOverride, useAddIntappMitigation, useUpdateIntappMitigation, useWorkdayLatestValidation, useWorkdayCostCenters, useRunWorkdayValidation, useLinkWorkdayCostCenter, useOverrideWorkdayValidation } from "@/hooks/use-api";
 import { ResultBadge as IntappResultBadge, RiskBadge as IntappRiskBadge, SourceBadge as IntappSourceBadge } from "./Intapp";
 import { ShieldAlert, ShieldCheck, Unlock } from "lucide-react";
 import { formatCurrency, formatPercent, formatNumber, getStatusColor, getStatusLabel, cn } from "@/lib/utils";
@@ -1021,6 +1021,7 @@ function ApprovalStep({ deal }: { deal: any }) {
   return (
     <div className="max-w-3xl mx-auto space-y-6">
       <IntappCompliancePanel deal={deal} />
+      <WorkdayDealPanel deal={deal} />
       <div className="card p-6">
         <h2 className="text-lg font-semibold text-foreground mb-4">Approval Status</h2>
         {(approvals || []).length === 0 ? (
@@ -1671,6 +1672,153 @@ function MitigationModal({
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+function WorkdayDealPanel({ deal }: { deal: any }) {
+  const { data: latest, isLoading } = useWorkdayLatestValidation(deal.id);
+  const { data: costCenters = [] } = useWorkdayCostCenters();
+  const runValidation = useRunWorkdayValidation();
+  const link = useLinkWorkdayCostCenter();
+  const override = useOverrideWorkdayValidation();
+  const { persona } = useAuth();
+  const [justification, setJustification] = useState("");
+  const [showLink, setShowLink] = useState(false);
+
+  const canOverride = persona?.role === "fin" || persona?.role === "sll";
+  const status = latest?.status || "unvalidated";
+  const isBlocker = status === "over_budget" || status === "staffing_shortfall";
+  const isWarning = status === "rate_variance";
+  const isOverridden = !!latest?.overriddenBy;
+
+  const tone =
+    isOverridden ? "border-amber-300 bg-amber-50"
+    : isBlocker ? "border-red-300 bg-red-50"
+    : isWarning ? "border-amber-300 bg-amber-50"
+    : status === "clean" ? "border-emerald-300 bg-emerald-50"
+    : "border-stone-200 bg-stone-50";
+
+  const Icon = isBlocker ? XCircle : isWarning ? AlertTriangle : status === "clean" ? CheckCircle : Clock;
+  const iconColor = isBlocker ? "text-red-600" : isWarning || isOverridden ? "text-amber-700" : status === "clean" ? "text-emerald-600" : "text-stone-500";
+
+  const cc = latest?.costCenter;
+  const headroom = latest?.budgetHeadroom != null ? parseFloat(latest.budgetHeadroom) : null;
+  const usedPct = latest?.budgetUsedPct != null ? parseFloat(latest.budgetUsedPct) : null;
+
+  return (
+    <div className={`card border ${tone} p-5 space-y-4`}>
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-start gap-3">
+          <Icon className={`w-5 h-5 mt-0.5 ${iconColor}`} />
+          <div>
+            <div className="flex items-center gap-2">
+              <h3 className="text-sm font-semibold text-foreground">Workday Validation</h3>
+              <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-100 text-amber-800">Source · Simulation</span>
+              {isOverridden && <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-200 text-amber-900">Override on file</span>}
+            </div>
+            <p className="text-sm text-foreground mt-0.5">
+              {isLoading ? "Loading…" : latest?.summary || "No validation has been run yet."}
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <button onClick={() => runValidation.mutate({ dealId: deal.id, userName: persona?.name })}
+            disabled={runValidation.isPending}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-stone-300 bg-white text-xs font-medium hover:bg-stone-50 disabled:opacity-50">
+            {runValidation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+            Re-run
+          </button>
+          <button onClick={() => setShowLink(!showLink)}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-stone-300 bg-white text-xs font-medium hover:bg-stone-50">
+            <GitBranch className="w-3.5 h-3.5" />
+            {cc ? "Re-link" : "Link Cost Center"}
+          </button>
+        </div>
+      </div>
+
+      {showLink && (
+        <div className="rounded-md bg-white border border-stone-200 p-3">
+          <label className="label">Workday Cost Center</label>
+          <select className="input-field"
+            defaultValue={deal.workdayCostCenterId || ""}
+            onChange={(e) => {
+              const v = e.target.value ? parseInt(e.target.value) : null;
+              link.mutate({ dealId: deal.id, costCenterId: v, userName: persona?.name }, { onSuccess: () => setShowLink(false) });
+            }}>
+            <option value="">— Unlinked —</option>
+            {costCenters.map((c: any) => (
+              <option key={c.id} value={c.id}>{c.code} · {c.name} ({c.businessUnit || "—"})</option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      <div className="grid grid-cols-3 gap-3">
+        <div className="rounded-md bg-white border border-stone-200 p-3">
+          <p className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">Cost Center</p>
+          {cc ? (
+            <>
+              <p className="text-sm font-semibold text-foreground mt-0.5">{cc.code}</p>
+              <p className="text-xs text-muted-foreground truncate">{cc.name}</p>
+            </>
+          ) : <p className="text-sm text-muted-foreground mt-1">Not linked</p>}
+        </div>
+        <div className="rounded-md bg-white border border-stone-200 p-3">
+          <p className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">Budget Headroom</p>
+          {headroom != null ? (
+            <>
+              <p className={`text-sm font-bold mt-0.5 ${headroom < 0 ? "text-red-600" : "text-emerald-700"}`}>{formatCurrency(headroom)}</p>
+              {usedPct != null && (
+                <div className="mt-1 h-1 rounded-full bg-stone-100 overflow-hidden">
+                  <div className={`h-full ${usedPct > 100 ? "bg-red-500" : usedPct > 90 ? "bg-amber-500" : "bg-emerald-500"}`} style={{ width: `${Math.min(usedPct, 100)}%` }} />
+                </div>
+              )}
+            </>
+          ) : <p className="text-sm text-muted-foreground mt-1">—</p>}
+        </div>
+        <div className="rounded-md bg-white border border-stone-200 p-3">
+          <p className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">Findings</p>
+          <p className="text-sm font-semibold text-foreground mt-0.5">{latest?.findings?.length || 0}</p>
+          <p className="text-xs text-muted-foreground">
+            {latest?.findings?.filter((f: any) => f.severity === "blocker").length || 0} blocker · {latest?.findings?.filter((f: any) => f.severity === "warning").length || 0} warn
+          </p>
+        </div>
+      </div>
+
+      {latest?.findings && latest.findings.length > 0 && (
+        <div className="space-y-1.5">
+          {latest.findings.map((f: any) => (
+            <div key={f.id} className={`text-xs p-2 rounded border ${
+              f.severity === "blocker" ? "bg-red-50 border-red-200 text-red-800"
+              : f.severity === "warning" ? "bg-amber-50 border-amber-200 text-amber-800"
+              : "bg-white border-stone-200 text-stone-700"}`}>
+              <span className="font-semibold uppercase tracking-wider mr-2">{f.findingType}</span>{f.message}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {isBlocker && !isOverridden && (
+        <div className="border-t border-stone-200 pt-3">
+          <p className="text-xs font-semibold text-red-700 mb-1">⚠️ Approval submission is blocked until this validation passes or is overridden.</p>
+          <label className="label">Override Justification</label>
+          <textarea className="input-field min-h-[60px]" value={justification} onChange={(e) => setJustification(e.target.value)}
+            placeholder="Required if Finance or Service Line Lead waives the block (≥5 chars)." />
+          {!canOverride && <p className="text-xs text-red-600 mt-1">Only Finance or Service Line Lead can override.</p>}
+          <button disabled={!canOverride || justification.trim().length < 5 || override.isPending}
+            className="btn-primary mt-2 text-xs disabled:opacity-50"
+            onClick={() => override.mutate({ id: latest.id, justification, userName: persona?.name, role: persona?.role }, { onSuccess: () => setJustification("") })}>
+            {override.isPending ? <Loader2 className="w-3 h-3 animate-spin inline" /> : "Apply Override"}
+          </button>
+        </div>
+      )}
+      {isOverridden && (
+        <div className="border-t border-stone-200 pt-3 text-xs">
+          <p className="font-semibold text-amber-900">Override applied by {latest.overriddenBy}</p>
+          <p className="text-amber-800 mt-0.5">"{latest.overrideJustification}"</p>
+        </div>
+      )}
     </div>
   );
 }

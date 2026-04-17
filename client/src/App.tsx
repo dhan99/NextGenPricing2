@@ -15,6 +15,7 @@ import { Analytics } from "./pages/Analytics";
 import { ChangeOrders } from "./pages/ChangeOrders";
 import { DynamicsCRM } from "./pages/DynamicsCRM";
 import { Intapp } from "./pages/Intapp";
+import { WorkdayIntegration } from "./pages/WorkdayIntegration";
 import { Login } from "./pages/Login";
 import { Shield } from "lucide-react";
 
@@ -67,6 +68,7 @@ function AuthenticatedApp() {
         </Route>
         <Route path="/integrations/dynamics" component={DynamicsCRM} />
         <Route path="/integrations/intapp" component={Intapp} />
+        <Route path="/integrations/workday" component={WorkdayIntegration} />
         <Route path="/architecture" component={ArchitectureHub} />
         <Route path="/architecture-i" component={ArchitectureInteractive} />
         <Route>
