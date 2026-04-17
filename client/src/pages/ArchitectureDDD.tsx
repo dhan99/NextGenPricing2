@@ -554,6 +554,191 @@ function SeqRow({ msg, actorIndex }: { msg: SeqMessage; actorIndex: Map<string, 
   );
 }
 
+const manualSeqGroups: { name: string; color: string; messages: SeqMessage[] }[] = [
+  {
+    name: "Trigger",
+    color: "border-stone-300",
+    messages: [
+      { from: "rev", to: "ui", label: "Click 'Import to DealPad' on opportunity row", kind: "call" },
+      { from: "ui", to: "api", label: "POST /api/dynamics/opportunities/:id/import", kind: "call" },
+      { from: "api", to: "db", label: "Resolve client (account → client, or auto-create)", kind: "call" },
+      { from: "api", to: "db", label: "INSERT deal (status=draft, currentStep=1)", kind: "call" },
+      { from: "api", to: "ext", label: "linkDealToOpportunity → write back dealpadDealId to D365", kind: "call" },
+      { from: "api", to: "ui", label: "201 Created { dealId, dealNumber }", kind: "return" },
+      { from: "ui", to: "rev", label: "Redirect to /deals/:dealId (Wizard, Step 1)", kind: "call" },
+    ],
+  },
+  {
+    name: "Step 1 · Setup (manual)",
+    color: "border-amber-300",
+    messages: [
+      { from: "rev", to: "ui", label: "Pick BU, service line, complexity, dates, PDL", kind: "call" },
+      { from: "ui", to: "api", label: "PATCH /api/deals/:id (header fields)", kind: "call" },
+      { from: "api", to: "db", label: "UPDATE deal · log activity", kind: "call" },
+      { from: "rev", to: "ui", label: "Click 'Next → Scope'", kind: "call" },
+      { from: "ui", to: "api", label: "PATCH /api/deals/:id (currentStep=2)", kind: "call" },
+    ],
+  },
+  {
+    name: "Step 2 · Scope (manual)",
+    color: "border-cyan-300",
+    messages: [
+      { from: "ui", to: "api", label: "GET /api/scope-catalog · GET /api/scope-templates", kind: "call" },
+      { from: "api", to: "db", label: "SELECT catalog rows", kind: "call" },
+      { from: "rev", to: "ui", label: "Browse catalog · add items · apply template", kind: "call" },
+      { from: "ui", to: "api", label: "POST /api/deals/:id/scope-items (per item or bulk)", kind: "call" },
+      { from: "api", to: "db", label: "INSERT deal_scope_items · log activity", kind: "call" },
+    ],
+  },
+  {
+    name: "Step 3 · Prompts (manual)",
+    color: "border-blue-300",
+    messages: [
+      { from: "ui", to: "api", label: "GET /api/deals/:id/prompts (active prompt set)", kind: "call" },
+      { from: "rev", to: "ui", label: "Answer each contextual prompt", kind: "call" },
+      { from: "ui", to: "api", label: "PATCH /api/deals/:id/prompts/:id (per answer)", kind: "call" },
+      { from: "api", to: "db", label: "UPDATE prompt_responses · log activity", kind: "call" },
+    ],
+  },
+  {
+    name: "Step 4 · Pricing (manual)",
+    color: "border-emerald-300",
+    messages: [
+      { from: "ui", to: "api", label: "GET /api/rate-cards · GET /api/deals/:id/pricing", kind: "call" },
+      { from: "rev", to: "ui", label: "Add / edit pricing lines (role × hours × rate)", kind: "call" },
+      { from: "ui", to: "api", label: "POST or PATCH /api/deals/:id/pricing", kind: "call" },
+      { from: "api", to: "engines", label: "recalc fee · cost · hours · margin", kind: "call" },
+      { from: "engines", to: "api", label: "totals", kind: "return" },
+      { from: "api", to: "db", label: "UPDATE deal totals + pricing_lines", kind: "call" },
+    ],
+  },
+  {
+    name: "Step 5 · Scenarios (assisted)",
+    color: "border-violet-300",
+    messages: [
+      { from: "rev", to: "ui", label: "Click 'Generate Scenarios' (UC-4)", kind: "call" },
+      { from: "ui", to: "api", label: "POST /api/ai/scenario-recommendation", kind: "call" },
+      { from: "api", to: "engines", label: "build 3 scenarios (conservative / standard / aggressive)", kind: "call" },
+      { from: "engines", to: "api", label: "scenarios", kind: "return" },
+      { from: "rev", to: "ui", label: "Pick recommended scenario", kind: "call" },
+      { from: "ui", to: "api", label: "POST /api/deals/:id/scenarios/:id/select", kind: "call" },
+      { from: "api", to: "db", label: "INSERT scenarios · UPDATE selected", kind: "call" },
+    ],
+  },
+  {
+    name: "Step 6 · Risk review (assisted)",
+    color: "border-red-300",
+    messages: [
+      { from: "rev", to: "ui", label: "Open Risk panel · click 'Generate Summary' (UC-5)", kind: "call" },
+      { from: "ui", to: "api", label: "POST /api/ai/risk-summary", kind: "call" },
+      { from: "api", to: "engines", label: "synthesize narrative + risk score", kind: "call" },
+      { from: "engines", to: "api", label: "narrative · approval likelihood", kind: "return" },
+      { from: "api", to: "db", label: "log activity", kind: "call" },
+    ],
+  },
+  {
+    name: "Step 7 · Summary & Submit",
+    color: "border-orange-300",
+    messages: [
+      { from: "rev", to: "ui", label: "Review totals · click 'Submit for Approval'", kind: "call" },
+      { from: "ui", to: "api", label: "PATCH /api/deals/:id (status=submitted)", kind: "call" },
+      { from: "api", to: "ext", label: "Intapp gate: assertSubmissionAllowed", kind: "call" },
+      { from: "ext", to: "api", label: "screening result (clear / hits)", kind: "return" },
+      { from: "api", to: "ext", label: "Workday gate: validate cost-center + headroom", kind: "call" },
+      { from: "ext", to: "api", label: "validation findings", kind: "return" },
+      { from: "api", to: "db", label: "POST /api/deals/:id/approvals · INSERT approval (pending)", kind: "call" },
+      { from: "api", to: "ui", label: "200 OK · status=submitted", kind: "return" },
+      { from: "ui", to: "rev", label: "Show 'Submitted for approval' banner", kind: "call" },
+    ],
+  },
+];
+
+function ManualWizardSequence() {
+  const actorIndex = new Map(seqActors.map((a, i) => [a.id, i]));
+  return (
+    <div className="card p-6 overflow-x-auto">
+      <div className="min-w-[900px]">
+        <div className="flex justify-between items-start mb-2 sticky top-0 bg-white z-10 pb-3 border-b border-stone-200">
+          {seqActors.map((a) => (
+            <ActorChip key={a.id} actor={a} />
+          ))}
+        </div>
+
+        <div className="space-y-6 pt-4">
+          {manualSeqGroups.map((group) => (
+            <div
+              key={group.name}
+              className={`relative rounded-lg border-l-4 ${group.color} bg-stone-50/40 px-3 py-3`}
+            >
+              <div className="text-[10px] uppercase tracking-wider font-bold text-stone-600 mb-3 px-2">
+                {group.name}
+              </div>
+              <div className="space-y-7">
+                {group.messages.map((m, i) => (
+                  <SeqRow key={i} msg={m} actorIndex={actorIndex} />
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="mt-4 flex items-center gap-4 text-[11px] text-muted-foreground">
+          <div className="flex items-center gap-1.5">
+            <div className="w-6 h-px bg-stone-700" />
+            <span>Call</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <div className="w-6 h-px border-t border-dashed border-stone-400" />
+            <span>Return</span>
+          </div>
+          <div className="ml-auto">
+            Reviewer drives every step · 7 wizard pages · ~15–25 min hands-on
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const flowComparison = [
+  { dim: "Reviewer touches", auto: "1 click + final approve", manual: "~30+ clicks across 7 wizard steps" },
+  { dim: "Time to Summary", auto: "~3–8 seconds (synchronous)", manual: "~15–25 minutes" },
+  { dim: "Where decisions are made", auto: "Engine + per-prompt context inference", manual: "Reviewer types every answer" },
+  { dim: "Confidence signals", auto: "Per-step + per-prompt confidence + needsReview flags", manual: "None — reviewer is the only signal" },
+  { dim: "Approval gates", auto: "Same Intapp + Workday gates (at agent-approve)", manual: "Same Intapp + Workday gates (at submit)" },
+  { dim: "Audit trail", auto: "Per-step activity_log with structured agentRun metadata", manual: "Per-action activity_log entries" },
+  { dim: "Reviewer override", auto: "Approve · Open in Wizard · Discard", manual: "Edit any step before submit" },
+];
+
+function FlowComparison() {
+  return (
+    <div className="card overflow-hidden">
+      <div className="px-5 py-3 border-b border-stone-200 bg-stone-50">
+        <h3 className="text-sm font-semibold text-foreground">Side-by-side comparison</h3>
+        <p className="text-xs text-muted-foreground mt-0.5">Both flows end at the same place — a deal in <code className="font-mono text-[10px] bg-white px-1 rounded">submitted</code> status with the same approval gates enforced.</p>
+      </div>
+      <table className="w-full text-sm">
+        <thead className="bg-white border-b border-stone-200">
+          <tr>
+            <th className="px-4 py-2 text-left text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">Dimension</th>
+            <th className="px-4 py-2 text-left text-[10px] uppercase tracking-wider font-semibold text-purple-700">Autonomous Agent</th>
+            <th className="px-4 py-2 text-left text-[10px] uppercase tracking-wider font-semibold text-blue-700">Manual Wizard</th>
+          </tr>
+        </thead>
+        <tbody>
+          {flowComparison.map((row, i) => (
+            <tr key={row.dim} className={i % 2 === 0 ? "bg-white" : "bg-stone-50/50"}>
+              <td className="px-4 py-2.5 text-sm font-medium text-foreground">{row.dim}</td>
+              <td className="px-4 py-2.5 text-xs text-stone-700">{row.auto}</td>
+              <td className="px-4 py-2.5 text-xs text-stone-700">{row.manual}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 function AutonomousAgentSequence() {
   const actorIndex = new Map(seqActors.map((a, i) => [a.id, i]));
   return (
@@ -715,6 +900,17 @@ export function ArchitectureDDD() {
           </p>
         </div>
         <AutonomousAgentSequence />
+      </div>
+
+      <div className="space-y-3">
+        <div>
+          <h2 className="text-xl font-semibold text-foreground">For comparison — Manual wizard flow</h2>
+          <p className="text-sm text-muted-foreground mt-1 max-w-3xl">
+            The same opportunity, walked through DealPad by hand: import → 7 wizard steps → submit. Same bounded contexts, same approval gates — but the reviewer is the orchestrator instead of the agent.
+          </p>
+        </div>
+        <ManualWizardSequence />
+        <FlowComparison />
       </div>
 
       <div className="space-y-3">
