@@ -270,7 +270,14 @@ export function registerRoutes(app: Express) {
       },
     });
     if (!result) return res.status(404).json({ error: "Deal not found" });
-    res.json(result);
+    const [link] = await db.select({
+      dealpadDealId: dynamicsOpportunities.dealpadDealId,
+      id: dynamicsOpportunities.id,
+      opportunityNumber: dynamicsOpportunities.opportunityNumber,
+      accountName: dynamicsOpportunities.accountName,
+      stage: dynamicsOpportunities.stage,
+    }).from(dynamicsOpportunities).where(eq(dynamicsOpportunities.dealpadDealId, result.id));
+    res.json({ ...result, dynamicsLink: link || null });
   });
 
   app.post("/api/deals", async (req: Request, res: Response) => {
