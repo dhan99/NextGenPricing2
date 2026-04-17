@@ -63,11 +63,6 @@ export function DealsList() {
             )}
           </p>
         </div>
-        {hasPermission("createDeals") && (
-          <Link href="/deals/new">
-            <button className="btn-primary"><Plus className="w-4 h-4" /> Scope an Engagement</button>
-          </Link>
-        )}
       </div>
 
       <div className="card mb-6">
