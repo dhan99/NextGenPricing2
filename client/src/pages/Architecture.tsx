@@ -21,23 +21,23 @@ function SystemDiagram() {
     },
     db: {
       title: "PostgreSQL Database",
-      details: ["12 tables", "Drizzle ORM", "Relational queries", "Seeded data"],
+      details: ["37 tables", "Drizzle ORM", "seedAll() bootstrap", "Advisory-locked, idempotent"],
     },
     crm: {
-      title: "Dynamics CRM",
-      details: ["Client sync", "Deal pipeline", "Bi-directional"],
+      title: "Dynamics 365 CRM",
+      details: ["Client / opportunity sync", "Outcome push on approval", "Bi-directional"],
     },
     workday: {
       title: "Workday",
-      details: ["Budget data", "Resource planning"],
+      details: ["Cost-center & worker pull", "Project push on approval", "Atomic committed-budget reserve"],
     },
     intapp: {
-      title: "Intapp",
-      details: ["Conflict checks", "Independence"],
+      title: "Intapp Risk",
+      details: ["Conflict / independence screening", "Mitigation tracking", "Outcome push on approval"],
     },
-    powerbi: {
-      title: "Power BI",
-      details: ["Dashboards", "Analytics", "Reporting"],
+    conga: {
+      title: "Conga CLM",
+      details: ["Engagement-letter generation", "Delivery push (email / e-sign / portal)", "Bi-directional"],
     },
     azure: {
       title: "Azure Cloud",
@@ -114,39 +114,40 @@ function SystemDiagram() {
               {...boxStyle("db", "#ecfdf5")} stroke={hoveredNode === "db" ? "#DA720F" : "#a7f3d0"} strokeWidth={hoveredNode === "db" ? 2 : 1}
               onMouseEnter={() => setHoveredNode("db")} onMouseLeave={() => setHoveredNode(null)} />
             <text x="450" y="343" textAnchor="middle" fontSize="13" fontWeight="600" fill="#065f46" {...textStyle("db")}>PostgreSQL</text>
-            <text x="450" y="361" textAnchor="middle" fontSize="10" fill="#047857" {...textStyle("db")}>12 Tables | Drizzle ORM</text>
+            <text x="450" y="361" textAnchor="middle" fontSize="10" fill="#047857" {...textStyle("db")}>37 Tables | Drizzle ORM | seedAll bootstrap</text>
 
-            <line x1="640" y1="200" x2="700" y2="200" stroke="#a8a29e" strokeWidth="1.5" strokeDasharray="4 3" markerEnd="url(#arrow)" {...lineStyle(["api", "crm", "workday", "intapp", "powerbi"])} />
+            <line x1="640" y1="200" x2="700" y2="200" stroke="#DA720F" strokeWidth="1.5" markerEnd="url(#arrow-orange)" markerStart="url(#arrow-orange)" {...lineStyle(["api", "crm", "workday", "intapp", "conga"])} />
+            <text x="648" y="192" fontSize="8" fill="#DA720F" fontWeight="500" {...lineStyle(["api", "crm", "workday", "intapp", "conga"])}>Bi-directional</text>
 
             <rect x="705" y="60" width="155" height="44" rx="8" filter="url(#shadow)"
               {...boxStyle("crm", "#fff")} stroke={hoveredNode === "crm" ? "#DA720F" : "#e7e5e4"} strokeWidth={hoveredNode === "crm" ? 2 : 1}
               onMouseEnter={() => setHoveredNode("crm")} onMouseLeave={() => setHoveredNode(null)} />
-            <text x="782" y="80" textAnchor="middle" fontSize="11" fontWeight="500" fill="#1c1917" {...textStyle("crm")}>Dynamics CRM</text>
-            <text x="782" y="94" textAnchor="middle" fontSize="8" fill="#78716c" {...textStyle("crm")}>Bi-directional sync</text>
+            <text x="782" y="80" textAnchor="middle" fontSize="11" fontWeight="500" fill="#1c1917" {...textStyle("crm")}>Dynamics 365</text>
+            <text x="782" y="94" textAnchor="middle" fontSize="8" fill="#78716c" {...textStyle("crm")}>Pull + outcome push</text>
 
             <rect x="705" y="115" width="155" height="44" rx="8" filter="url(#shadow)"
               {...boxStyle("workday", "#fff")} stroke={hoveredNode === "workday" ? "#DA720F" : "#e7e5e4"} strokeWidth={hoveredNode === "workday" ? 2 : 1}
               onMouseEnter={() => setHoveredNode("workday")} onMouseLeave={() => setHoveredNode(null)} />
             <text x="782" y="135" textAnchor="middle" fontSize="11" fontWeight="500" fill="#1c1917" {...textStyle("workday")}>Workday</text>
-            <text x="782" y="149" textAnchor="middle" fontSize="8" fill="#78716c" {...textStyle("workday")}>Budget / Resource</text>
+            <text x="782" y="149" textAnchor="middle" fontSize="8" fill="#78716c" {...textStyle("workday")}>Pull + project push</text>
 
             <rect x="705" y="170" width="155" height="44" rx="8" filter="url(#shadow)"
               {...boxStyle("intapp", "#fff")} stroke={hoveredNode === "intapp" ? "#DA720F" : "#e7e5e4"} strokeWidth={hoveredNode === "intapp" ? 2 : 1}
               onMouseEnter={() => setHoveredNode("intapp")} onMouseLeave={() => setHoveredNode(null)} />
-            <text x="782" y="190" textAnchor="middle" fontSize="11" fontWeight="500" fill="#1c1917" {...textStyle("intapp")}>Intapp</text>
-            <text x="782" y="204" textAnchor="middle" fontSize="8" fill="#78716c" {...textStyle("intapp")}>Conflict / Independence</text>
+            <text x="782" y="190" textAnchor="middle" fontSize="11" fontWeight="500" fill="#1c1917" {...textStyle("intapp")}>Intapp Risk</text>
+            <text x="782" y="204" textAnchor="middle" fontSize="8" fill="#78716c" {...textStyle("intapp")}>Screen + outcome push</text>
 
             <rect x="705" y="225" width="155" height="44" rx="8" filter="url(#shadow)"
-              {...boxStyle("powerbi", "#fff")} stroke={hoveredNode === "powerbi" ? "#DA720F" : "#e7e5e4"} strokeWidth={hoveredNode === "powerbi" ? 2 : 1}
-              onMouseEnter={() => setHoveredNode("powerbi")} onMouseLeave={() => setHoveredNode(null)} />
-            <text x="782" y="245" textAnchor="middle" fontSize="11" fontWeight="500" fill="#1c1917" {...textStyle("powerbi")}>Power BI</text>
-            <text x="782" y="259" textAnchor="middle" fontSize="8" fill="#78716c" {...textStyle("powerbi")}>Dashboards / Analytics</text>
+              {...boxStyle("conga", "#fff")} stroke={hoveredNode === "conga" ? "#DA720F" : "#e7e5e4"} strokeWidth={hoveredNode === "conga" ? 2 : 1}
+              onMouseEnter={() => setHoveredNode("conga")} onMouseLeave={() => setHoveredNode(null)} />
+            <text x="782" y="245" textAnchor="middle" fontSize="11" fontWeight="500" fill="#1c1917" {...textStyle("conga")}>Conga CLM</text>
+            <text x="782" y="259" textAnchor="middle" fontSize="8" fill="#78716c" {...textStyle("conga")}>Generate + deliver push</text>
 
             <line x1="700" y1="200" x2="700" y2="82" stroke="#a8a29e" strokeWidth="1" strokeDasharray="3 3" {...lineStyle(["crm"])} />
             <line x1="700" y1="82" x2="705" y2="82" stroke="#a8a29e" strokeWidth="1" strokeDasharray="3 3" {...lineStyle(["crm"])} />
             <line x1="700" y1="137" x2="705" y2="137" stroke="#a8a29e" strokeWidth="1" strokeDasharray="3 3" {...lineStyle(["workday"])} />
             <line x1="700" y1="192" x2="705" y2="192" stroke="#a8a29e" strokeWidth="1" strokeDasharray="3 3" {...lineStyle(["intapp"])} />
-            <line x1="700" y1="247" x2="705" y2="247" stroke="#a8a29e" strokeWidth="1" strokeDasharray="3 3" {...lineStyle(["powerbi"])} />
+            <line x1="700" y1="247" x2="705" y2="247" stroke="#a8a29e" strokeWidth="1" strokeDasharray="3 3" {...lineStyle(["conga"])} />
 
             <rect x="600" y="400" width="260" height="90" rx="12" filter="url(#shadow)"
               {...boxStyle("azure", "#eff6ff")} stroke={hoveredNode === "azure" ? "#DA720F" : "#bfdbfe"} strokeWidth={hoveredNode === "azure" ? 2 : 1}
@@ -237,10 +238,10 @@ const layers = [
     icon: Database,
     color: "bg-emerald-700",
     items: [
-      "12 normalized tables with full relational integrity",
-      "Clients, Deals, Scope Catalog, Deal Scope Items",
-      "Roles, Rate Cards, Rate Card Entries, Pricing Lines",
-      "Scenarios, Approvals, Prompt Responses, Activity Log",
+      "37 normalized tables with full relational integrity",
+      "Core: Clients, Deals, Scope, Pricing, Scenarios, Approvals, Activity Log",
+      "Integration: Dynamics, Workday (cost centers, validations, events), Intapp (screenings, mitigations), Conga (templates, letters)",
+      "seedAll() bootstrap runs before HTTP listen — pg advisory lock + per-record idempotency for safe horizontal scale-out",
     ],
   },
 ];
@@ -349,10 +350,10 @@ export function Architecture() {
             <div className="card p-5">
               <div className="grid grid-cols-2 gap-3">
                 {[
-                  { name: "Microsoft Dynamics CRM", type: "Bi-directional" },
-                  { name: "Workday", type: "Budget/Resource" },
-                  { name: "Intapp", type: "Conflict/Independence" },
-                  { name: "Power BI", type: "Dashboards" },
+                  { name: "Microsoft Dynamics 365", type: "Bi-directional (auto-push on approval)" },
+                  { name: "Workday", type: "Bi-directional (project + budget reserve)" },
+                  { name: "Intapp Risk", type: "Bi-directional (screening + outcome)" },
+                  { name: "Conga CLM", type: "Bi-directional (letter + delivery)" },
                 ].map((integration) => (
                   <div key={integration.name} className="border border-border rounded-lg p-3 text-center">
                     <p className="text-sm font-medium text-foreground">{integration.name}</p>

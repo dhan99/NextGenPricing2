@@ -44,7 +44,7 @@ const nodes: NodeData[] = [
       "Clone/Renewal deal endpoints",
     ],
     technologies: ["Express.js", "TypeScript", "Drizzle ORM", "CORS", "JSON"],
-    connections: ["ai", "db", "crm", "workday", "intapp", "powerbi"],
+    connections: ["ai", "db", "crm", "workday", "intapp", "conga"],
   },
   {
     id: "ai",
@@ -69,53 +69,75 @@ const nodes: NodeData[] = [
     category: "data",
     description: "Relational database storing all deal lifecycle data with full referential integrity. Managed through Drizzle ORM with type-safe queries and automatic schema synchronization.",
     details: [
-      "Clients, Deals, Scope Catalog, Deal Scope Items",
-      "Roles, Rate Cards, Rate Card Entries",
-      "Pricing Lines, Scenarios, Approvals",
-      "Prompt Responses, Activity Log",
-      "12 normalized tables with seeded sample data",
+      "Core: Clients, Deals, Scope, Pricing, Scenarios, Approvals, Activity Log",
+      "Dynamics: accounts, opportunities, contacts, sync events",
+      "Workday: cost centers, workers, rate cards, validations, events",
+      "Intapp: screenings, mitigations, audit trail",
+      "Conga: templates, generated engagement letters, delivery records",
+      "37 normalized tables — seedAll() bootstrap with pg advisory lock + per-record idempotency runs before HTTP listen",
     ],
-    technologies: ["PostgreSQL", "Drizzle ORM", "SQL", "Relational Queries"],
+    technologies: ["PostgreSQL", "Drizzle ORM", "pg_advisory_lock", "Relational Queries"],
     connections: ["azure"],
   },
   {
     id: "crm",
-    title: "Dynamics CRM",
-    subtitle: "Client & Pipeline",
+    title: "Dynamics 365 CRM",
+    subtitle: "Client & Pipeline (bi-directional)",
     category: "integration",
-    description: "Bi-directional integration with Microsoft Dynamics CRM for client data synchronization, deal pipeline management, and opportunity tracking.",
-    details: ["Client record sync", "Deal pipeline bi-directional", "Opportunity stage mapping", "Contact and account data"],
-    technologies: ["Dynamics 365", "REST API", "OAuth 2.0"],
+    description: "Bi-directional integration with Microsoft Dynamics 365 CRM. DealPad pulls client/opportunity data and pushes deal-status outcomes back on every approval transition via autoPushDeal().",
+    details: [
+      "Client / opportunity / contact pull",
+      "Outcome push on approval (autoPushDeal)",
+      "Field-level sync of status, owner, amount",
+      "Sync events recorded for audit",
+    ],
+    technologies: ["Dynamics 365", "Dataverse Web API v9.2", "OAuth 2.0", "REST"],
     connections: [],
   },
   {
     id: "workday",
     title: "Workday",
-    subtitle: "Budget & Resources",
+    subtitle: "Budget / Resources (bi-directional)",
     category: "integration",
-    description: "Integration with Workday for budget validation, resource availability, and staffing plan alignment during deal scoping.",
-    details: ["Budget data retrieval", "Resource availability checks", "Staffing plan alignment", "Cost rate validation"],
-    technologies: ["Workday API", "SOAP/REST"],
+    description: "Pulls cost centers, workers, and rate cards for validation; on deal approval, pushes a project record back and atomically reserves committed budget on the cost center via a transactional sentinel marker (concurrency-safe).",
+    details: [
+      "Cost-center, worker, rate-card pull",
+      "Deal validation (rate variance, budget headroom, staffing)",
+      "Project push on approval (autoPushWorkdayProject)",
+      "Atomic committed-budget reserve (transaction + idempotency marker)",
+    ],
+    technologies: ["Workday Web Services", "REST + SOAP", "ISU auth", "OAuth 2.0"],
     connections: [],
   },
   {
     id: "intapp",
-    title: "Intapp",
-    subtitle: "Conflict & Independence",
+    title: "Intapp Risk",
+    subtitle: "Screening + Mitigation (bi-directional)",
     category: "integration",
-    description: "Integration with Intapp for automated conflict-of-interest checks and independence verification before deal engagement.",
-    details: ["Conflict-of-interest screening", "Independence verification", "Engagement acceptance", "Compliance tracking"],
-    technologies: ["Intapp API", "REST"],
+    description: "Runs conflict-of-interest and independence screenings, tracks mitigations through resolve/waive/reject, and pushes the final approval outcome (approved/rejected/withdrawn) back to Intapp on deal finalization.",
+    details: [
+      "Conflict / independence screening",
+      "Mitigation lifecycle tracking",
+      "Outcome push on approval (autoPushIntappOutcome)",
+      "Mitigation push on resolve/waive/reject",
+      "Header-based RBAC on all push endpoints",
+    ],
+    technologies: ["Intapp API", "REST", "x-user-name / x-user-role headers"],
     connections: [],
   },
   {
-    id: "powerbi",
-    title: "Power BI",
-    subtitle: "Dashboards & Analytics",
+    id: "conga",
+    title: "Conga CLM",
+    subtitle: "Engagement Letters (bi-directional)",
     category: "integration",
-    description: "Integration with Power BI for advanced analytics dashboards, margin trend reporting, and pipeline health visualization.",
-    details: ["Embedded dashboards", "Margin trend analytics", "Pipeline health reports", "Executive KPIs"],
-    technologies: ["Power BI Embedded", "REST API", "DAX"],
+    description: "Generates engagement letters from templates and pushes deliveries back through Conga's pipeline (email / e-sign / portal). On successful delivery the letter row flips to 'delivered'.",
+    details: [
+      "Template-driven letter generation",
+      "Delivery push (email / e-sign / portal channels)",
+      "Status reconciliation back to engagement_letters",
+      "Header-based RBAC on the deliver endpoint",
+    ],
+    technologies: ["Conga CLM", "REST", "DocuSign / Adobe Sign"],
     connections: [],
   },
   {
@@ -150,10 +172,10 @@ const dataFlows = [
   { from: "browser", to: "api", label: "REST / JSON", type: "primary" as const },
   { from: "api", to: "ai", label: "AI Inference", type: "secondary" as const },
   { from: "api", to: "db", label: "SQL Queries", type: "secondary" as const },
-  { from: "api", to: "crm", label: "Client Sync", type: "dashed" as const },
-  { from: "api", to: "workday", label: "Budget Data", type: "dashed" as const },
-  { from: "api", to: "intapp", label: "Conflict Checks", type: "dashed" as const },
-  { from: "api", to: "powerbi", label: "Analytics", type: "dashed" as const },
+  { from: "api", to: "crm", label: "Pull + outcome push", type: "primary" as const },
+  { from: "api", to: "workday", label: "Pull + project push", type: "primary" as const },
+  { from: "api", to: "intapp", label: "Screen + outcome push", type: "primary" as const },
+  { from: "api", to: "conga", label: "Generate + deliver push", type: "primary" as const },
   { from: "ai", to: "azure", label: "Compute", type: "dashed" as const },
   { from: "db", to: "azure", label: "Hosting", type: "dashed" as const },
 ];
@@ -245,9 +267,9 @@ export function ArchitectureInteractive() {
                 </div>
               </div>
 
-              <div className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground mt-4 mb-2">External Integrations</div>
+              <div className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground mt-4 mb-2">External Integrations — all bi-directional</div>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                {["crm", "workday", "intapp", "powerbi"].map((id) => <div key={id}>{renderNodeCard(id, true)}</div>)}
+                {["crm", "workday", "intapp", "conga"].map((id) => <div key={id}>{renderNodeCard(id, true)}</div>)}
               </div>
 
               <div className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground mt-4 mb-2">Infrastructure</div>
