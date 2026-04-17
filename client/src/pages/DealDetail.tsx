@@ -1837,29 +1837,18 @@ function ReviewStep({ deal, navigateToStep, onReadiness, override, setOverride }
         </div>
       </div>
 
-      {/* Hero card */}
-      <div className="card p-6">
-        <div className="flex flex-col lg:flex-row lg:items-center gap-6 lg:gap-8">
-          <div className="flex-1 min-w-0">
-            <h2 className="text-2xl font-bold text-foreground tracking-tight truncate">{deal.client?.name || deal.title}</h2>
-            <p className="text-sm text-muted-foreground mt-1 truncate">
-              {[deal.serviceLine, deal.businessUnit, billable.length ? `${billable.length} scope items` : null, deal.dealType ? `${deal.dealType.charAt(0).toUpperCase() + deal.dealType.slice(1)} Project` : null]
-                .filter(Boolean)
-                .join(" · ")}
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-x-8 gap-y-3 lg:justify-end">
-            <ReviewKpi label="Total Fees" value={formatCurrency(sumFee)} />
-            <ReviewKpi label="Margin" value={`${marginPct.toFixed(1)}%`} tone={marginOk ? "success" : "warning"} />
-            <ReviewKpi label="Hours" value={formatNumber(sumHours)} />
-            <ReviewKpi label="Eff. Rate" value={effRate > 0 ? `${formatCurrency(effRate)}` : "—"} tone="primary" />
-            <ReviewKpi
-              label="vs Target"
-              value={`${vsTarget >= 0 ? "↑ +" : "↓ "}${vsTarget.toFixed(1)}%`}
-              tone={vsTarget >= 0 ? "success" : "danger"}
-            />
-          </div>
-        </div>
+      {/* KPI strip — same compact card pattern used on the Pricing step */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+        <ReviewKpiCard label="Total Fees" value={formatCurrency(sumFee)} />
+        <ReviewKpiCard label="Margin" value={`${marginPct.toFixed(1)}%`} tone={marginOk ? "success" : "warning"} />
+        <ReviewKpiCard label="Hours" value={formatNumber(sumHours)} />
+        <ReviewKpiCard label="Eff. Rate" value={effRate > 0 ? `${formatCurrency(effRate)}/hr` : "—"} />
+        <ReviewKpiCard
+          label={`vs Target (${targetMargin}%)`}
+          value={`${vsTarget >= 0 ? "+" : ""}${vsTarget.toFixed(1)}%`}
+          tone={vsTarget >= 0 ? "success" : "danger"}
+          accent
+        />
       </div>
 
       {/* Scope summary + Validation checklist */}
@@ -2012,17 +2001,23 @@ function ReviewStep({ deal, navigateToStep, onReadiness, override, setOverride }
   );
 }
 
-function ReviewKpi({ label, value, tone = "default" }: { label: string; value: string; tone?: "default" | "success" | "warning" | "danger" | "primary" }) {
+function ReviewKpiCard({ label, value, tone = "default", accent = false }: { label: string; value: string; tone?: "default" | "success" | "warning" | "danger"; accent?: boolean }) {
   return (
-    <div className="text-right min-w-[80px]">
-      <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">{label}</p>
+    <div
+      className={cn(
+        "rounded-xl border px-3 py-3 bg-card",
+        accent && tone === "success" && "border-emerald-300 bg-emerald-50/60",
+        accent && tone === "danger" && "border-rose-300 bg-rose-50/60",
+        !accent && "border-border",
+      )}
+    >
+      <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground leading-tight">{label}</p>
       <p className={cn(
-        "text-xl font-bold mt-0.5 tabular-nums",
+        "text-lg font-bold mt-1 leading-none tabular-nums",
         tone === "default" && "text-foreground",
-        tone === "success" && "text-emerald-600",
-        tone === "warning" && "text-amber-600",
-        tone === "danger" && "text-rose-600",
-        tone === "primary" && "text-primary",
+        tone === "success" && "text-emerald-700",
+        tone === "warning" && "text-amber-700",
+        tone === "danger" && "text-rose-700",
       )}>{value}</p>
     </div>
   );
