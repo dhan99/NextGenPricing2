@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useRoute } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
-import { useDeal, useUpdateDeal, useScopeCatalog, useScopeTemplates, useApplyScopeTemplate, useDealScopeItems, useAddScopeItem, useRemoveScopeItem, useRoles, useDealPricing, useUpdatePricingLine, useDealScenarios, useSelectScenario, useDealApprovals, useSubmitApproval, useUpdateApproval, useDealPrompts, useUpdatePrompt, useEngagementInputSpec, useAIDealSimilarity, useAIEffortEstimation, useAIMarginAdvisor, useAIScenarioRecommendation, useAIRiskSummary, useDealIntappScreening, useRunIntappScreening, useIntappOverride, useAddIntappMitigation, useUpdateIntappMitigation, useWorkdayLatestValidation, useWorkdayCostCenters, useRunWorkdayValidation, useLinkWorkdayCostCenter, useOverrideWorkdayValidation } from "@/hooks/use-api";
+import { useDeal, useUpdateDeal, useScopeCatalog, useScopeTemplates, useApplyScopeTemplate, useDealScopeItems, useAddScopeItem, useRemoveScopeItem, useRoles, useDealPricing, useUpdatePricingLine, useDealScenarios, useSelectScenario, useDealApprovals, useSubmitApproval, useUpdateApproval, useDealPrompts, useUpdatePrompt, useEngagementInputSpec, useAIDealSimilarity, useAIEffortEstimation, useAIMarginAdvisor, useAIScenarioRecommendation, useAIRiskSummary, useDealIntappScreening, useRunIntappScreening, useIntappOverride, useAddIntappMitigation, useUpdateIntappMitigation, useWorkdayLatestValidation, useWorkdayCostCenters, useRunWorkdayValidation, useLinkWorkdayCostCenter, useOverrideWorkdayValidation, usePromptSets } from "@/hooks/use-api";
 import { ResultBadge as IntappResultBadge, RiskBadge as IntappRiskBadge, SourceBadge as IntappSourceBadge } from "./Intapp";
 import { ShieldAlert, ShieldCheck, Unlock } from "lucide-react";
-import { formatCurrency, formatPercent, formatNumber, getStatusColor, getStatusLabel, cn } from "@/lib/utils";
-import { ArrowLeft, Check, ChevronRight, Sparkles, AlertTriangle, TrendingUp, Target, FileText, Shield, CheckCircle, XCircle, Clock, Loader2, Plus, Trash2, Lightbulb, RefreshCw, Pencil, Save, GitBranch, Layers, X } from "lucide-react";
+import { formatCurrency, formatPercent, formatNumber, formatRelativeTime, getStatusColor, getStatusLabel, cn } from "@/lib/utils";
+import { ArrowLeft, Check, ChevronRight, Sparkles, AlertTriangle, TrendingUp, TrendingDown, Target, FileText, Shield, CheckCircle, XCircle, Clock, Loader2, Plus, Trash2, Lightbulb, RefreshCw, Pencil, Save, GitBranch, Layers, X, Database, Save as SaveIcon, MessageSquare, ArrowUpRight, ArrowDownRight, MoreHorizontal, Copy, Archive, Download } from "lucide-react";
 import { Link } from "wouter";
 import { useAuth } from "@/context/AuthContext";
 import { AskDealPadAI } from "@/components/AskDealPadAI";
@@ -54,50 +54,7 @@ export function DealDetail() {
 
   return (
     <div className="flex flex-col min-h-screen">
-      <div className="border-b border-border bg-card px-8 py-4">
-        <div className="flex items-center gap-4 mb-3">
-          <Link href="/deals"><span className="text-muted-foreground hover:text-foreground cursor-pointer"><ArrowLeft className="w-5 h-5" /></span></Link>
-          <div className="flex-1">
-            <div className="flex items-center gap-3">
-              <h1 className="text-xl font-bold text-foreground">{deal.title}</h1>
-              <span className={`badge ${getStatusColor(deal.status)}`}>{getStatusLabel(deal.status)}</span>
-            </div>
-            <div className="flex items-center gap-4 mt-1">
-              <span className="text-sm text-muted-foreground">{deal.dealNumber}</span>
-              <span className="text-sm text-muted-foreground">{deal.client?.name}</span>
-              <span className="text-sm text-muted-foreground">{deal.serviceLine}</span>
-            </div>
-          </div>
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-6 text-right">
-              <div><p className="text-xs text-muted-foreground">Total Fee</p><p className="text-lg font-bold text-foreground">{formatCurrency(deal.totalFee || 0)}</p></div>
-              <div><p className="text-xs text-muted-foreground">Margin</p><p className="text-lg font-bold text-foreground">{formatPercent(deal.marginPercent || 0)}</p></div>
-              <div><p className="text-xs text-muted-foreground">Hours</p><p className="text-lg font-bold text-foreground">{formatNumber(deal.totalHours || 0)}</p></div>
-            </div>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-1 overflow-x-auto">
-          {STEPS.map((step, i) => (
-            <button
-              key={step.num}
-              onClick={() => navigateToStep(step.num)}
-              className={cn(
-                "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-all",
-                currentStep === step.num
-                  ? "bg-primary text-primary-foreground"
-                  : step.num < currentStep
-                  ? "bg-success/10 text-success"
-                  : "text-muted-foreground hover:bg-muted"
-              )}
-            >
-              {step.num < currentStep ? <Check className="w-3.5 h-3.5" /> : <span className="w-5 h-5 rounded-full border border-current flex items-center justify-center text-xs">{step.num}</span>}
-              {step.label}
-              {i < STEPS.length - 1 && <ChevronRight className="w-3 h-3 text-muted-foreground ml-1" />}
-            </button>
-          ))}
-        </div>
-      </div>
+      <DealBanner deal={deal} currentStep={currentStep} navigateToStep={navigateToStep} />
 
       <div className="flex-1 p-8 max-w-7xl mx-auto w-full">
         {currentStep === 1 && <SetupStep deal={deal} />}
@@ -1496,6 +1453,184 @@ function PricingOptionsDrawer({ deal, open, onClose }: { deal: any; open: boolea
         })}
           </div>
           )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DealBanner({ deal, currentStep, navigateToStep }: { deal: any; currentStep: number; navigateToStep: (n: number) => void }) {
+  const { data: approvals } = useDealApprovals(deal.id);
+  const { data: publishedSets } = usePromptSets({ status: "published", serviceLine: deal.serviceLine });
+  const [moreOpen, setMoreOpen] = useState(false);
+
+  const pendingApprovals = (approvals || []).filter((a: any) => a.status === "pending").length;
+  const targetMargin = 35;
+  const marginVal = parseFloat(deal.marginPercent || 0);
+  const marginDelta = marginVal - targetMargin;
+  const marginGood = marginDelta >= 0;
+  const activePromptSet = (publishedSets || [])[0];
+
+  const dynamics = deal.dynamicsLink;
+  const lastSaved = formatRelativeTime(deal.updatedAt);
+  const dynamicsSyncedAt = dynamics?.lastSyncedAt ? formatRelativeTime(dynamics.lastSyncedAt) : null;
+
+  const stepProgress = ((currentStep - 1) / (STEPS.length - 1)) * 100;
+
+  return (
+    <div className="border-b border-border bg-gradient-to-b from-card to-background">
+      <div className="px-8 pt-5 pb-3">
+        {/* Title row */}
+        <div className="flex items-start gap-4">
+          <Link href="/deals">
+            <button className="mt-1 w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors" title="Back to engagements">
+              <ArrowLeft className="w-4 h-4" />
+            </button>
+          </Link>
+
+          {/* Amber accent bar */}
+          <div className="self-stretch w-1 rounded-full bg-gradient-to-b from-primary to-primary/40" />
+
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <h1 className="text-xl font-bold text-foreground truncate">{deal.title}</h1>
+              <span className={cn("inline-flex items-center text-[11px] font-semibold px-2 py-0.5 rounded-full", getStatusColor(deal.status))}>
+                {getStatusLabel(deal.status)}
+              </span>
+              {marginVal > 0 && (
+                <span className={cn(
+                  "inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full",
+                  marginGood ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-rose-50 text-rose-700 border border-rose-200"
+                )}>
+                  {marginGood ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
+                  {marginVal.toFixed(1)}% · {marginGood ? "+" : ""}{marginDelta.toFixed(1)} vs {targetMargin}%
+                </span>
+              )}
+            </div>
+            <div className="flex items-center gap-3 mt-1 text-sm text-muted-foreground flex-wrap">
+              <span className="font-medium text-foreground/70">{deal.dealNumber}</span>
+              <span className="text-border">·</span>
+              <span>{deal.client?.name}</span>
+              <span className="text-border">·</span>
+              <span>{deal.serviceLine}</span>
+              {deal.businessUnit && (<><span className="text-border">·</span><span>{deal.businessUnit}</span></>)}
+            </div>
+
+            {/* Trust chips */}
+            <div className="flex items-center gap-2 mt-3 flex-wrap">
+              {dynamics ? (
+                <Link href="/integrations/dynamics">
+                  <span className="inline-flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 cursor-pointer transition-colors">
+                    <Database className="w-3 h-3" />
+                    CRM linked: {dynamics.opportunityNumber}
+                    {dynamicsSyncedAt && <span className="text-blue-600/70">· synced {dynamicsSyncedAt}</span>}
+                  </span>
+                </Link>
+              ) : (
+                <span className="inline-flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-full bg-muted text-muted-foreground border border-border">
+                  <Database className="w-3 h-3" />
+                  CRM not linked
+                </span>
+              )}
+
+              <span className="inline-flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-full bg-muted/60 text-muted-foreground border border-border">
+                <SaveIcon className="w-3 h-3" />
+                Auto-saved · {lastSaved}
+              </span>
+
+              {activePromptSet && (
+                <Link href="/admin/prompt-sets">
+                  <span className="inline-flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-full bg-primary/5 text-primary border border-primary/20 hover:bg-primary/10 cursor-pointer transition-colors">
+                    <MessageSquare className="w-3 h-3" />
+                    Prompt set v{activePromptSet.version} · {activePromptSet.name}
+                  </span>
+                </Link>
+              )}
+
+              {pendingApprovals > 0 && (
+                <button
+                  onClick={() => navigateToStep(6)}
+                  className="inline-flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 transition-colors"
+                >
+                  <Clock className="w-3 h-3" />
+                  {pendingApprovals} approval{pendingApprovals !== 1 ? "s" : ""} pending
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Quick actions */}
+          <div className="relative">
+            <button
+              onClick={() => setMoreOpen((v) => !v)}
+              onBlur={() => setTimeout(() => setMoreOpen(false), 150)}
+              className="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+              title="More actions"
+            >
+              <MoreHorizontal className="w-4 h-4" />
+            </button>
+            {moreOpen && (
+              <div className="absolute right-0 top-10 w-52 rounded-xl border border-border bg-card shadow-xl overflow-hidden z-20">
+                <button className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-foreground hover:bg-muted/40 transition-colors" onClick={() => window.print()}>
+                  <Download className="w-3.5 h-3.5 text-muted-foreground" />
+                  Export PDF
+                </button>
+                <button disabled className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-muted-foreground/60 cursor-not-allowed" title="Coming soon">
+                  <Copy className="w-3.5 h-3.5" />
+                  Duplicate deal
+                </button>
+                <button disabled className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-muted-foreground/60 cursor-not-allowed border-t border-border" title="Coming soon">
+                  <Archive className="w-3.5 h-3.5" />
+                  Archive
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Slim wizard rail */}
+      <div className="px-8 pb-3">
+        <div className="relative">
+          {/* Baseline */}
+          <div className="absolute left-3 right-3 top-1/2 h-0.5 bg-border -translate-y-1/2" />
+          <div
+            className="absolute left-3 top-1/2 h-0.5 bg-primary -translate-y-1/2 transition-all duration-300"
+            style={{ width: `calc(${stepProgress}% * (100% - 24px) / 100%)` }}
+          />
+          <div className="relative flex items-center justify-between">
+            {STEPS.map((step) => {
+              const isDone = step.num < currentStep;
+              const isActive = step.num === currentStep;
+              return (
+                <button
+                  key={step.num}
+                  onClick={() => navigateToStep(step.num)}
+                  className="group relative flex flex-col items-center gap-1.5"
+                  title={`Step ${step.num}: ${step.label}`}
+                >
+                  <span
+                    className={cn(
+                      "w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold transition-all border-2 bg-background",
+                      isActive && "border-primary text-primary scale-110 shadow-sm",
+                      isDone && "border-primary bg-primary text-primary-foreground",
+                      !isActive && !isDone && "border-border text-muted-foreground group-hover:border-foreground/40 group-hover:text-foreground"
+                    )}
+                  >
+                    {isDone ? <Check className="w-3 h-3" /> : step.num}
+                  </span>
+                  <span
+                    className={cn(
+                      "text-[11px] font-medium whitespace-nowrap transition-colors",
+                      isActive ? "text-primary" : isDone ? "text-foreground/70" : "text-muted-foreground group-hover:text-foreground"
+                    )}
+                  >
+                    {step.label}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
         </div>
       </div>
     </div>

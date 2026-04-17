@@ -36,6 +36,23 @@ export function getStatusColor(status: string): string {
   }
 }
 
+export function formatRelativeTime(value: string | Date | null | undefined): string {
+  if (!value) return "—";
+  const d = typeof value === "string" ? new Date(value) : value;
+  const ms = Date.now() - d.getTime();
+  if (Number.isNaN(ms)) return "—";
+  const sec = Math.max(0, Math.floor(ms / 1000));
+  if (sec < 10) return "just now";
+  if (sec < 60) return `${sec}s ago`;
+  const min = Math.floor(sec / 60);
+  if (min < 60) return `${min}m ago`;
+  const hr = Math.floor(min / 60);
+  if (hr < 24) return `${hr}h ago`;
+  const day = Math.floor(hr / 24);
+  if (day < 30) return `${day}d ago`;
+  return d.toLocaleDateString();
+}
+
 export function getStatusLabel(status: string): string {
   switch (status) {
     case "draft": return "Draft";

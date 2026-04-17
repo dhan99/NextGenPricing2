@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Sparkles, X, Send, Loader2, Lock, MessageSquare } from "lucide-react";
 import { useAskDealPadAI } from "@/hooks/use-api";
 import { useAuth } from "@/context/AuthContext";
@@ -75,6 +75,12 @@ export function AskDealPadAI({ context }: { context: AskAIContext }) {
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
   const ask = useAskDealPadAI();
+
+  useEffect(() => {
+    const handler = () => setOpen(true);
+    window.addEventListener("dealpad:open-ask-ai", handler);
+    return () => window.removeEventListener("dealpad:open-ask-ai", handler);
+  }, []);
 
   const suggestions = SUGGESTED_PROMPTS[context.screen] || [];
 
