@@ -89,6 +89,35 @@ async function pushSchema() {
       default_hours DECIMAL(8,2),
       is_assembly BOOLEAN DEFAULT false,
       parent_id INTEGER,
+      service_lines TEXT,
+      sort_order INTEGER DEFAULT 0
+    );
+    ALTER TABLE scope_catalog ADD COLUMN IF NOT EXISTS service_lines TEXT;
+    ALTER TABLE scope_catalog ADD COLUMN IF NOT EXISTS parent_id INTEGER;
+    DO $$ BEGIN
+      IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'scope_catalog_parent_id_fkey') THEN
+        ALTER TABLE scope_catalog
+          ADD CONSTRAINT scope_catalog_parent_id_fkey
+          FOREIGN KEY (parent_id) REFERENCES scope_catalog(id) ON DELETE SET NULL;
+      END IF;
+    END $$;
+
+    CREATE TABLE IF NOT EXISTS scope_templates (
+      id SERIAL PRIMARY KEY,
+      name TEXT NOT NULL,
+      description TEXT,
+      service_line TEXT,
+      is_active BOOLEAN DEFAULT TRUE,
+      sort_order INTEGER DEFAULT 0,
+      created_at TIMESTAMP DEFAULT NOW() NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS scope_template_items (
+      id SERIAL PRIMARY KEY,
+      template_id INTEGER REFERENCES scope_templates(id) NOT NULL,
+      scope_item_id INTEGER REFERENCES scope_catalog(id) NOT NULL,
+      default_hours DECIMAL(8,2),
+      complexity_multiplier DECIMAL(4,2) DEFAULT 1.0,
       sort_order INTEGER DEFAULT 0
     );
 
@@ -362,7 +391,18 @@ async function pushSchema() {
     ALTER TABLE intapp_settings ADD COLUMN IF NOT EXISTS live_tenant_url TEXT;
     ALTER TABLE intapp_settings ADD COLUMN IF NOT EXISTS live_client_id TEXT;
     ALTER TABLE intapp_settings ADD COLUMN IF NOT EXISTS live_api_key_secret TEXT;
+    ALTER TABLE intapp_settings ADD COLUMN IF NOT EXISTS qrm_notify_on_conflict BOOLEAN DEFAULT TRUE;
+    ALTER TABLE intapp_settings ADD COLUMN IF NOT EXISTS qrm_notify_channel TEXT DEFAULT 'in_app';
+    ALTER TABLE intapp_settings ADD COLUMN IF NOT EXISTS qrm_notify_recipients TEXT;
+    ALTER TABLE intapp_settings ADD COLUMN IF NOT EXISTS qrm_teams_webhook_url TEXT;
+    ALTER TABLE intapp_settings ADD COLUMN IF NOT EXISTS app_base_url TEXT;
     ALTER TABLE deals ADD COLUMN IF NOT EXISTS workday_cost_center_id INTEGER;
+
+    DELETE FROM deal_scope_items a
+      USING deal_scope_items b
+      WHERE a.id > b.id AND a.deal_id = b.deal_id AND a.scope_item_id = b.scope_item_id;
+    CREATE UNIQUE INDEX IF NOT EXISTS deal_scope_items_deal_item_uniq
+      ON deal_scope_items (deal_id, scope_item_id);
 
     CREATE TABLE IF NOT EXISTS workday_settings (
       id SERIAL PRIMARY KEY,
@@ -483,6 +523,47 @@ async function pushSchema() {
       END IF;
     END $$;
   `);
+
+  // Backfill scope catalog: service lines + assembly parent links
+  await db.execute(sql`
+    UPDATE scope_catalog SET service_lines = 'Digital Transformation,Cloud Services' WHERE code IN ('ARCH-001','ARCH-002','ARCH-003') AND service_lines IS NULL;
+    UPDATE scope_catalog SET service_lines = 'Digital Transformation,Cloud Services,NetSuite,Sage Intacct' WHERE code IN ('IMPL-001','IMPL-002','IMPL-003','IMPL-004') AND service_lines IS NULL;
+    UPDATE scope_catalog SET service_lines = NULL WHERE code IN ('TEST-001','TEST-002','TEST-003','PMO-001','PMO-002','TRN-001') AND service_lines IS NULL;
+    UPDATE scope_catalog SET service_lines = 'Risk Assurance,Cloud Services,Financial Audit' WHERE code = 'SEC-001' AND service_lines IS NULL;
+    UPDATE scope_catalog SET service_lines = 'Cloud Services,Digital Transformation' WHERE code = 'CLD-001' AND service_lines IS NULL;
+
+    UPDATE scope_catalog c SET parent_id = p.id FROM scope_catalog p WHERE p.code = 'ARCH-001' AND c.code IN ('ARCH-002','ARCH-003') AND c.parent_id IS NULL;
+    UPDATE scope_catalog c SET parent_id = p.id FROM scope_catalog p WHERE p.code = 'IMPL-001' AND c.code IN ('IMPL-002','IMPL-003','IMPL-004') AND c.parent_id IS NULL;
+    UPDATE scope_catalog c SET parent_id = p.id FROM scope_catalog p WHERE p.code = 'TEST-001' AND c.code IN ('TEST-002','TEST-003') AND c.parent_id IS NULL;
+  `);
+
+  // Seed starter templates if none exist
+  const { rows: tplRows } = await pool.query(`SELECT COUNT(*)::int AS c FROM scope_templates`);
+  if (tplRows[0]?.c === 0) {
+    await pool.query(`
+      INSERT INTO scope_templates (name, description, service_line, sort_order) VALUES
+        ('NetSuite Implementation - Mid-Market', 'Standard mid-market NetSuite ERP rollout: implementation, testing, PM, training.', 'Digital Transformation', 1),
+        ('Cloud Migration - Standard', 'Lift-and-shift cloud migration with architecture, security, and project oversight.', 'Cloud Services', 2),
+        ('Risk Assurance - SOC 2 Type II', 'SOC 2 Type II readiness and assessment package.', 'Risk Assurance', 3),
+        ('Architecture Quick Start', 'Discovery + target-state design for a new platform decision.', NULL, 4);
+
+      INSERT INTO scope_template_items (template_id, scope_item_id, sort_order)
+      SELECT t.id, c.id, c.sort_order FROM scope_templates t, scope_catalog c
+      WHERE t.name = 'NetSuite Implementation - Mid-Market' AND c.code IN ('IMPL-001','PMO-001','TRN-001','TEST-001');
+
+      INSERT INTO scope_template_items (template_id, scope_item_id, sort_order)
+      SELECT t.id, c.id, c.sort_order FROM scope_templates t, scope_catalog c
+      WHERE t.name = 'Cloud Migration - Standard' AND c.code IN ('CLD-001','ARCH-002','ARCH-003','SEC-001','PMO-001');
+
+      INSERT INTO scope_template_items (template_id, scope_item_id, sort_order)
+      SELECT t.id, c.id, c.sort_order FROM scope_templates t, scope_catalog c
+      WHERE t.name = 'Risk Assurance - SOC 2 Type II' AND c.code IN ('SEC-001','PMO-001','TRN-001');
+
+      INSERT INTO scope_template_items (template_id, scope_item_id, sort_order)
+      SELECT t.id, c.id, c.sort_order FROM scope_templates t, scope_catalog c
+      WHERE t.name = 'Architecture Quick Start' AND c.code IN ('ARCH-001','PMO-002');
+    `);
+  }
 }
 
 async function start() {

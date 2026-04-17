@@ -94,6 +94,28 @@ export function useScopeCatalog() {
   return useQuery({ queryKey: ["scope-catalog"], queryFn: () => fetchApi("/api/scope-catalog") });
 }
 
+export function useScopeTemplates(serviceLine?: string | null) {
+  const qs = serviceLine ? `?serviceLine=${encodeURIComponent(serviceLine)}` : "";
+  return useQuery({
+    queryKey: ["scope-templates", serviceLine || "all"],
+    queryFn: () => fetchApi(`/api/scope-templates${qs}`),
+  });
+}
+
+export function useApplyScopeTemplate() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ dealId, templateId, userName }: { dealId: number; templateId: number; userName?: string }) =>
+      fetchApi(`/api/deals/${dealId}/apply-template/${templateId}`, { method: "POST", body: JSON.stringify({ userName }) }),
+    onSuccess: (_, { dealId }) => {
+      qc.invalidateQueries({ queryKey: ["deal-scope", dealId] });
+      qc.invalidateQueries({ queryKey: ["deal-pricing", dealId] });
+      qc.invalidateQueries({ queryKey: ["deal", dealId] });
+      qc.invalidateQueries({ queryKey: ["activity"] });
+    },
+  });
+}
+
 export function useDealScopeItems(dealId: number) {
   return useQuery({ queryKey: ["deal-scope", dealId], queryFn: () => fetchApi(`/api/deals/${dealId}/scope-items`), enabled: !!dealId });
 }
@@ -317,7 +339,7 @@ export function useUnlinkOpportunity() {
     },
   });
 }
-export function useScopeTemplates() {
+export function useDynamicsScopeTemplates() {
   return useQuery({ queryKey: ["dyn-scope-templates"], queryFn: () => fetchApi("/api/dynamics/scope-templates") });
 }
 export function useCreateOpportunity() {

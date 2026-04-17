@@ -1,6 +1,6 @@
 import { Express, Request, Response } from "express";
 import { db } from "./db";
-import { clients, deals, scopeCatalog, dealScopeItems, roles, rateCards, rateCardEntries, pricingLines, scenarios, approvals, promptResponses, activityLog, changeOrders, dynamicsOpportunities } from "../shared/schema";
+import { clients, deals, scopeCatalog, dealScopeItems, scopeTemplates, scopeTemplateItems, roles, rateCards, rateCardEntries, pricingLines, scenarios, approvals, promptResponses, activityLog, changeOrders, dynamicsOpportunities } from "../shared/schema";
 import { eq, desc, sql, and, count, isNull, isNotNull } from "drizzle-orm";
 
 function escapeHtml(str: string | null | undefined): string {
@@ -538,12 +538,121 @@ export function registerRoutes(app: Express) {
 
   app.post("/api/deals/:dealId/scope-items", async (req: Request, res: Response) => {
     const dealId = parseInt(req.params.dealId);
+    const cascade = req.body?.cascade !== false; // default true
     const [item] = await db.insert(dealScopeItems).values({
       dealId,
-      ...req.body,
-    }).returning();
+      scopeItemId: req.body.scopeItemId,
+      quantity: req.body.quantity ?? 1,
+      adjustedHours: req.body.adjustedHours,
+      complexityMultiplier: req.body.complexityMultiplier ?? "1.0",
+      notes: req.body.notes,
+    }).onConflictDoNothing({ target: [dealScopeItems.dealId, dealScopeItems.scopeItemId] }).returning();
+    if (!item) {
+      const [existingRow] = await db.select().from(dealScopeItems)
+        .where(and(eq(dealScopeItems.dealId, dealId), eq(dealScopeItems.scopeItemId, req.body.scopeItemId)));
+      return res.status(200).json({ ...existingRow, cascadedChildren: [], duplicate: true });
+    }
+
+    let cascaded: any[] = [];
+    if (cascade) {
+      const [parent] = await db.select().from(scopeCatalog).where(eq(scopeCatalog.id, req.body.scopeItemId));
+      if (parent?.isAssembly) {
+        const children = await db.select().from(scopeCatalog).where(eq(scopeCatalog.parentId, parent.id));
+        const existing = await db.select({ scopeItemId: dealScopeItems.scopeItemId })
+          .from(dealScopeItems).where(eq(dealScopeItems.dealId, dealId));
+        const existingIds = new Set(existing.map(e => e.scopeItemId));
+        for (const child of children) {
+          if (existingIds.has(child.id)) continue;
+          const [ci] = await db.insert(dealScopeItems).values({
+            dealId, scopeItemId: child.id, quantity: 1,
+            adjustedHours: child.defaultHours, complexityMultiplier: "1.0",
+          }).onConflictDoNothing({ target: [dealScopeItems.dealId, dealScopeItems.scopeItemId] }).returning();
+          if (ci) cascaded.push(ci);
+        }
+      }
+    }
+
     await recalcPricingFromScope(dealId);
-    res.status(201).json(item);
+    res.status(201).json({ ...item, cascadedChildren: cascaded });
+  });
+
+  // ========== SCOPE TEMPLATES ==========
+  app.get("/api/scope-templates", async (req: Request, res: Response) => {
+    const serviceLine = (req.query.serviceLine as string) || null;
+    const tpls = await db.select().from(scopeTemplates)
+      .where(eq(scopeTemplates.isActive, true))
+      .orderBy(scopeTemplates.sortOrder);
+    const ids = tpls.map(t => t.id);
+    if (ids.length === 0) return res.json([]);
+    const items = await db.execute(sql`
+      SELECT ti.template_id, ti.scope_item_id, ti.default_hours, ti.complexity_multiplier, ti.sort_order,
+             c.code, c.name, c.category, c.default_hours AS catalog_default_hours, c.is_assembly
+      FROM scope_template_items ti
+      JOIN scope_catalog c ON c.id = ti.scope_item_id
+      WHERE ti.template_id IN (${sql.join(ids.map(id => sql`${id}`), sql`, `)})
+      ORDER BY ti.sort_order
+    `);
+    const byTpl = new Map<number, any[]>();
+    for (const r of (items as any).rows || items) {
+      const tid = (r as any).template_id;
+      if (!byTpl.has(tid)) byTpl.set(tid, []);
+      byTpl.get(tid)!.push(r);
+    }
+    let result = tpls.map(t => ({ ...t, items: byTpl.get(t.id) || [] }));
+    if (serviceLine) {
+      result = result.filter(t => !t.serviceLine || t.serviceLine === serviceLine);
+    }
+    res.json(result);
+  });
+
+  app.post("/api/deals/:dealId/apply-template/:templateId", async (req: Request, res: Response) => {
+    const dealId = parseInt(req.params.dealId);
+    const templateId = parseInt(req.params.templateId);
+    const items = await db.select().from(scopeTemplateItems).where(eq(scopeTemplateItems.templateId, templateId));
+    if (items.length === 0) return res.status(404).json({ error: "Template has no items" });
+    const existing = await db.select({ scopeItemId: dealScopeItems.scopeItemId })
+      .from(dealScopeItems).where(eq(dealScopeItems.dealId, dealId));
+    const existingIds = new Set(existing.map(e => e.scopeItemId));
+    const inserted: any[] = [];
+    for (const ti of items) {
+      if (existingIds.has(ti.scopeItemId)) continue;
+      const [catalogItem] = await db.select().from(scopeCatalog).where(eq(scopeCatalog.id, ti.scopeItemId));
+      const [row] = await db.insert(dealScopeItems).values({
+        dealId,
+        scopeItemId: ti.scopeItemId,
+        quantity: 1,
+        adjustedHours: ti.defaultHours || catalogItem?.defaultHours,
+        complexityMultiplier: ti.complexityMultiplier || "1.0",
+      }).onConflictDoNothing({ target: [dealScopeItems.dealId, dealScopeItems.scopeItemId] }).returning();
+      if (row) {
+        inserted.push(row);
+        existingIds.add(ti.scopeItemId);
+      }
+      // Cascade assembly children
+      if (catalogItem?.isAssembly) {
+        const children = await db.select().from(scopeCatalog).where(eq(scopeCatalog.parentId, catalogItem.id));
+        for (const child of children) {
+          if (existingIds.has(child.id)) continue;
+          const [ci] = await db.insert(dealScopeItems).values({
+            dealId, scopeItemId: child.id, quantity: 1,
+            adjustedHours: child.defaultHours, complexityMultiplier: "1.0",
+          }).onConflictDoNothing({ target: [dealScopeItems.dealId, dealScopeItems.scopeItemId] }).returning();
+          if (ci) {
+            inserted.push(ci);
+            existingIds.add(child.id);
+          }
+        }
+      }
+    }
+    await recalcPricingFromScope(dealId);
+    const [tpl] = await db.select().from(scopeTemplates).where(eq(scopeTemplates.id, templateId));
+    await db.insert(activityLog).values({
+      dealId, action: "template_applied",
+      description: `Applied scope template "${tpl?.name}" (${inserted.length} items added)`,
+      userName: req.body?.userName || null,
+      metadata: { templateId, itemsAdded: inserted.length },
+    }).catch(() => {});
+    res.status(201).json({ insertedCount: inserted.length, items: inserted });
   });
 
   app.delete("/api/deals/:dealId/scope-items/:id", async (req: Request, res: Response) => {

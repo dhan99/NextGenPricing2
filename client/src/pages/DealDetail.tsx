@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRoute } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
-import { useDeal, useUpdateDeal, useScopeCatalog, useDealScopeItems, useAddScopeItem, useRemoveScopeItem, useRoles, useDealPricing, useUpdatePricingLine, useDealScenarios, useSelectScenario, useDealApprovals, useSubmitApproval, useUpdateApproval, useDealPrompts, useUpdatePrompt, useCloneDeal, useAIDealSimilarity, useAIEffortEstimation, useAIMarginAdvisor, useAIScenarioRecommendation, useAIRiskSummary, useDealIntappScreening, useRunIntappScreening, useIntappOverride, useAddIntappMitigation, useUpdateIntappMitigation, useWorkdayLatestValidation, useWorkdayCostCenters, useRunWorkdayValidation, useLinkWorkdayCostCenter, useOverrideWorkdayValidation } from "@/hooks/use-api";
+import { useDeal, useUpdateDeal, useScopeCatalog, useScopeTemplates, useApplyScopeTemplate, useDealScopeItems, useAddScopeItem, useRemoveScopeItem, useRoles, useDealPricing, useUpdatePricingLine, useDealScenarios, useSelectScenario, useDealApprovals, useSubmitApproval, useUpdateApproval, useDealPrompts, useUpdatePrompt, useCloneDeal, useAIDealSimilarity, useAIEffortEstimation, useAIMarginAdvisor, useAIScenarioRecommendation, useAIRiskSummary, useDealIntappScreening, useRunIntappScreening, useIntappOverride, useAddIntappMitigation, useUpdateIntappMitigation, useWorkdayLatestValidation, useWorkdayCostCenters, useRunWorkdayValidation, useLinkWorkdayCostCenter, useOverrideWorkdayValidation } from "@/hooks/use-api";
 import { ResultBadge as IntappResultBadge, RiskBadge as IntappRiskBadge, SourceBadge as IntappSourceBadge } from "./Intapp";
 import { ShieldAlert, ShieldCheck, Unlock } from "lucide-react";
 import { formatCurrency, formatPercent, formatNumber, getStatusColor, getStatusLabel, cn } from "@/lib/utils";
@@ -390,17 +390,44 @@ function SetupStep({ deal }: { deal: any }) {
 function ScopeStep({ deal }: { deal: any }) {
   const { data: catalog } = useScopeCatalog();
   const { data: scopeItems } = useDealScopeItems(deal.id);
+  const { data: templates } = useScopeTemplates(deal.serviceLine || null);
   const addItem = useAddScopeItem();
   const removeItem = useRemoveScopeItem();
+  const applyTemplate = useApplyScopeTemplate();
   const estimation = useAIEffortEstimation();
   const [searchTerm, setSearchTerm] = useState("");
   const [hasEstimated, setHasEstimated] = useState(false);
+  const [showAllPractices, setShowAllPractices] = useState(false);
 
-  const filteredCatalog = (catalog || []).filter((item: any) =>
-    !searchTerm || item.name.toLowerCase().includes(searchTerm.toLowerCase()) || item.code.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const matchesServiceLine = (item: any) => {
+    if (showAllPractices) return true;
+    if (!deal.serviceLine) return true;
+    if (!item.serviceLines) return true; // cross-cutting items always show
+    return item.serviceLines.split(",").map((s: string) => s.trim()).includes(deal.serviceLine);
+  };
+
+  const filteredCatalog = (catalog || []).filter((item: any) => {
+    const matchesSearch = !searchTerm || item.name.toLowerCase().includes(searchTerm.toLowerCase()) || item.code.toLowerCase().includes(searchTerm.toLowerCase());
+    return matchesSearch && matchesServiceLine(item);
+  });
 
   const addedIds = new Set((scopeItems || []).map((si: any) => si.scopeItemId));
+
+  // Group deal scope items: parents (assemblies) followed by their children
+  const groupedScope = (() => {
+    const items = scopeItems || [];
+    const parents = items.filter((si: any) => si.scopeItem?.isAssembly);
+    const orphans = items.filter((si: any) => !si.scopeItem?.isAssembly && !parents.some((p: any) => p.scopeItem?.id === si.scopeItem?.parentId));
+    const childrenByParent = new Map<number, any[]>();
+    for (const si of items) {
+      const pid = si.scopeItem?.parentId;
+      if (pid && parents.some((p: any) => p.scopeItem?.id === pid)) {
+        if (!childrenByParent.has(pid)) childrenByParent.set(pid, []);
+        childrenByParent.get(pid)!.push(si);
+      }
+    }
+    return { parents, orphans, childrenByParent };
+  })();
 
   const [scopeError, setScopeError] = useState("");
 
@@ -447,16 +474,52 @@ function ScopeStep({ deal }: { deal: any }) {
             <span className="text-sm text-muted-foreground">{(scopeItems || []).length} items added</span>
           </div>
           {(scopeItems || []).length === 0 ? (
-            <p className="text-sm text-muted-foreground py-8 text-center">No scope items added yet. Browse the catalog below to add items.</p>
+            <div className="py-8 text-center">
+              <p className="text-sm text-muted-foreground mb-4">No scope items yet. Pick a starter template below or browse the catalog.</p>
+            </div>
           ) : (
             <div className="space-y-2">
-              {(scopeItems || []).map((si: any) => (
+              {groupedScope.parents.map((parent: any) => {
+                const kids = groupedScope.childrenByParent.get(parent.scopeItem?.id) || [];
+                return (
+                  <div key={parent.id} className="border border-border rounded-lg overflow-hidden">
+                    <div className="flex items-center justify-between p-3 bg-amber-50/40">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-mono text-muted-foreground">{parent.scopeItem?.code}</span>
+                          <p className="text-sm font-semibold text-foreground">{parent.scopeItem?.name}</p>
+                          <span className="badge bg-accent text-accent-foreground">Assembly</span>
+                          {kids.length > 0 && <span className="text-xs text-muted-foreground">{kids.length} child{kids.length !== 1 ? "ren" : ""}</span>}
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-0.5">{parent.adjustedHours || parent.scopeItem?.defaultHours} hrs (x{parent.complexityMultiplier} multiplier)</p>
+                      </div>
+                      <button onClick={() => removeItem.mutate({ dealId: deal.id, id: parent.id })} className="p-1.5 text-muted-foreground hover:text-destructive transition-colors">
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                    {kids.map((kid: any) => (
+                      <div key={kid.id} className="flex items-center justify-between p-2.5 pl-8 border-t border-border bg-muted/20">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-mono text-muted-foreground">↳ {kid.scopeItem?.code}</span>
+                            <p className="text-sm text-foreground">{kid.scopeItem?.name}</p>
+                          </div>
+                          <p className="text-xs text-muted-foreground mt-0.5">{kid.adjustedHours || kid.scopeItem?.defaultHours} hrs</p>
+                        </div>
+                        <button onClick={() => removeItem.mutate({ dealId: deal.id, id: kid.id })} className="p-1.5 text-muted-foreground hover:text-destructive transition-colors">
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })}
+              {groupedScope.orphans.map((si: any) => (
                 <div key={si.id} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
                       <span className="text-xs font-mono text-muted-foreground">{si.scopeItem?.code}</span>
                       <p className="text-sm font-medium text-foreground">{si.scopeItem?.name}</p>
-                      {si.scopeItem?.isAssembly && <span className="badge bg-accent text-accent-foreground">Assembly</span>}
                     </div>
                     <p className="text-xs text-muted-foreground mt-0.5">{si.adjustedHours || si.scopeItem?.defaultHours} hrs (x{si.complexityMultiplier} multiplier)</p>
                   </div>
@@ -469,23 +532,73 @@ function ScopeStep({ deal }: { deal: any }) {
           )}
         </div>
 
+        {(templates || []).length > 0 && (
+          <div className="card p-6">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h2 className="text-lg font-semibold text-foreground">Starter Templates</h2>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {deal.serviceLine ? `Curated for ${deal.serviceLine}` : "Generic templates"} · click to bulk-add a starter scope set
+                </p>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {(templates || []).map((tpl: any) => (
+                <button
+                  key={tpl.id}
+                  disabled={applyTemplate.isPending}
+                  onClick={() => {
+                    if ((scopeItems || []).length > 0 && !confirm(`Add ${tpl.items?.length || 0} items from "${tpl.name}" to your scope?\n\nExisting items are kept; duplicates are skipped.`)) return;
+                    applyTemplate.mutate({ dealId: deal.id, templateId: tpl.id });
+                  }}
+                  className="text-left p-3 border border-border rounded-lg hover:border-primary hover:bg-primary/5 transition-colors disabled:opacity-50"
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <p className="text-sm font-medium text-foreground">{tpl.name}</p>
+                    <span className="text-xs text-muted-foreground">{tpl.items?.length || 0} items</span>
+                  </div>
+                  {tpl.description && <p className="text-xs text-muted-foreground line-clamp-2">{tpl.description}</p>}
+                  {tpl.serviceLine && <span className="badge bg-secondary text-secondary-foreground mt-2">{tpl.serviceLine}</span>}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         <div className="card p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-foreground">Scope Catalog</h2>
-            <div className="relative w-64">
-              <input type="text" placeholder="Search catalog..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="input-field text-sm" />
+          <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
+            <div>
+              <h2 className="text-lg font-semibold text-foreground">Scope Catalog</h2>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {showAllPractices || !deal.serviceLine
+                  ? `Showing all practices · ${filteredCatalog.length} items`
+                  : `Filtered to ${deal.serviceLine} · ${filteredCatalog.length} items`}
+              </p>
+            </div>
+            <div className="flex items-center gap-3">
+              {deal.serviceLine && (
+                <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer">
+                  <input type="checkbox" checked={showAllPractices} onChange={(e) => setShowAllPractices(e.target.checked)} className="rounded" />
+                  Show all practices
+                </label>
+              )}
+              <input type="text" placeholder="Search catalog..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="input-field text-sm w-56" />
             </div>
           </div>
           <div className="space-y-2 max-h-96 overflow-y-auto">
             {filteredCatalog.map((item: any) => (
               <div key={item.id} className="flex items-center justify-between p-3 border border-border rounded-lg hover:bg-muted/30 transition-colors">
                 <div className="flex-1">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-xs font-mono text-muted-foreground">{item.code}</span>
                     <p className="text-sm font-medium text-foreground">{item.name}</p>
                     <span className="badge bg-secondary text-secondary-foreground">{item.category}</span>
+                    {item.isAssembly && <span className="badge bg-accent text-accent-foreground">Assembly</span>}
                   </div>
-                  <p className="text-xs text-muted-foreground mt-0.5">{item.description} | Default: {item.defaultHours} hrs</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {item.description} | Default: {item.defaultHours} hrs
+                    {item.isAssembly && " · adding cascades children"}
+                  </p>
                 </div>
                 <button
                   disabled={addedIds.has(item.id)}
@@ -496,6 +609,11 @@ function ScopeStep({ deal }: { deal: any }) {
                 </button>
               </div>
             ))}
+            {filteredCatalog.length === 0 && (
+              <p className="text-sm text-muted-foreground py-8 text-center">
+                No items match. {!showAllPractices && deal.serviceLine && "Try enabling \"Show all practices\"."}
+              </p>
+            )}
           </div>
         </div>
       </div>

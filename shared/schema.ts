@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, decimal, boolean, timestamp, jsonb, varchar } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, decimal, boolean, timestamp, jsonb, varchar, uniqueIndex } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 
 export const clients = pgTable("clients", {
@@ -54,7 +54,27 @@ export const scopeCatalog = pgTable("scope_catalog", {
   description: text("description"),
   defaultHours: decimal("default_hours", { precision: 8, scale: 2 }),
   isAssembly: boolean("is_assembly").default(false),
-  parentId: integer("parent_id"),
+  parentId: integer("parent_id").references((): any => scopeCatalog.id),
+  serviceLines: text("service_lines"),
+  sortOrder: integer("sort_order").default(0),
+});
+
+export const scopeTemplates = pgTable("scope_templates", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  description: text("description"),
+  serviceLine: text("service_line"),
+  isActive: boolean("is_active").default(true),
+  sortOrder: integer("sort_order").default(0),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const scopeTemplateItems = pgTable("scope_template_items", {
+  id: serial("id").primaryKey(),
+  templateId: integer("template_id").references(() => scopeTemplates.id).notNull(),
+  scopeItemId: integer("scope_item_id").references(() => scopeCatalog.id).notNull(),
+  defaultHours: decimal("default_hours", { precision: 8, scale: 2 }),
+  complexityMultiplier: decimal("complexity_multiplier", { precision: 4, scale: 2 }).default("1.0"),
   sortOrder: integer("sort_order").default(0),
 });
 
@@ -66,7 +86,9 @@ export const dealScopeItems = pgTable("deal_scope_items", {
   adjustedHours: decimal("adjusted_hours", { precision: 8, scale: 2 }),
   complexityMultiplier: decimal("complexity_multiplier", { precision: 4, scale: 2 }).default("1.0"),
   notes: text("notes"),
-});
+}, (t) => ({
+  uniqDealScopeItem: uniqueIndex("deal_scope_items_deal_item_uniq").on(t.dealId, t.scopeItemId),
+}));
 
 export const roles = pgTable("roles", {
   id: serial("id").primaryKey(),

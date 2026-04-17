@@ -10,7 +10,7 @@ import {
   useDynamicsSettings, useUpdateDynamicsSettings,
   useUpdateDynamicsAccount, useUpdateDynamicsOpportunity,
   useNightlyBatch, usePushDealToDynamics, useUnlinkOpportunity,
-  useScopeTemplates, useCreateOpportunity,
+  useDynamicsScopeTemplates, useCreateOpportunity,
 } from "@/hooks/use-api";
 import { useAuth } from "@/context/AuthContext";
 
@@ -794,7 +794,7 @@ function Toggle({ checked, onChange, disabled }: { checked: boolean; onChange: (
 
 function NewOpportunityModal({ onClose }: { onClose: () => void }) {
   const { data: accounts = [] } = useDynamicsAccounts();
-  const { data: templates = [] } = useScopeTemplates();
+  const { data: templates = [] } = useDynamicsScopeTemplates();
   const create = useCreateOpportunity();
   const { persona } = useAuth();
   const [form, setForm] = useState({
