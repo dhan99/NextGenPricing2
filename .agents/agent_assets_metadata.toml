@@ -12,3 +12,9 @@ id = "UZs6NDGmCiCqLL5FOqNhF"
 uri = "file://exports/Integrations-API-Overview.pptx"
 type = "slides"
 title = "Integrations API Overview — Dynamics 365 + Workday (34 slides)"
+
+[[outputs]]
+id = "k05lspVQiNCPqnuJOJOTd"
+uri = "file://exports/Integrations-D365-Workday-Summary.pptx"
+type = "slides"
+title = "Integrations — D365 & Workday Summary (2 slides)"
