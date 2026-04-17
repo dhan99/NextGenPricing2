@@ -425,8 +425,9 @@ function ScopeStep({ deal }: { deal: any }) {
     }
     setScopeError("");
     setHasEstimated(true);
+    const billableItems = (scopeItems || []).filter((si: any) => !si.scopeItem?.isAssembly);
     estimation.mutate({
-      scopeItems: (scopeItems || []).map((si: any) => ({ ...si.scopeItem, defaultHours: si.adjustedHours || si.scopeItem?.defaultHours })),
+      scopeItems: billableItems.map((si: any) => ({ ...si.scopeItem, defaultHours: si.adjustedHours || si.scopeItem?.defaultHours })),
       complexity: deal.complexity,
       prompts: deal.promptResponses || [],
       startDate: deal.startDate,
@@ -434,12 +435,13 @@ function ScopeStep({ deal }: { deal: any }) {
     });
   };
 
-  const scopeItemCount = (scopeItems || []).length;
+  const scopeItemCount = (scopeItems || []).filter((si: any) => !si.scopeItem?.isAssembly).length;
   useEffect(() => {
     if (hasEstimated && scopeItemCount > 0 && !estimation.isPending) {
       const timer = setTimeout(() => {
+        const billableItems = (scopeItems || []).filter((si: any) => !si.scopeItem?.isAssembly);
         estimation.mutate({
-          scopeItems: (scopeItems || []).map((si: any) => ({ ...si.scopeItem, defaultHours: si.adjustedHours || si.scopeItem?.defaultHours })),
+          scopeItems: billableItems.map((si: any) => ({ ...si.scopeItem, defaultHours: si.adjustedHours || si.scopeItem?.defaultHours })),
           complexity: deal.complexity,
           prompts: deal.promptResponses || [],
           startDate: deal.startDate,
@@ -612,40 +614,48 @@ function ScopeStep({ deal }: { deal: any }) {
       <div className="space-y-6">
         <div className="card p-6">
           <h3 className="font-semibold text-foreground mb-4">Calculated Scope Preview</h3>
-          {(scopeItems || []).length === 0 ? (
-            <p className="text-xs text-muted-foreground">Add scope items to see the calculated preview.</p>
-          ) : (
-            <>
-              <div className="space-y-2.5">
-                {(scopeItems || []).map((si: any) => {
-                  const qty = si.quantity || 1;
-                  const baseHrs = parseFloat(si.adjustedHours || si.scopeItem?.defaultHours || "0");
-                  const mult = parseFloat(si.complexityMultiplier || "1");
-                  const totalHrs = baseHrs * qty * mult;
-                  return (
-                    <div key={si.id} className="flex items-start justify-between text-sm">
-                      <span className="text-foreground flex-1 pr-2 leading-snug">{si.scopeItem?.name}</span>
-                      <div className="text-right flex-shrink-0">
-                        <div className="text-foreground font-medium">×{qty}</div>
-                        <div className="text-xs text-muted-foreground">~{totalHrs.toFixed(0)} hrs</div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-              <div className="border-t border-border mt-4 pt-3 flex items-center justify-between">
-                <span className="text-sm font-semibold text-foreground">Total Estimated Hours</span>
-                <span className="text-lg font-bold text-foreground">
-                  {(scopeItems || []).reduce((sum: number, si: any) => {
+          {(() => {
+            const billable = (scopeItems || []).filter((si: any) => !si.scopeItem?.isAssembly);
+            if (billable.length === 0) {
+              return <p className="text-xs text-muted-foreground">Add scope items to see the calculated preview.</p>;
+            }
+            const total = billable.reduce((sum: number, si: any) => {
+              const qty = si.quantity || 1;
+              const baseHrs = parseFloat(si.adjustedHours || si.scopeItem?.defaultHours || "0");
+              const mult = parseFloat(si.complexityMultiplier || "1");
+              return sum + baseHrs * qty * mult;
+            }, 0);
+            return (
+              <>
+                <div className="space-y-2.5">
+                  {billable.map((si: any) => {
                     const qty = si.quantity || 1;
                     const baseHrs = parseFloat(si.adjustedHours || si.scopeItem?.defaultHours || "0");
                     const mult = parseFloat(si.complexityMultiplier || "1");
-                    return sum + baseHrs * qty * mult;
-                  }, 0).toLocaleString(undefined, { maximumFractionDigits: 0 })} hrs
-                </span>
-              </div>
-            </>
-          )}
+                    const totalHrs = baseHrs * qty * mult;
+                    return (
+                      <div key={si.id} className="flex items-start justify-between text-sm">
+                        <span className="text-foreground flex-1 pr-2 leading-snug">{si.scopeItem?.name}</span>
+                        <div className="text-right flex-shrink-0">
+                          <div className="text-foreground font-medium">×{qty}</div>
+                          <div className="text-xs text-muted-foreground">~{totalHrs.toFixed(0)} hrs</div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="border-t border-border mt-4 pt-3 flex items-center justify-between">
+                  <span className="text-sm font-semibold text-foreground">Total Estimated Hours</span>
+                  <span className="text-lg font-bold text-foreground">
+                    {total.toLocaleString(undefined, { maximumFractionDigits: 0 })} hrs
+                  </span>
+                </div>
+                <p className="text-[11px] text-muted-foreground mt-2">
+                  Assemblies are shown as groupings only; hours come from their child items.
+                </p>
+              </>
+            );
+          })()}
         </div>
 
         <div className="rounded-xl p-5 border border-amber-200 bg-amber-50/40">
