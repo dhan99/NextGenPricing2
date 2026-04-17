@@ -15,10 +15,10 @@ export function Sidebar() {
     { name: "Dashboard", href: "/", icon: LayoutDashboard, show: true },
     { name: "Engagements", href: "/deals", icon: FileText, show: true },
     { name: "Analytics", href: "/analytics", icon: BarChart3, show: hasPermission("viewDeals") },
-    { name: "Dynamics CRM", href: "/integrations/dynamics", icon: Database, show: true },
+    { name: "Dynamics CRM", href: "/integrations/dynamics", icon: Database, show: true, dividerBefore: true },
     { name: "Intapp Risk", href: "/integrations/intapp", icon: ShieldAlert, show: true },
     { name: "Workday", href: "/integrations/workday", icon: Briefcase, show: true },
-    { name: "Architecture", href: "/architecture", icon: Layers, show: true },
+    { name: "Architecture", href: "/architecture", icon: Layers, show: true, dividerBefore: true },
   ];
 
   const showAdmin = true;
@@ -48,17 +48,22 @@ export function Sidebar() {
         {navigation.filter(n => n.show).map((item) => {
           const isActive = item.href === "/" ? location === "/" : location.startsWith(item.href);
           return (
-            <Link key={item.href} href={item.href}>
-              <div className={cn(
-                "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all cursor-pointer",
-                isActive
-                  ? "bg-primary/15 text-primary"
-                  : "text-sidebar-muted hover:text-sidebar-fg hover:bg-sidebar-accent"
-              )}>
-                <item.icon className="w-4.5 h-4.5" />
-                {item.name}
-              </div>
-            </Link>
+            <div key={item.href}>
+              {item.dividerBefore && (
+                <div className="my-2 mx-3 border-t border-sidebar-accent" />
+              )}
+              <Link href={item.href}>
+                <div className={cn(
+                  "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all cursor-pointer",
+                  isActive
+                    ? "bg-primary/15 text-primary"
+                    : "text-sidebar-muted hover:text-sidebar-fg hover:bg-sidebar-accent"
+                )}>
+                  <item.icon className="w-4.5 h-4.5" />
+                  {item.name}
+                </div>
+              </Link>
+            </div>
           );
         })}
 
