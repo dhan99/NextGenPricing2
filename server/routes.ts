@@ -2269,6 +2269,7 @@ export function registerRoutes(app: Express) {
       serviceLine,
       complexity,
       totalFee: opp.estimatedValue || "0",
+      startDate: new Date().toISOString().slice(0, 10),
       endDate: opp.estimatedCloseDate || null,
       pdlName: opp.ownerName || null,
       currentStep: 7,
