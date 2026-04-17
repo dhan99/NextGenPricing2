@@ -990,6 +990,142 @@ function EngagementInputsCard({ deal }: { deal: any }) {
   );
 }
 
+function ScopeBreakdownPanel({ dealId, pricingLines }: { dealId: number; pricingLines: any[] }) {
+  const { data: scopeItems } = useDealScopeItems(dealId);
+  const items = scopeItems || [];
+  const lines = pricingLines || [];
+
+  const totalScopeHours = items.reduce(
+    (s: number, i: any) => s + parseFloat(i.adjustedHours || 0) * parseFloat(i.complexityMultiplier || 1) * (i.quantity || 1),
+    0
+  );
+  const roleHourTotals: Record<number, number> = {};
+  lines.forEach((l: any) => { roleHourTotals[l.roleId] = parseFloat(l.hours || 0); });
+
+  // Group scope items by category prefix derived from the code (IMPL, TEST, PMO, TRN, etc.)
+  const groups: Record<string, any[]> = {};
+  items.forEach((item: any) => {
+    const code: string = item.scopeItem?.code || item.code || "OTHER";
+    const prefix = code.includes("-") ? code.split("-")[0] : "OTHER";
+    if (!groups[prefix]) groups[prefix] = [];
+    groups[prefix].push(item);
+  });
+  const groupOrder = ["IMPL", "TEST", "PMO", "TRN"];
+  const orderedGroupKeys = [
+    ...groupOrder.filter((g) => groups[g]),
+    ...Object.keys(groups).filter((g) => !groupOrder.includes(g)).sort(),
+  ];
+
+  const groupLabel: Record<string, string> = {
+    IMPL: "Implementation",
+    TEST: "Testing & QA",
+    PMO: "Project Management",
+    TRN: "Training & Enablement",
+    OTHER: "Other",
+  };
+
+  const allocatedHoursForCell = (itemHours: number, roleHours: number) =>
+    totalScopeHours > 0 ? (itemHours / totalScopeHours) * roleHours : 0;
+
+  const itemRowFee = (itemHours: number) =>
+    lines.reduce((sum: number, l: any) => {
+      const h = allocatedHoursForCell(itemHours, parseFloat(l.hours || 0));
+      return sum + h * parseFloat(l.rate || 0);
+    }, 0);
+
+  const itemRowHours = (itemHours: number) =>
+    lines.reduce((sum: number, l: any) => sum + allocatedHoursForCell(itemHours, parseFloat(l.hours || 0)), 0);
+
+  if (items.length === 0 || lines.length === 0) return null;
+
+  return (
+    <div className="card overflow-hidden mb-6">
+      <div className="px-6 py-4 border-b border-border flex items-center justify-between">
+        <div>
+          <h2 className="text-lg font-semibold text-foreground">Scope Breakdown</h2>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            High-level pricing decomposed by scope item, proportionally allocated across roles.
+          </p>
+        </div>
+        <span className="text-[10px] uppercase tracking-wide px-2 py-0.5 rounded border border-border bg-muted/40 text-muted-foreground font-semibold">
+          Derived view
+        </span>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="bg-muted/50">
+              <th className="text-left px-6 py-3 text-xs font-semibold text-muted-foreground uppercase">Scope Item</th>
+              <th className="text-right px-3 py-3 text-xs font-semibold text-muted-foreground uppercase">Effort hrs</th>
+              {lines.map((l: any) => (
+                <th key={l.id} className="text-right px-3 py-3 text-xs font-semibold text-muted-foreground uppercase whitespace-nowrap">
+                  {l.role?.name} hrs
+                </th>
+              ))}
+              <th className="text-right px-6 py-3 text-xs font-semibold text-muted-foreground uppercase">Fee</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-border">
+            {orderedGroupKeys.map((g) => {
+              const groupItems = groups[g];
+              const groupHours = groupItems.reduce((s, i) => s + parseFloat(i.adjustedHours || 0) * parseFloat(i.complexityMultiplier || 1) * (i.quantity || 1), 0);
+              const groupFee = itemRowFee(groupHours);
+              return (
+                <>
+                  <tr key={`grp-${g}`} className="bg-amber-50/40">
+                    <td className="px-6 py-2 text-xs font-bold text-foreground uppercase tracking-wide" colSpan={2 + lines.length + 1}>
+                      <span className="text-primary">{g}</span>
+                      <span className="text-muted-foreground ml-2 normal-case font-medium">{groupLabel[g] || g}</span>
+                      <span className="text-muted-foreground ml-3 font-normal">·  {groupItems.length} items · {formatNumber(groupHours)} hrs · {formatCurrency(groupFee)}</span>
+                    </td>
+                  </tr>
+                  {groupItems.map((item: any) => {
+                    const code = item.scopeItem?.code || "—";
+                    const name = item.scopeItem?.name || "Unnamed";
+                    const itemHours = parseFloat(item.adjustedHours || 0) * parseFloat(item.complexityMultiplier || 1) * (item.quantity || 1);
+                    return (
+                      <tr key={item.id} className="hover:bg-muted/30">
+                        <td className="px-6 py-2.5">
+                          <div className="flex items-baseline gap-2">
+                            <span className="text-xs font-mono text-primary font-semibold">{code}</span>
+                            <span className="text-sm text-foreground">{name}</span>
+                          </div>
+                        </td>
+                        <td className="px-3 py-2.5 text-right text-foreground font-medium">{formatNumber(itemHours)}</td>
+                        {lines.map((l: any) => {
+                          const h = allocatedHoursForCell(itemHours, parseFloat(l.hours || 0));
+                          return (
+                            <td key={l.id} className="px-3 py-2.5 text-right text-muted-foreground tabular-nums">
+                              {h > 0.05 ? h.toFixed(1) : "—"}
+                            </td>
+                          );
+                        })}
+                        <td className="px-6 py-2.5 text-right font-semibold text-foreground tabular-nums">{formatCurrency(itemRowFee(itemHours))}</td>
+                      </tr>
+                    );
+                  })}
+                </>
+              );
+            })}
+          </tbody>
+          <tfoot>
+            <tr className="bg-muted/50 font-semibold">
+              <td className="px-6 py-3 text-foreground">Totals</td>
+              <td className="px-3 py-3 text-right text-foreground tabular-nums">{formatNumber(totalScopeHours)}</td>
+              {lines.map((l: any) => (
+                <td key={l.id} className="px-3 py-3 text-right text-foreground tabular-nums">{formatNumber(parseFloat(l.hours || 0))}</td>
+              ))}
+              <td className="px-6 py-3 text-right text-foreground tabular-nums">
+                {formatCurrency(lines.reduce((s: number, l: any) => s + parseFloat(l.fee || 0), 0))}
+              </td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 function PricingStep({ deal }: { deal: any }) {
   const { data: pricingLines } = useDealPricing(deal.id);
   const updateLine = useUpdatePricingLine();
@@ -1013,6 +1149,7 @@ function PricingStep({ deal }: { deal: any }) {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
       <div className="lg:col-span-3">
+        <ScopeBreakdownPanel dealId={deal.id} pricingLines={pricingLines || []} />
         <div className="card overflow-hidden">
           <div className="px-6 py-4 border-b border-border flex items-center justify-between">
             <h2 className="text-lg font-semibold text-foreground">Pricing Grid</h2>
