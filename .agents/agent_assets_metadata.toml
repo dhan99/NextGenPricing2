@@ -18,3 +18,9 @@ id = "k05lspVQiNCPqnuJOJOTd"
 uri = "file://exports/Integrations-D365-Workday-Summary.pptx"
 type = "slides"
 title = "Integrations — D365 & Workday Summary (2 slides)"
+
+[[outputs]]
+id = "jlT2tF0TzXsBO-pnlbc8M"
+uri = "file://exports/DealPad_Integrations_Architecture.pptx"
+type = "slides"
+title = "DealPad Integrations Architecture (1 slide)"
