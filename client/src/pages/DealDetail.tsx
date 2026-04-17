@@ -30,6 +30,9 @@ export function DealDetail() {
   const [currentStep, setCurrentStep] = useState(1);
   const { hasPermission, persona } = useAuth();
   const qc = useQueryClient();
+  const [reviewBlockers, setReviewBlockers] = useState(0);
+  const [reviewOverride, setReviewOverride] = useState(false);
+  const reviewBlocked = currentStep === 5 && reviewBlockers > 0 && !reviewOverride;
 
   const navigateToStep = useCallback((step: number) => {
     qc.invalidateQueries({ queryKey: ["deal", dealId] });
@@ -62,7 +65,7 @@ export function DealDetail() {
         {currentStep === 2 && <ScopeStep deal={deal} />}
         {currentStep === 3 && <AssumptionsStep deal={deal} />}
         {currentStep === 4 && <PricingStep deal={deal} />}
-        {currentStep === 5 && <ReviewStep deal={deal} />}
+        {currentStep === 5 && <ReviewStep deal={deal} navigateToStep={navigateToStep} onReadiness={(b) => setReviewBlockers(b)} override={reviewOverride} setOverride={setReviewOverride} />}
         {currentStep === 6 && <ApprovalStep deal={deal} />}
         {currentStep === 7 && <SummaryStep deal={deal} />}
 
@@ -87,8 +90,15 @@ export function DealDetail() {
 
           {currentStep < STEPS.length ? (
             <button
-              onClick={() => navigateToStep(Math.min(STEPS.length, currentStep + 1))}
-              className="flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-all"
+              onClick={() => !reviewBlocked && navigateToStep(Math.min(STEPS.length, currentStep + 1))}
+              disabled={reviewBlocked}
+              title={reviewBlocked ? `Resolve ${reviewBlockers} blocker${reviewBlockers > 1 ? "s" : ""} or override to continue` : undefined}
+              className={cn(
+                "flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-medium transition-all",
+                reviewBlocked
+                  ? "bg-muted text-muted-foreground cursor-not-allowed"
+                  : "bg-primary text-primary-foreground hover:bg-primary/90"
+              )}
             >
               {STEPS[currentStep].label}
               <ChevronRight className="w-4 h-4" />
@@ -1638,10 +1648,11 @@ function DealBanner({ deal, currentStep, navigateToStep }: { deal: any; currentS
   );
 }
 
-function ReviewStep({ deal }: { deal: any }) {
+function ReviewStep({ deal, navigateToStep, onReadiness, override, setOverride }: { deal: any; navigateToStep: (s: number) => void; onReadiness: (blockers: number) => void; override: boolean; setOverride: (v: boolean) => void }) {
   const { data: pricingLines } = useDealPricing(deal.id);
   const { data: scopeItems } = useDealScopeItems(deal.id);
   const { data: approvals } = useDealApprovals(deal.id);
+  const qc = useQueryClient();
 
   const lines = pricingLines || [];
   const items = scopeItems || [];
@@ -1697,21 +1708,81 @@ function ReviewStep({ deal }: { deal: any }) {
   const plTrigger = evaluatePracticeLeadTrigger({ totalFee: sumFee, marginPercent: marginPct, scopeItemCount: billable.length });
   const isNewClient = (deal.dealType || "").toLowerCase() === "new";
 
-  type Check = { ok: boolean | "warn" | "info"; label: string };
+  // Build a list of missing required fields so we can name them in the fix UI.
+  const missingFields = ([
+    ["Client", deal.client?.name],
+    ["Deal type", deal.dealType],
+    ["Service line", deal.serviceLine],
+    ["Business unit", deal.businessUnit],
+    ["Start date", deal.startDate],
+    ["End date", deal.endDate],
+    ["PDL", deal.pdlName],
+  ] as Array<[string, any]>)
+    .filter(([, v]) => !v)
+    .map(([k]) => k);
+
+  type CheckAction = { label: string; onClick: () => void };
+  type Check = { ok: boolean | "warn" | "info"; label: string; hint?: string; action?: CheckAction };
+  const recalcAction: CheckAction = {
+    label: "Recalculate",
+    onClick: () => {
+      qc.invalidateQueries({ queryKey: ["deal", deal.id] });
+      qc.invalidateQueries({ queryKey: ["deal-pricing", deal.id] });
+    },
+  };
   const checks: Check[] = [
-    { ok: calcParity, label: `Calc parity verified${calcParity ? "" : ` (off by ${formatCurrency(Math.abs(sumFee - dealTotalFee))})`}` },
-    { ok: requiredFieldsOk, label: "Required fields complete" },
-    { ok: marginOk, label: `Margin above BU target (${targetMargin}%)` },
-    { ok: ratesAssigned, label: `Rate table assigned${lines.length > 0 ? ` (${lines.length} roles)` : ""}` },
-    { ok: crmLinked, label: crmLinked ? `CRM opportunity linked (${deal.dynamicsLink.opportunityNumber})` : "CRM opportunity not yet linked" },
+    {
+      ok: calcParity,
+      label: calcParity ? "Calc parity verified" : "Calc parity mismatch",
+      hint: calcParity ? undefined : `Pricing lines total ${formatCurrency(sumFee)} but deal header reads ${formatCurrency(dealTotalFee)} (off by ${formatCurrency(Math.abs(sumFee - dealTotalFee))}).`,
+      action: calcParity ? undefined : recalcAction,
+    },
+    {
+      ok: requiredFieldsOk,
+      label: requiredFieldsOk ? "Required fields complete" : "Required fields missing",
+      hint: requiredFieldsOk ? undefined : `Missing: ${missingFields.join(", ")}.`,
+      action: requiredFieldsOk ? undefined : { label: "Open Setup", onClick: () => navigateToStep(1) },
+    },
+    {
+      ok: marginOk,
+      label: marginOk ? `Margin above BU target (${targetMargin}%)` : `Margin ${marginPct.toFixed(1)}% is below BU target (${targetMargin}%)`,
+      hint: marginOk ? undefined : "Adjust hours, role mix, or fees to lift margin, or compare alternative pricing options.",
+      action: marginOk ? undefined : { label: "Open Pricing", onClick: () => navigateToStep(4) },
+    },
+    {
+      ok: ratesAssigned,
+      label: ratesAssigned ? `Rate table assigned (${lines.length} role${lines.length === 1 ? "" : "s"})` : "Rate table not fully assigned",
+      hint: ratesAssigned ? undefined : "Some pricing lines have no billable rate.",
+      action: ratesAssigned ? undefined : { label: "Open Pricing", onClick: () => navigateToStep(4) },
+    },
+    {
+      ok: crmLinked,
+      label: crmLinked ? `CRM opportunity linked (${deal.dynamicsLink.opportunityNumber})` : "CRM opportunity not yet linked",
+      hint: crmLinked ? undefined : "Link a Dynamics 365 opportunity so the deal can sync after approval.",
+      action: crmLinked ? undefined : { label: "Link in Setup", onClick: () => navigateToStep(1) },
+    },
     plTrigger.required
-      ? { ok: "warn" as const, label: `${plTrigger.reason} — Practice Lead approval required` }
+      ? {
+          ok: "warn" as const,
+          label: "Practice Lead approval required",
+          hint: `${plTrigger.reason}. The approval will route to the Practice Lead automatically.`,
+        }
       : { ok: true as const, label: "Within auto-approval thresholds" },
     isNewClient
       ? { ok: "info" as const, label: "New client — QRM notification sent" }
       : { ok: "info" as const, label: "Existing client — no QRM notification required" },
   ];
   const blockers = checks.filter((c) => c.ok === false).length;
+  const ready = blockers === 0;
+
+  // Surface readiness up to the wizard so the Next button can be gated.
+  useEffect(() => {
+    onReadiness(blockers);
+  }, [blockers, onReadiness]);
+  // Auto-clear the override the moment the deal becomes clean.
+  useEffect(() => {
+    if (ready && override) setOverride(false);
+  }, [ready, override, setOverride]);
 
   // Approval routing preview
   const pendingApproval = (approvals || []).find((a: any) => a.status === "pending");
@@ -1729,19 +1800,41 @@ function ReviewStep({ deal }: { deal: any }) {
 
   return (
     <div className="space-y-6">
-      {/* Calc Parity pill — top right */}
-      <div className="flex items-center justify-end">
-        <span
-          className={cn(
-            "inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-full border",
-            calcParity
-              ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-              : "bg-rose-50 text-rose-700 border-rose-200"
+      {/* Section header — same pattern as the Pricing step */}
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <h2 className="text-lg font-semibold text-foreground">Review &amp; Submit</h2>
+          <p className="text-xs text-muted-foreground mt-0.5">Confirm totals, resolve any open items, and route the deal for approval.</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <span
+            className={cn(
+              "inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-full border",
+              calcParity
+                ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                : "bg-rose-50 text-rose-700 border-rose-200"
+            )}
+          >
+            {calcParity ? <CheckCircle className="w-3 h-3" /> : <AlertTriangle className="w-3 h-3" />}
+            Calc Parity: {calcParity ? "Verified" : "Mismatch"}
+          </span>
+          {ready ? (
+            <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-full border bg-emerald-50 text-emerald-700 border-emerald-200">
+              <CheckCircle className="w-3 h-3" />
+              Ready to submit
+            </span>
+          ) : override ? (
+            <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-full border bg-amber-50 text-amber-800 border-amber-200">
+              <ShieldAlert className="w-3 h-3" />
+              Overridden — {blockers} open
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-full border bg-rose-50 text-rose-700 border-rose-200">
+              <XCircle className="w-3 h-3" />
+              {blockers} blocker{blockers > 1 ? "s" : ""}
+            </span>
           )}
-        >
-          {calcParity ? <CheckCircle className="w-3 h-3" /> : <AlertTriangle className="w-3 h-3" />}
-          Calc Parity: {calcParity ? "Verified" : "Mismatch"}
-        </span>
+        </div>
       </div>
 
       {/* Hero card */}
@@ -1804,33 +1897,79 @@ function ReviewStep({ deal }: { deal: any }) {
         <div className="card p-6">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-base font-semibold text-foreground">Validation Checklist</h3>
-            {blockers > 0 ? (
-              <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-rose-50 text-rose-700 border border-rose-200">
-                {blockers} blocker{blockers > 1 ? "s" : ""}
-              </span>
-            ) : (
+            {ready ? (
               <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
                 Ready
               </span>
+            ) : (
+              <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-rose-50 text-rose-700 border border-rose-200">
+                {blockers} blocker{blockers > 1 ? "s" : ""}
+              </span>
             )}
           </div>
-          <ul className="space-y-2.5">
+          <ul className="space-y-3">
             {checks.map((c, i) => (
               <li key={i} className="flex items-start gap-2.5 text-sm">
                 {c.ok === true && <CheckCircle className="w-4 h-4 text-emerald-600 mt-0.5 shrink-0" />}
                 {c.ok === false && <XCircle className="w-4 h-4 text-rose-600 mt-0.5 shrink-0" />}
                 {c.ok === "warn" && <AlertTriangle className="w-4 h-4 text-primary mt-0.5 shrink-0" />}
                 {c.ok === "info" && <Clock className="w-4 h-4 text-muted-foreground mt-0.5 shrink-0" />}
-                <span className={cn(
-                  "leading-snug",
-                  c.ok === true && "text-foreground",
-                  c.ok === false && "text-rose-700",
-                  c.ok === "warn" && "text-primary",
-                  c.ok === "info" && "text-muted-foreground",
-                )}>{c.label}</span>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-start justify-between gap-3">
+                    <span className={cn(
+                      "leading-snug",
+                      c.ok === true && "text-foreground",
+                      c.ok === false && "text-rose-700 font-medium",
+                      c.ok === "warn" && "text-primary",
+                      c.ok === "info" && "text-muted-foreground",
+                    )}>{c.label}</span>
+                    {c.action && (
+                      <button
+                        type="button"
+                        onClick={c.action.onClick}
+                        className="shrink-0 inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded-md border border-border bg-card hover:bg-muted/50 text-foreground transition-colors"
+                      >
+                        {c.action.label}
+                        <ArrowUpRight className="w-3 h-3" />
+                      </button>
+                    )}
+                  </div>
+                  {c.hint && (
+                    <p className="text-xs text-muted-foreground mt-0.5 leading-snug">{c.hint}</p>
+                  )}
+                </div>
               </li>
             ))}
           </ul>
+
+          {!ready && (
+            <div className={cn(
+              "mt-5 pt-4 border-t border-border flex items-start gap-3",
+              override ? "" : ""
+            )}>
+              <ShieldAlert className={cn("w-4 h-4 mt-0.5 shrink-0", override ? "text-amber-600" : "text-muted-foreground")} />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-foreground">Override and continue</p>
+                <p className="text-xs text-muted-foreground mt-0.5 leading-snug">
+                  {override
+                    ? "Open issues will be flagged on the approval record for the reviewer."
+                    : "Bypass the checklist and proceed to approval. Use only when blockers will be resolved out-of-band."}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setOverride(!override)}
+                className={cn(
+                  "shrink-0 inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-md border transition-colors",
+                  override
+                    ? "bg-amber-50 text-amber-800 border-amber-300 hover:bg-amber-100"
+                    : "bg-card text-foreground border-border hover:bg-muted/50"
+                )}
+              >
+                {override ? <><CheckCircle className="w-3.5 h-3.5" /> Override active</> : <>Override</>}
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
