@@ -2552,6 +2552,33 @@ function AgentDraftReviewBanner({ deal, navigateToStep }: { deal: any; navigateT
                         )}
                       </div>
                       <p className="text-xs text-muted-foreground mt-1">{s.summary}</p>
+                      {s.step === "prompts" && Array.isArray(s.output?.prompts) && s.output.prompts.length > 0 && (
+                        <ul className="mt-2 space-y-1">
+                          {s.output.prompts.map((p: any, i: number) => (
+                            <li key={i} className="text-[11px] flex items-start gap-2 leading-snug">
+                              <span className={cn("inline-block mt-0.5 w-1.5 h-1.5 rounded-full flex-shrink-0",
+                                p.confidence >= 0.7 ? "bg-emerald-500" : p.confidence >= 0.5 ? "bg-amber-500" : "bg-red-500")} />
+                              <span className="flex-1 min-w-0">
+                                <span className="text-foreground font-medium">{p.question}</span>
+                                <span className="text-muted-foreground"> → </span>
+                                <span className="text-foreground">{p.answer}</span>
+                                {p.rationale && (
+                                  <span className="text-muted-foreground italic"> · {p.rationale}</span>
+                                )}
+                              </span>
+                              <span className={cn("font-semibold flex-shrink-0",
+                                p.confidence >= 0.7 ? "text-emerald-700" : p.confidence >= 0.5 ? "text-amber-700" : "text-red-700")}>
+                                {Math.round((p.confidence || 0) * 100)}%
+                              </span>
+                              {p.needsReview && (
+                                <span className="text-[9px] px-1 py-0.5 rounded bg-amber-100 text-amber-800 font-semibold uppercase flex-shrink-0">
+                                  Review
+                                </span>
+                              )}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
                     </div>
                     <div className="text-[11px] text-muted-foreground flex flex-col items-end flex-shrink-0">
                       {typeof s.confidence === "number" && (

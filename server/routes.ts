@@ -2,7 +2,7 @@ import { Express, Request, Response } from "express";
 import { db } from "./db";
 import { clients, deals, scopeCatalog, dealScopeItems, scopeTemplates, scopeTemplateItems, roles, rateCards, rateCardEntries, pricingLines, scenarios, approvals, promptResponses, activityLog, changeOrders, dynamicsOpportunities, promptSets, promptSetItems } from "../shared/schema";
 import { evaluatePracticeLeadTrigger } from "../shared/policy";
-import { eq, desc, sql, and, count, isNull, isNotNull, asc } from "drizzle-orm";
+import { eq, desc, sql, and, count, isNull, isNotNull, asc, inArray } from "drizzle-orm";
 
 function escapeHtml(str: string | null | undefined): string {
   if (!str) return "";
@@ -12,15 +12,187 @@ function escapeHtml(str: string | null | undefined): string {
 // Fallback prompt set used only if no governed prompt set is published for the
 // deal's BU+service line AND no published cross-service default exists.
 // Pricing Operations should publish a real set per BU/service line via /api/prompt-sets.
-const STANDARD_PROMPTS = [
-  { question: "How many geographic regions are involved?", category: "Complexity", sortOrder: 1 },
-  { question: "Are there regulatory/compliance requirements?", category: "Compliance", sortOrder: 2 },
-  { question: "What is the expected data volume?", category: "Complexity", sortOrder: 3 },
-  { question: "How many integrations are required?", category: "Integration", sortOrder: 4 },
-  { question: "Is there an existing system being replaced?", category: "Migration", sortOrder: 5 },
-  { question: "What is the client's technical maturity?", category: "Client", sortOrder: 6 },
-  { question: "Is there a hard deadline or external dependency?", category: "Timeline", sortOrder: 7 },
+const STANDARD_PROMPTS: Array<{
+  question: string;
+  category: string;
+  sortOrder: number;
+  options: Array<{ label: string; multiplier: string }>;
+}> = [
+  { question: "How many geographic regions are involved?", category: "Complexity", sortOrder: 1, options: [{ label: "1 region", multiplier: "1.00" }, { label: "2 regions", multiplier: "1.10" }, { label: "3+ regions", multiplier: "1.20" }] },
+  { question: "Are there regulatory/compliance requirements?", category: "Compliance", sortOrder: 2, options: [{ label: "None", multiplier: "1.00" }, { label: "Standard compliance", multiplier: "1.05" }, { label: "SOX/HIPAA compliance", multiplier: "1.15" }, { label: "Multi-framework", multiplier: "1.25" }] },
+  { question: "What is the expected data volume?", category: "Complexity", sortOrder: 3, options: [{ label: "Small (<100K records)", multiplier: "0.90" }, { label: "Medium (100K-1M)", multiplier: "1.00" }, { label: "Large (1M-10M)", multiplier: "1.10" }, { label: "Very Large (10M+)", multiplier: "1.20" }] },
+  { question: "How many integrations are required?", category: "Integration", sortOrder: 4, options: [{ label: "None", multiplier: "1.00" }, { label: "1-2 integrations", multiplier: "1.05" }, { label: "3-4 integrations", multiplier: "1.10" }, { label: "5-8 integrations", multiplier: "1.20" }, { label: "9+ integrations", multiplier: "1.30" }] },
+  { question: "Is there an existing system being replaced?", category: "Migration", sortOrder: 5, options: [{ label: "No (greenfield)", multiplier: "0.95" }, { label: "Yes - modern system", multiplier: "1.05" }, { label: "Yes - legacy system", multiplier: "1.10" }, { label: "Yes - multiple systems", multiplier: "1.20" }] },
+  { question: "What is the client's technical maturity?", category: "Client", sortOrder: 6, options: [{ label: "High maturity", multiplier: "0.90" }, { label: "Moderate maturity", multiplier: "1.00" }, { label: "Low maturity", multiplier: "1.10" }, { label: "Very low maturity", multiplier: "1.20" }] },
+  { question: "Is there a hard deadline or external dependency?", category: "Timeline", sortOrder: 7, options: [{ label: "Flexible timeline", multiplier: "0.95" }, { label: "Preferred deadline", multiplier: "1.00" }, { label: "Hard deadline", multiplier: "1.10" }, { label: "Regulatory deadline", multiplier: "1.20" }] },
 ];
+
+type PromptOption = { label: string; multiplier: string };
+type PromptAnswerCtx = {
+  industry: string;
+  segment: string | null;
+  region: string | null;
+  complexity: string;
+  estimatedFee: number;
+  oppName: string;
+  closeDate: Date | null;
+  priorDealCount: number;
+  serviceLine: string;
+  businessUnit: string;
+};
+
+// Match an option whose label contains any of the given keywords (case-insensitive).
+function findOption(options: PromptOption[], keywords: string[]): PromptOption | null {
+  const lowered = keywords.map((k) => k.toLowerCase());
+  for (const opt of options) {
+    const lbl = opt.label.toLowerCase();
+    if (lowered.some((k) => lbl.includes(k))) return opt;
+  }
+  return null;
+}
+
+// Pick a context-aware answer for one prompt. Returns the chosen option plus a
+// per-prompt confidence score and a rationale describing what evidence drove
+// the pick. needsReview is set only when we lack signal for that specific
+// prompt — not blanket-on across the whole step.
+function pickContextualAnswer(
+  question: string,
+  options: PromptOption[],
+  ctx: PromptAnswerCtx,
+): { answer: string; multiplier: string; confidence: number; needsReview: boolean; rationale: string } {
+  if (!options || options.length === 0) {
+    return { answer: "Standard / Medium", multiplier: "1.05", confidence: 0.4, needsReview: true, rationale: "Prompt has no governed options — falling back to neutral baseline." };
+  }
+  const q = question.toLowerCase();
+  const oppName = (ctx.oppName || "").toLowerCase();
+  const industry = (ctx.industry || "").toLowerCase();
+  const region = (ctx.region || "").toLowerCase();
+  const middleIdx = Math.floor((options.length - 1) / 2);
+  const neutral = options[middleIdx];
+
+  // Geographic regions
+  if (q.includes("geograph") || q.includes("region") || q.includes("countr")) {
+    const multi = /global|multinational|multi-?national|international|emea|apac|worldwide|cross-?border/.test(oppName)
+      || /global|multinational|international/.test(industry);
+    if (multi) {
+      const opt = findOption(options, ["3+", "3 +", "multi", "global"]) || options[options.length - 1];
+      return { answer: opt.label, multiplier: opt.multiplier, confidence: 0.78, needsReview: false, rationale: "Opportunity name/industry signals multi-region footprint." };
+    }
+    const opt = findOption(options, ["1 region", "1 country", "single"]) || options[0];
+    return { answer: opt.label, multiplier: opt.multiplier, confidence: 0.7, needsReview: false, rationale: "No multi-region signal in opportunity or client profile — assuming single region." };
+  }
+
+  // Compliance / regulatory
+  if (q.includes("regulat") || q.includes("complian") || q.includes("sox") || q.includes("hipaa")) {
+    const heavyReg = /financial|bank|insurance|healthcare|pharma|hospital|life sciences|government|public sector/.test(industry)
+      || /sox|hipaa|pci|gdpr|audit|compliance/.test(oppName);
+    const multiFw = /sox.*hipaa|hipaa.*sox|multi-?framework|sox.*pci|pci.*sox/.test(oppName + " " + industry);
+    if (multiFw) {
+      const opt = findOption(options, ["multi", "multiple"]) || options[options.length - 1];
+      return { answer: opt.label, multiplier: opt.multiplier, confidence: 0.8, needsReview: false, rationale: "Multiple regulatory frameworks implied by industry/opportunity name." };
+    }
+    if (heavyReg) {
+      const opt = findOption(options, ["sox", "hipaa", "pci"]) || options[Math.min(2, options.length - 1)];
+      return { answer: opt.label, multiplier: opt.multiplier, confidence: 0.82, needsReview: false, rationale: `Industry "${ctx.industry}" carries heavy regulatory burden.` };
+    }
+    const opt = findOption(options, ["standard"]) || neutral;
+    return { answer: opt.label, multiplier: opt.multiplier, confidence: 0.65, needsReview: false, rationale: "No heavy-regulation signal — assuming standard compliance posture." };
+  }
+
+  // Data volume — proxy via fee tier
+  if (q.includes("data volume") || q.includes("volume of data") || q.includes("records")) {
+    const fee = ctx.estimatedFee;
+    if (fee >= 750_000) {
+      const opt = findOption(options, ["very large", "10m"]) || options[options.length - 1];
+      return { answer: opt.label, multiplier: opt.multiplier, confidence: 0.7, needsReview: false, rationale: `Estimated value $${Math.round(fee).toLocaleString()} suggests very large data footprint.` };
+    }
+    if (fee >= 250_000) {
+      const opt = findOption(options, ["large", "1m"]) || options[Math.min(2, options.length - 1)];
+      return { answer: opt.label, multiplier: opt.multiplier, confidence: 0.7, needsReview: false, rationale: `Estimated value $${Math.round(fee).toLocaleString()} suggests large data footprint.` };
+    }
+    if (fee >= 75_000) {
+      const opt = findOption(options, ["medium"]) || neutral;
+      return { answer: opt.label, multiplier: opt.multiplier, confidence: 0.7, needsReview: false, rationale: `Mid-range fee suggests medium data footprint.` };
+    }
+    const opt = findOption(options, ["small"]) || options[0];
+    return { answer: opt.label, multiplier: opt.multiplier, confidence: 0.55, needsReview: true, rationale: "Low/unknown fee — data volume needs reviewer confirmation." };
+  }
+
+  // Integrations
+  if (q.includes("integration")) {
+    if (ctx.complexity === "very_high") {
+      const opt = findOption(options, ["9+", "5-8"]) || options[options.length - 1];
+      return { answer: opt.label, multiplier: opt.multiplier, confidence: 0.72, needsReview: false, rationale: `Very high complexity template implies many integrations.` };
+    }
+    if (ctx.complexity === "high") {
+      const opt = findOption(options, ["3-4", "5-8"]) || options[Math.min(2, options.length - 1)];
+      return { answer: opt.label, multiplier: opt.multiplier, confidence: 0.7, needsReview: false, rationale: "High complexity template implies several integrations." };
+    }
+    if (ctx.complexity === "low") {
+      const opt = findOption(options, ["none", "0"]) || options[0];
+      return { answer: opt.label, multiplier: opt.multiplier, confidence: 0.65, needsReview: false, rationale: "Low complexity template implies few/no integrations." };
+    }
+    const opt = findOption(options, ["1-2"]) || neutral;
+    return { answer: opt.label, multiplier: opt.multiplier, confidence: 0.6, needsReview: false, rationale: "Medium complexity — assuming a small number of integrations." };
+  }
+
+  // System being replaced / migration
+  if (q.includes("replac") || q.includes("migrat") || q.includes("legacy") || q.includes("greenfield")) {
+    const isMigration = /migrat|replace|modern|lift.?and.?shift|upgrade|legacy|sunset|cutover/.test(oppName)
+      || /migration|cloud|erp/.test(ctx.serviceLine.toLowerCase());
+    if (isMigration) {
+      const opt = findOption(options, ["legacy"]) || findOption(options, ["yes"]) || options[Math.min(2, options.length - 1)];
+      return { answer: opt.label, multiplier: opt.multiplier, confidence: 0.75, needsReview: false, rationale: "Opportunity scope clearly involves replacing/migrating an existing system." };
+    }
+    const opt = findOption(options, ["greenfield", "no"]) || options[0];
+    return { answer: opt.label, multiplier: opt.multiplier, confidence: 0.6, needsReview: false, rationale: "No migration/replacement signal — assuming greenfield." };
+  }
+
+  // Client technical maturity — informed by prior engagement history
+  if (q.includes("technical maturity") || q.includes("client") && q.includes("maturity")) {
+    if (ctx.priorDealCount >= 3) {
+      const opt = findOption(options, ["high"]) || options[0];
+      return { answer: opt.label, multiplier: opt.multiplier, confidence: 0.78, needsReview: false, rationale: `${ctx.priorDealCount} prior engagements with this client — high working maturity.` };
+    }
+    if (ctx.priorDealCount >= 1) {
+      const opt = findOption(options, ["moderate"]) || neutral;
+      return { answer: opt.label, multiplier: opt.multiplier, confidence: 0.7, needsReview: false, rationale: `${ctx.priorDealCount} prior engagement${ctx.priorDealCount === 1 ? "" : "s"} on file — moderate working maturity.` };
+    }
+    const opt = findOption(options, ["low"]) || options[Math.min(2, options.length - 1)];
+    return { answer: opt.label, multiplier: opt.multiplier, confidence: 0.45, needsReview: true, rationale: "No prior engagement history — maturity is a guess; reviewer should confirm." };
+  }
+
+  // Hard deadline / external dependency
+  if (q.includes("deadline") || q.includes("dependency") || q.includes("timeline")) {
+    if (/regulatory|sox|year-?end|audit|filing|statutory/.test(oppName)) {
+      const opt = findOption(options, ["regulatory"]) || options[options.length - 1];
+      return { answer: opt.label, multiplier: opt.multiplier, confidence: 0.78, needsReview: false, rationale: "Regulatory/audit framing implies a statutory deadline." };
+    }
+    if (ctx.closeDate) {
+      const days = Math.round((ctx.closeDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+      if (days <= 60 && days >= 0) {
+        const opt = findOption(options, ["hard"]) || options[Math.min(2, options.length - 1)];
+        return { answer: opt.label, multiplier: opt.multiplier, confidence: 0.75, needsReview: false, rationale: `Close date is ${days} days out — hard deadline.` };
+      }
+      if (days <= 150) {
+        const opt = findOption(options, ["preferred"]) || neutral;
+        return { answer: opt.label, multiplier: opt.multiplier, confidence: 0.7, needsReview: false, rationale: `Close date ~${days} days out — preferred deadline.` };
+      }
+      const opt = findOption(options, ["flexible"]) || options[0];
+      return { answer: opt.label, multiplier: opt.multiplier, confidence: 0.7, needsReview: false, rationale: `Close date ~${days} days out — flexible timeline.` };
+    }
+    return { answer: neutral.label, multiplier: neutral.multiplier, confidence: 0.45, needsReview: true, rationale: "No close date on opportunity — timeline pressure unknown." };
+  }
+
+  // Unknown question: pick neutral middle option, low confidence.
+  return {
+    answer: neutral.label,
+    multiplier: neutral.multiplier,
+    confidence: 0.4,
+    needsReview: true,
+    rationale: "No heuristic mapped this question — neutral baseline pending reviewer input.",
+  };
+}
 
 // Find the most-specific published prompt set for a deal's BU + serviceLine.
 // Specificity priority: exact (BU+SL) > BU-only > SL-only > cross-service default.
@@ -2129,30 +2301,88 @@ export function registerRoutes(app: Express) {
     // 4. Link to opportunity
     await linkDealToOpportunity(oppId, dealId, userName).catch(() => {});
 
-    // 5. Default prompts + auto-answer with low-signal flag
+    // 5. Default prompts + context-aware auto-answer.
+    //    Each prompt is mapped to opportunity attributes (industry, complexity
+    //    template hint, estimated value tier, close date, prior engagement
+    //    history). Confidence is per-prompt and only the genuinely uncertain
+    //    ones are flagged for reviewer attention.
     await createDefaultPrompts(dealId);
     const prompts = await db.select().from(promptResponses).where(eq(promptResponses.dealId, dealId));
-    let autoAnsweredCount = 0;
+
+    // Load options: governed prompts come from promptSetItems; fallback prompts
+    // come from STANDARD_PROMPTS keyed by question.
+    const optionsByQuestion = new Map<string, PromptOption[]>();
+    const promptSetIds = Array.from(new Set(prompts.map(p => p.promptSetId).filter((x): x is number => !!x)));
+    if (promptSetIds.length > 0) {
+      const items = await db.select().from(promptSetItems)
+        .where(inArray(promptSetItems.promptSetId, promptSetIds));
+      for (const it of items) {
+        optionsByQuestion.set(`${it.promptSetId}::${it.question}`, (it.options as PromptOption[]) || []);
+      }
+    }
+    const standardOptionsByQuestion = new Map(STANDARD_PROMPTS.map(p => [p.question, p.options]));
+
+    // Prior engagement history for the client (excluding the deal we just created).
+    const priorDeals = await db.select({ id: deals.id }).from(deals)
+      .where(and(eq(deals.clientId, clientId!), sql`${deals.id} <> ${dealId}`));
+    const priorDealCount = priorDeals.length;
+
+    // Resolve client industry (we may have just created a "Professional Services" stub).
+    const [clientRow] = await db.select().from(clients).where(eq(clients.id, clientId!));
+
+    const ctx: PromptAnswerCtx = {
+      industry: clientRow?.industry || "",
+      segment: clientRow?.segment || null,
+      region: clientRow?.region || null,
+      complexity,
+      estimatedFee: parseFloat(opp.estimatedValue || "0") || 0,
+      oppName: opp.name || "",
+      closeDate: (() => {
+        if (!opp.estimatedCloseDate) return null;
+        const d = new Date(opp.estimatedCloseDate);
+        return isNaN(d.getTime()) ? null : d;
+      })(),
+      priorDealCount,
+      serviceLine,
+      businessUnit,
+    };
+
+    const promptDetails: any[] = [];
     let lowSignalCount = 0;
     for (const p of prompts) {
-      // Heuristic: pick neutral/medium answer; flag as needs-review since
-      // we don't have rich opportunity context to anchor a real answer.
-      const answer = "Standard / Medium";
-      const impactMultiplier = "1.05";
+      const opts = (p.promptSetId ? optionsByQuestion.get(`${p.promptSetId}::${p.question}`) : null)
+        || standardOptionsByQuestion.get(p.question)
+        || [];
+      const decision = pickContextualAnswer(p.question, opts, ctx);
       await db.update(promptResponses).set({
-        answer,
-        impactMultiplier,
+        answer: decision.answer,
+        impactMultiplier: decision.multiplier,
       }).where(eq(promptResponses.id, p.id));
-      autoAnsweredCount++;
-      lowSignalCount++;
+      promptDetails.push({
+        question: p.question,
+        category: p.category,
+        answer: decision.answer,
+        multiplier: parseFloat(decision.multiplier),
+        confidence: decision.confidence,
+        needsReview: decision.needsReview,
+        rationale: decision.rationale,
+      });
+      if (decision.needsReview) lowSignalCount++;
     }
+    const avgConfidence = promptDetails.length > 0
+      ? promptDetails.reduce((s, d) => s + d.confidence, 0) / promptDetails.length
+      : 0.45;
+    const stepNeedsReview = lowSignalCount > 0;
+    const summary = lowSignalCount === 0
+      ? `Answered ${promptDetails.length} contextual prompts from opportunity context (avg confidence ${Math.round(avgConfidence * 100)}%).`
+      : `Answered ${promptDetails.length} contextual prompts (avg confidence ${Math.round(avgConfidence * 100)}%). ${lowSignalCount} need reviewer validation.`;
     await logStep(
       "prompts",
       "Assumptions answered",
-      `Auto-answered ${autoAnsweredCount} contextual prompts at neutral baseline. ${lowSignalCount} flagged as low-signal — reviewer should validate.`,
-      { autoAnsweredCount, lowSignalCount, defaultAnswer: "Standard / Medium", impactMultiplier: 1.05 },
-      0.45,
-      lowSignalCount > 0,
+      summary,
+      { prompts: promptDetails, autoAnsweredCount: promptDetails.length, lowSignalCount, avgConfidence },
+      avgConfidence,
+      stepNeedsReview,
     );
 
     // 6. UC-2: pick scope items via service-line template (or fallback)
