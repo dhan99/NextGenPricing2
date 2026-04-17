@@ -39,6 +39,8 @@ export const deals = pgTable("deals", {
   notes: text("notes"),
   aiSummary: text("ai_summary"),
   riskScore: decimal("risk_score", { precision: 3, scale: 1 }),
+  archivedAt: timestamp("archived_at"),
+  archivedBy: text("archived_by"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

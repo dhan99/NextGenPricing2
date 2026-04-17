@@ -72,9 +72,13 @@ async function pushSchema() {
       notes TEXT,
       ai_summary TEXT,
       risk_score DECIMAL(3,1),
+      archived_at TIMESTAMP,
+      archived_by TEXT,
       created_at TIMESTAMP DEFAULT NOW() NOT NULL,
       updated_at TIMESTAMP DEFAULT NOW() NOT NULL
     );
+    ALTER TABLE deals ADD COLUMN IF NOT EXISTS archived_at TIMESTAMP;
+    ALTER TABLE deals ADD COLUMN IF NOT EXISTS archived_by TEXT;
 
     CREATE TABLE IF NOT EXISTS scope_catalog (
       id SERIAL PRIMARY KEY,

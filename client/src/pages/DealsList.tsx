@@ -1,30 +1,43 @@
-import { useDeals } from "@/hooks/use-api";
+import { useDeals, useArchiveDeal, useRestoreDeal } from "@/hooks/use-api";
 import { formatCurrency, formatPercent, getStatusColor, getStatusLabel } from "@/lib/utils";
 import { Link } from "wouter";
 import { useState } from "react";
-import { Search, FileText, Plus, LayoutGrid, List, Filter, Copy, RefreshCw, MoreVertical, Loader2 } from "lucide-react";
+import { Search, FileText, Plus, LayoutGrid, List, Filter, Copy, RefreshCw, MoreVertical, Loader2, Archive, ArchiveRestore, Database, Unlink } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { useCloneDeal } from "@/hooks/use-api";
 import { useLocation } from "wouter";
 
 export function DealsList() {
-  const { data: deals, isLoading } = useDeals();
+  const [archiveView, setArchiveView] = useState<"active" | "archived" | "all">("active");
+  const { data: deals, isLoading } = useDeals({
+    includeArchived: archiveView === "all",
+    onlyArchived: archiveView === "archived",
+  });
   const [search, setSearch] = useState("");
   const urlParams = new URLSearchParams(window.location.search);
   const initialFilter = urlParams.get("status") || "all";
   const [statusFilter, setStatusFilter] = useState(initialFilter);
+  const [linkFilter, setLinkFilter] = useState<"all" | "linked" | "standalone">("all");
   const [viewMode, setViewMode] = useState<"table" | "card">("table");
 
   const filtered = (deals || []).filter((d: any) => {
     const matchesSearch = !search || d.title.toLowerCase().includes(search.toLowerCase()) ||
       d.dealNumber.toLowerCase().includes(search.toLowerCase()) ||
-      d.client?.name?.toLowerCase().includes(search.toLowerCase());
+      d.client?.name?.toLowerCase().includes(search.toLowerCase()) ||
+      d.dynamicsLink?.opportunityNumber?.toLowerCase().includes(search.toLowerCase());
     const matchesStatus = statusFilter === "all" || d.status === statusFilter;
-    return matchesSearch && matchesStatus;
+    const matchesLink = linkFilter === "all"
+      || (linkFilter === "linked" && d.dynamicsLink)
+      || (linkFilter === "standalone" && !d.dynamicsLink);
+    return matchesSearch && matchesStatus && matchesLink;
   });
+
+  const standaloneCount = (deals || []).filter((d: any) => !d.dynamicsLink && !d.archivedAt).length;
 
   const { hasPermission, persona } = useAuth();
   const cloneDeal = useCloneDeal();
+  const archiveDeal = useArchiveDeal();
+  const restoreDeal = useRestoreDeal();
   const [, navigate] = useLocation();
   const [actionMenuId, setActionMenuId] = useState<number | null>(null);
   const statuses = ["all", "draft", "in_progress", "submitted", "approved", "rejected"];
@@ -41,7 +54,14 @@ export function DealsList() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-foreground tracking-tight">Deals</h1>
-          <p className="text-muted-foreground text-sm mt-1">{filtered.length} deal{filtered.length !== 1 ? "s" : ""}</p>
+          <p className="text-muted-foreground text-sm mt-1">
+            {filtered.length} deal{filtered.length !== 1 ? "s" : ""}
+            {standaloneCount > 0 && archiveView === "active" && (
+              <span className="ml-2 inline-flex items-center gap-1 text-amber-700">
+                <Unlink className="w-3 h-3" /> {standaloneCount} not linked to a Dynamics opportunity
+              </span>
+            )}
+          </p>
         </div>
         {hasPermission("createDeals") && (
           <Link href="/deals/new">
@@ -72,6 +92,26 @@ export function DealsList() {
                 }`}
               >
                 {s === "all" ? "All" : getStatusLabel(s)}
+              </button>
+            ))}
+          </div>
+          <div className="flex items-center gap-1 bg-muted rounded-lg p-0.5">
+            {(["all", "linked", "standalone"] as const).map((f) => (
+              <button key={f} onClick={() => setLinkFilter(f)}
+                className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                  linkFilter === f ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+                }`}>
+                {f === "all" ? "All" : f === "linked" ? "D365 linked" : "Standalone"}
+              </button>
+            ))}
+          </div>
+          <div className="flex items-center gap-1 bg-muted rounded-lg p-0.5">
+            {(["active", "archived", "all"] as const).map((v) => (
+              <button key={v} onClick={() => setArchiveView(v)}
+                className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                  archiveView === v ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+                }`}>
+                {v === "active" ? "Active" : v === "archived" ? "Archived" : "All"}
               </button>
             ))}
           </div>
@@ -115,8 +155,28 @@ export function DealsList() {
                   <td className="px-6 py-4">
                     <Link href={`/deals/${deal.id}`}>
                       <div>
-                        <p className="font-medium text-sm text-foreground">{deal.title}</p>
-                        <p className="text-xs text-muted-foreground mt-0.5">{deal.dealNumber}{deal.parentDealId ? " (cloned)" : ""}</p>
+                        <div className="flex items-center gap-2">
+                          <p className="font-medium text-sm text-foreground">{deal.title}</p>
+                          {deal.archivedAt && (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-medium uppercase tracking-wider px-1.5 py-0.5 rounded bg-stone-200 text-stone-700">
+                              <Archive className="w-2.5 h-2.5" /> Archived
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <p className="text-xs text-muted-foreground">{deal.dealNumber}{deal.parentDealId ? " (cloned)" : ""}</p>
+                          {deal.dynamicsLink ? (
+                            <span title={`${deal.dynamicsLink.accountName} · ${deal.dynamicsLink.stage}`}
+                              className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200">
+                              <Database className="w-2.5 h-2.5" /> {deal.dynamicsLink.opportunityNumber}
+                            </span>
+                          ) : (
+                            <span title="Not linked to any Dynamics 365 opportunity"
+                              className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200">
+                              <Unlink className="w-2.5 h-2.5" /> Standalone
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </Link>
                   </td>
@@ -153,6 +213,37 @@ export function DealsList() {
                               <RefreshCw className="w-3.5 h-3.5" />
                               Renew Deal
                             </button>
+                            <div className="my-1 border-t border-border" />
+                            {deal.archivedAt ? (
+                              <button
+                                onClick={() => {
+                                  setActionMenuId(null);
+                                  restoreDeal.mutate({ dealId: deal.id, userName: persona?.name });
+                                }}
+                                disabled={restoreDeal.isPending}
+                                className="flex items-center gap-2 w-full px-4 py-2 text-sm text-foreground hover:bg-muted transition-colors"
+                              >
+                                <ArchiveRestore className="w-3.5 h-3.5" />
+                                Restore Deal
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => {
+                                  setActionMenuId(null);
+                                  const msg = deal.dynamicsLink
+                                    ? `Archive "${deal.title}"?\n\nThe deal stays in the database with full history. It will be hidden from active lists, and the linked D365 opportunity ${deal.dynamicsLink.opportunityNumber} will be unlinked so it can be re-scoped.`
+                                    : `Archive "${deal.title}"?\n\nThe deal stays in the database with full history but will be hidden from active lists. You can restore it later from the Archived view.`;
+                                  if (confirm(msg)) {
+                                    archiveDeal.mutate({ dealId: deal.id, userName: persona?.name });
+                                  }
+                                }}
+                                disabled={archiveDeal.isPending}
+                                className="flex items-center gap-2 w-full px-4 py-2 text-sm text-amber-700 hover:bg-amber-50 transition-colors"
+                              >
+                                <Archive className="w-3.5 h-3.5" />
+                                Archive Deal
+                              </button>
+                            )}
                           </div>
                         )}
                       </div>
@@ -173,8 +264,26 @@ export function DealsList() {
               <div className="card p-5 hover:shadow-md transition-shadow cursor-pointer">
                 <div className="flex items-start justify-between mb-3">
                   <div>
-                    <p className="font-medium text-foreground text-sm">{deal.title}</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">{deal.dealNumber}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="font-medium text-foreground text-sm">{deal.title}</p>
+                      {deal.archivedAt && (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-medium uppercase tracking-wider px-1.5 py-0.5 rounded bg-stone-200 text-stone-700">
+                          <Archive className="w-2.5 h-2.5" /> Archived
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <p className="text-xs text-muted-foreground">{deal.dealNumber}</p>
+                      {deal.dynamicsLink ? (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200">
+                          <Database className="w-2.5 h-2.5" /> {deal.dynamicsLink.opportunityNumber}
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200">
+                          <Unlink className="w-2.5 h-2.5" /> Standalone
+                        </span>
+                      )}
+                    </div>
                   </div>
                   <span className={`badge ${getStatusColor(deal.status)}`}>{getStatusLabel(deal.status)}</span>
                 </div>

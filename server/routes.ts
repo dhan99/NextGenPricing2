@@ -1,7 +1,7 @@
 import { Express, Request, Response } from "express";
 import { db } from "./db";
-import { clients, deals, scopeCatalog, dealScopeItems, roles, rateCards, rateCardEntries, pricingLines, scenarios, approvals, promptResponses, activityLog, changeOrders } from "../shared/schema";
-import { eq, desc, sql, and, count } from "drizzle-orm";
+import { clients, deals, scopeCatalog, dealScopeItems, roles, rateCards, rateCardEntries, pricingLines, scenarios, approvals, promptResponses, activityLog, changeOrders, dynamicsOpportunities } from "../shared/schema";
+import { eq, desc, sql, and, count, isNull, isNotNull } from "drizzle-orm";
 
 function escapeHtml(str: string | null | undefined): string {
   if (!str) return "";
@@ -149,12 +149,24 @@ export function registerRoutes(app: Express) {
   });
 
   // ========== DEALS ==========
-  app.get("/api/deals", async (_req: Request, res: Response) => {
+  app.get("/api/deals", async (req: Request, res: Response) => {
+    const includeArchived = req.query.includeArchived === "true";
+    const onlyArchived = req.query.onlyArchived === "true";
     const result = await db.query.deals.findMany({
       with: { client: true },
+      where: onlyArchived ? isNotNull(deals.archivedAt) : (includeArchived ? undefined : isNull(deals.archivedAt)),
       orderBy: [desc(deals.updatedAt)],
     });
-    res.json(result);
+    // Enrich with D365 link info so the UI can show "linked" vs "standalone"
+    const linkedOpps = await db.select({
+      dealpadDealId: dynamicsOpportunities.dealpadDealId,
+      id: dynamicsOpportunities.id,
+      opportunityNumber: dynamicsOpportunities.opportunityNumber,
+      accountName: dynamicsOpportunities.accountName,
+      stage: dynamicsOpportunities.stage,
+    }).from(dynamicsOpportunities).where(isNotNull(dynamicsOpportunities.dealpadDealId));
+    const linkMap = new Map(linkedOpps.map((o) => [o.dealpadDealId!, o]));
+    res.json(result.map((d) => ({ ...d, dynamicsLink: linkMap.get(d.id) || null })));
   });
 
   app.get("/api/deals/:id", async (req: Request, res: Response) => {
@@ -214,6 +226,46 @@ export function registerRoutes(app: Express) {
       if (!changedFields.includes("totalFee")) changedFields.push("totalFee", "totalCost", "totalHours");
     }
     autoPushDeal(dealId, changedFields, req.body?.userName).catch(() => {});
+    res.json(updated);
+  });
+
+  app.post("/api/deals/:id/archive", async (req: Request, res: Response) => {
+    const dealId = parseInt(req.params.id);
+    const userName = req.body?.userName || "System";
+    const [updated] = await db.update(deals)
+      .set({ archivedAt: new Date(), archivedBy: userName, updatedAt: new Date() })
+      .where(eq(deals.id, dealId))
+      .returning();
+    if (!updated) return res.status(404).json({ error: "Deal not found" });
+
+    // Auto-unlink any D365 opportunity so it can be re-scoped
+    let unlinkedOpp: string | null = null;
+    const [linkedOpp] = await db.select().from(dynamicsOpportunities).where(eq(dynamicsOpportunities.dealpadDealId, dealId));
+    if (linkedOpp) {
+      const { unlinkOpportunity } = await import("./dynamics");
+      await unlinkOpportunity(linkedOpp.id, userName).catch(() => {});
+      unlinkedOpp = linkedOpp.opportunityNumber;
+    }
+
+    await db.insert(activityLog).values({
+      dealId, action: "deal_archived", userName,
+      description: `Deal "${updated.title}" archived${unlinkedOpp ? ` (unlinked from D365 ${unlinkedOpp})` : ""}`,
+    });
+    res.json({ ...updated, unlinkedOpportunityNumber: unlinkedOpp });
+  });
+
+  app.post("/api/deals/:id/restore", async (req: Request, res: Response) => {
+    const dealId = parseInt(req.params.id);
+    const userName = req.body?.userName || "System";
+    const [updated] = await db.update(deals)
+      .set({ archivedAt: null, archivedBy: null, updatedAt: new Date() })
+      .where(eq(deals.id, dealId))
+      .returning();
+    if (!updated) return res.status(404).json({ error: "Deal not found" });
+    await db.insert(activityLog).values({
+      dealId, action: "deal_restored", userName,
+      description: `Deal "${updated.title}" restored from archive`,
+    });
     res.json(updated);
   });
 

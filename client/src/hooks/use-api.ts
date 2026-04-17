@@ -17,8 +17,36 @@ export function useClients() {
   return useQuery({ queryKey: ["clients"], queryFn: () => fetchApi("/api/clients") });
 }
 
-export function useDeals() {
-  return useQuery({ queryKey: ["deals"], queryFn: () => fetchApi("/api/deals") });
+export function useDeals(opts?: { includeArchived?: boolean; onlyArchived?: boolean }) {
+  const qs = opts?.onlyArchived ? "?onlyArchived=true" : opts?.includeArchived ? "?includeArchived=true" : "";
+  return useQuery({ queryKey: ["deals", opts?.includeArchived || false, opts?.onlyArchived || false], queryFn: () => fetchApi(`/api/deals${qs}`) });
+}
+
+export function useArchiveDeal() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ dealId, userName }: { dealId: number; userName?: string }) =>
+      fetchApi(`/api/deals/${dealId}/archive`, { method: "POST", body: JSON.stringify({ userName }) }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["deals"] });
+      qc.invalidateQueries({ queryKey: ["dyn-opps"] });
+      qc.invalidateQueries({ queryKey: ["dyn-opps-eligible"] });
+      qc.invalidateQueries({ queryKey: ["dyn-synclog"] });
+      qc.invalidateQueries({ queryKey: ["activity"] });
+    },
+  });
+}
+
+export function useRestoreDeal() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ dealId, userName }: { dealId: number; userName?: string }) =>
+      fetchApi(`/api/deals/${dealId}/restore`, { method: "POST", body: JSON.stringify({ userName }) }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["deals"] });
+      qc.invalidateQueries({ queryKey: ["activity"] });
+    },
+  });
 }
 
 export function useDeal(id: number) {
