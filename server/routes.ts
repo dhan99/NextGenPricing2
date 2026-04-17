@@ -163,9 +163,9 @@ async function recalcPricingFromScope(dealId: number) {
   await db.delete(scenarios).where(eq(scenarios.dealId, dealId));
 }
 
-import { registerDynamicsRoutes, autoPushDeal } from "./dynamics";
-import { autoPushWorkdayProject } from "./workday";
-import { autoPushIntappOutcome } from "./intapp";
+import { registerDynamicsRoutes, autoPushDeal, pickTemplateForName, tmplKey, linkDealToOpportunity, unlinkOpportunity } from "./dynamics";
+import { autoPushWorkdayProject, getProvider as getWorkdayProvider } from "./workday";
+import { autoPushIntappOutcome, runScreeningForDeal, getLatestScreening } from "./intapp";
 import {
   registerIntappRoutes,
   onDealSubmittedTrigger,
@@ -174,6 +174,7 @@ import {
   startNightlyRescreenLoop,
 } from "./intapp";
 import { registerWorkdayRoutes, onDealSaved, onDealSubmitted } from "./workday";
+import { dynamicsAccounts } from "../shared/schema";
 import { registerCongaRoutes } from "./conga";
 
 export function registerRoutes(app: Express) {
@@ -2037,6 +2038,562 @@ export function registerRoutes(app: Express) {
       narrative,
       approvalLikelihood: riskLevel === "Low" ? "High (89%)" : riskLevel === "Medium" ? "Moderate (72%)" : "Requires Review (45%)",
     });
+  });
+
+  // ========== AUTONOMOUS AGENT DRAFT (Task #22) ==========
+  // One-click pipeline: takes a Dynamics opportunity and produces a fully
+  // drafted DealPad deal (scope, prompts, pricing, scenarios, risk) in a
+  // pendingReviewAgent state for human review. Each step is logged to
+  // activityLog with a structured metadata.agentRun payload.
+  app.post("/api/dynamics/opportunities/:id/agent-draft", async (req: Request, res: Response) => {
+    const oppId = parseInt(req.params.id);
+    if (isNaN(oppId)) return res.status(400).json({ error: "Invalid id" });
+    const userName = (req.header("x-user-name") || req.body?.userName || "Agent").toString();
+
+    const [opp] = await db.select().from(dynamicsOpportunities).where(eq(dynamicsOpportunities.id, oppId));
+    if (!opp) return res.status(404).json({ error: "Opportunity not found" });
+    if (opp.dealpadDealId) return res.status(400).json({ error: "Already linked", dealId: opp.dealpadDealId });
+    if (!["Develop", "Propose"].includes(opp.stage || "")) {
+      return res.status(400).json({ error: `Opportunity stage "${opp.stage}" not eligible (needs Develop or Propose)` });
+    }
+
+    // 1. Resolve client (mirror import flow)
+    let clientId: number | null = null;
+    if (opp.dynamicsAccountId) {
+      const [acct] = await db.select().from(dynamicsAccounts).where(eq(dynamicsAccounts.id, opp.dynamicsAccountId));
+      clientId = acct?.dealpadClientId ?? null;
+    }
+    if (!clientId) {
+      const [matched] = await db.select().from(clients).where(eq(clients.name, opp.accountName || ""));
+      if (matched) clientId = matched.id;
+      else {
+        const [newClient] = await db.insert(clients).values({
+          name: opp.accountName || "Unknown",
+          industry: "Professional Services",
+          segment: "Mid-Market",
+          region: "San Francisco, CA",
+        }).returning();
+        clientId = newClient.id;
+      }
+    }
+
+    // 2. Pick template hints (BU/serviceLine/complexity) from opp name
+    const tmpl = pickTemplateForName(opp.name);
+    const templateKey = tmplKey(opp.name);
+    const businessUnit = tmpl?.businessUnit || "Advisory Services";
+    const serviceLine = tmpl?.serviceLine || "Strategy Consulting";
+    const complexity = tmpl?.complexity || "medium";
+
+    // 3. Create deal in pendingReviewAgent state, currentStep=7 (Summary)
+    const dealCount = await db.select({ count: count() }).from(deals);
+    const dealNumber = `DL-2026-${String(dealCount[0].count + 1).padStart(3, "0")}`;
+    const [newDeal] = await db.insert(deals).values({
+      dealNumber,
+      title: opp.name,
+      clientId: clientId!,
+      status: "pendingReviewAgent",
+      dealType: "new",
+      businessUnit,
+      serviceLine,
+      complexity,
+      totalFee: opp.estimatedValue || "0",
+      endDate: opp.estimatedCloseDate || null,
+      pdlName: opp.ownerName || null,
+      currentStep: 7,
+      notes: tmpl?.scopeNotes || null,
+    }).returning();
+
+    const dealId = newDeal.id;
+    const agentRunSteps: any[] = [];
+    const logStep = async (stepKey: string, label: string, summary: string, output: any, confidence: number, needsReview = false) => {
+      const entry = { step: stepKey, label, summary, output, confidence, needsReview, ts: new Date().toISOString() };
+      agentRunSteps.push(entry);
+      await db.insert(activityLog).values({
+        dealId,
+        action: `agent_${stepKey}`,
+        description: `[Agent] ${label}: ${summary}`,
+        userName,
+        metadata: { agentRun: entry },
+      });
+    };
+
+    await logStep(
+      "setup",
+      "Setup drafted",
+      `Inferred ${businessUnit} / ${serviceLine} (complexity: ${complexity}) from opportunity name${templateKey ? ` ("${templateKey}" template)` : ""}.`,
+      { businessUnit, serviceLine, complexity, templateKey, dealNumber },
+      tmpl ? 0.9 : 0.4,
+      !tmpl,
+    );
+
+    // 4. Link to opportunity
+    await linkDealToOpportunity(oppId, dealId, userName).catch(() => {});
+
+    // 5. Default prompts + auto-answer with low-signal flag
+    await createDefaultPrompts(dealId);
+    const prompts = await db.select().from(promptResponses).where(eq(promptResponses.dealId, dealId));
+    let autoAnsweredCount = 0;
+    let lowSignalCount = 0;
+    for (const p of prompts) {
+      // Heuristic: pick neutral/medium answer; flag as needs-review since
+      // we don't have rich opportunity context to anchor a real answer.
+      const answer = "Standard / Medium";
+      const impactMultiplier = "1.05";
+      await db.update(promptResponses).set({
+        answer,
+        impactMultiplier,
+      }).where(eq(promptResponses.id, p.id));
+      autoAnsweredCount++;
+      lowSignalCount++;
+    }
+    await logStep(
+      "prompts",
+      "Assumptions answered",
+      `Auto-answered ${autoAnsweredCount} contextual prompts at neutral baseline. ${lowSignalCount} flagged as low-signal — reviewer should validate.`,
+      { autoAnsweredCount, lowSignalCount, defaultAnswer: "Standard / Medium", impactMultiplier: 1.05 },
+      0.45,
+      lowSignalCount > 0,
+    );
+
+    // 6. UC-2: pick scope items via service-line template (or fallback)
+    const allCatalog = await db.select().from(scopeCatalog).where(eq(scopeCatalog.isActive, true));
+    const slLower = serviceLine.toLowerCase();
+    let candidateScope = allCatalog.filter((c) => {
+      const sls = (c.serviceLines || "").toLowerCase();
+      return sls && (sls.includes(slLower) || slLower.split(" ").some(w => w.length > 3 && sls.includes(w)));
+    }).filter(c => !c.isAssembly);
+    if (candidateScope.length === 0) {
+      candidateScope = allCatalog.filter(c => !c.isAssembly).slice(0, 5);
+    } else {
+      candidateScope = candidateScope.slice(0, 8);
+    }
+    const insertedScope: any[] = [];
+    for (const item of candidateScope) {
+      const [row] = await db.insert(dealScopeItems).values({
+        dealId,
+        scopeItemId: item.id,
+        quantity: 1,
+        adjustedHours: item.defaultHours,
+        complexityMultiplier: "1.0",
+      }).onConflictDoNothing({ target: [dealScopeItems.dealId, dealScopeItems.scopeItemId] }).returning();
+      if (row) insertedScope.push({ id: row.id, code: item.code, name: item.name, defaultHours: item.defaultHours });
+    }
+    await logStep(
+      "scope",
+      "Scope assembled",
+      `Added ${insertedScope.length} scope item${insertedScope.length === 1 ? "" : "s"} matched to ${serviceLine}.`,
+      { items: insertedScope, serviceLine, totalCandidates: candidateScope.length },
+      insertedScope.length >= 5 ? 0.8 : 0.55,
+      insertedScope.length === 0,
+    );
+
+    // 7. Seed pricing lines (mirror GET /pricing lazy-init) so recalc has a
+    //    line-set to scale.
+    const allRoles = await db.select().from(roles).orderBy(roles.sortOrder);
+    if (allRoles.length > 0) {
+      const baseMul = COMPLEXITY_MULTIPLIERS[complexity] || 1.0;
+      const promptMul = 1.05 ** prompts.length;
+      const totalMul = baseMul * promptMul;
+      const totalHours = insertedScope.length > 0
+        ? insertedScope.reduce((s, si) => s + Math.round(parseFloat(si.defaultHours || "40") * totalMul), 0)
+        : Math.round(200 * totalMul);
+      await db.insert(pricingLines).values(
+        allRoles.map((r) => {
+          const pct = ROLE_DISTRIBUTION[r.name] || (1 / allRoles.length);
+          const hours = Math.max(Math.round(totalHours * pct), 1);
+          const rate = parseFloat(r.defaultRate || "300");
+          const costRate = parseFloat(r.costRate || "150");
+          return {
+            dealId,
+            roleId: r.id,
+            hours: String(hours),
+            rate: String(rate),
+            costRate: String(costRate),
+            fee: String(hours * rate),
+            cost: String(hours * costRate),
+            margin: String(hours * (rate - costRate)),
+          };
+        })
+      );
+    }
+
+    // 8. Recalc totals from scope (rolls up pricing lines and updates the deal header)
+    await recalcPricingFromScope(dealId);
+
+    // Re-fetch to get updated header totals
+    const [refreshedDeal] = await db.select().from(deals).where(eq(deals.id, dealId));
+    const fee = parseFloat(refreshedDeal?.totalFee || "0");
+    const cost = parseFloat(refreshedDeal?.totalCost || "0");
+    const hours = parseFloat(refreshedDeal?.totalHours || "0");
+    const margin = parseFloat(refreshedDeal?.marginPercent || "0");
+    const blended = parseFloat(refreshedDeal?.blendedRate || "0");
+    await logStep(
+      "pricing",
+      "Pricing computed",
+      `Effort estimate: ${hours} hrs across ${allRoles.length} roles. Fee $${fee.toLocaleString()}, margin ${margin.toFixed(1)}%, blended $${blended.toFixed(0)}/hr.`,
+      { totalFee: fee, totalCost: cost, totalHours: hours, marginPercent: margin, blendedRate: blended, roleCount: allRoles.length },
+      hours > 0 ? 0.75 : 0.3,
+      hours === 0,
+    );
+
+    // 9. UC-4: generate scenarios (3 options with Option 1 recommended)
+    const baseFee = fee || 100000;
+    const baseCost = cost || 70000;
+    const baseHours = hours || 400;
+    const stdMargin = baseFee > 0 ? ((baseFee - baseCost) / baseFee * 100) : 25;
+    const premFee = Math.round(baseFee * 1.15);
+    const premHours = Math.round(baseHours * 0.9);
+    const premCost = Math.round(baseCost * 1.05);
+    const premMargin = premFee > 0 ? ((premFee - premCost) / premFee * 100) : 30;
+    const valFee = Math.round(baseFee * 0.85);
+    const valHours = Math.round(baseHours * 1.15);
+    const valCost = Math.round(baseCost * 0.92);
+    const valMargin = valFee > 0 ? ((valFee - valCost) / valFee * 100) : 20;
+    await db.delete(scenarios).where(eq(scenarios.dealId, dealId));
+    await db.insert(scenarios).values([
+      {
+        dealId, name: "Option 1", description: "Balanced team composition with standard timeline",
+        scenarioType: "option_1", isRecommended: true,
+        totalFee: String(Math.round(baseFee)), totalCost: String(Math.round(baseCost)),
+        totalHours: String(Math.round(baseHours)), marginPercent: String(stdMargin.toFixed(1)),
+        blendedRate: baseHours > 0 ? String((baseFee / baseHours).toFixed(2)) : "0",
+        aiReasoning: `Standard delivery model maintaining ${stdMargin.toFixed(0)}% margin with balanced senior-to-junior ratio across ${Math.round(baseHours)} hours.`,
+      },
+      {
+        dealId, name: "Option 2", description: "Senior-heavy team with accelerated timeline",
+        scenarioType: "option_2", isRecommended: false,
+        totalFee: String(premFee), totalCost: String(premCost),
+        totalHours: String(premHours), marginPercent: String(premMargin.toFixed(1)),
+        blendedRate: premHours > 0 ? String((premFee / premHours).toFixed(2)) : "0",
+        aiReasoning: `Senior-heavy staffing reduces hours to ${premHours} at higher fee; ${premMargin.toFixed(0)}% margin.`,
+      },
+      {
+        dealId, name: "Option 3", description: "Cost-optimized with extended timeline",
+        scenarioType: "option_3", isRecommended: false,
+        totalFee: String(valFee), totalCost: String(valCost),
+        totalHours: String(valHours), marginPercent: String(valMargin.toFixed(1)),
+        blendedRate: valHours > 0 ? String((valFee / valHours).toFixed(2)) : "0",
+        aiReasoning: `Junior-heavy mix at ${valMargin.toFixed(0)}% margin across ${valHours} hours; budget-conscious.`,
+      },
+    ]);
+    await logStep(
+      "scenarios",
+      "Scenarios generated",
+      `Recommended Option 1 (balanced) at ${stdMargin.toFixed(1)}% margin; alternatives Option 2 (premium) and Option 3 (value) available.`,
+      {
+        recommended: "Option 1",
+        options: [
+          { name: "Option 1", fee: Math.round(baseFee), margin: parseFloat(stdMargin.toFixed(1)) },
+          { name: "Option 2", fee: premFee, margin: parseFloat(premMargin.toFixed(1)) },
+          { name: "Option 3", fee: valFee, margin: parseFloat(valMargin.toFixed(1)) },
+        ],
+      },
+      0.7,
+    );
+
+    // 10. UC-5: risk narrative
+    const riskLevel = margin < 20 ? "High" : margin < 25 ? "Medium" : "Low";
+    const riskScore = riskLevel === "Low" ? 2.5 : riskLevel === "Medium" ? 5.5 : 8.0;
+    const riskFactors: any[] = [];
+    if (complexity === "high" || complexity === "very_high") {
+      riskFactors.push({ factor: "High Complexity", severity: "medium" });
+    }
+    if (margin < 25) {
+      riskFactors.push({ factor: "Below Target Margin", severity: margin < 20 ? "high" : "medium" });
+    }
+    if (hours > 1000) {
+      riskFactors.push({ factor: "Large Engagement", severity: "low" });
+    }
+    const narrative = `Agent-drafted ${serviceLine} engagement for ${opp.accountName || "client"} totalling $${fee.toLocaleString()} at ${margin.toFixed(1)}% margin (${riskLevel} risk). ${riskLevel === "Low" ? "Acceptable margin and manageable complexity." : riskLevel === "Medium" ? "Moderate risk factors should be monitored." : "Elevated risk factors require oversight."} Approval likelihood: ${riskLevel === "Low" ? "High (89%)" : riskLevel === "Medium" ? "Moderate (72%)" : "Requires Review (45%)"}.`;
+    await db.update(deals).set({
+      aiSummary: narrative,
+      riskScore: String(riskScore),
+      updatedAt: new Date(),
+    }).where(eq(deals.id, dealId));
+    await logStep(
+      "risk",
+      "Risk narrative",
+      `${riskLevel} risk · score ${riskScore}. ${riskFactors.length} factor${riskFactors.length === 1 ? "" : "s"} identified.`,
+      { riskLevel, riskScore, riskFactors, narrative, approvalLikelihood: riskLevel === "Low" ? "High (89%)" : riskLevel === "Medium" ? "Moderate (72%)" : "Requires Review (45%)" },
+      0.7,
+    );
+
+    // 11. Review checklist — execute Intapp screening, Workday validation,
+    //     and a margin/Practice-Lead policy check up front so reviewers see
+    //     the full readiness picture on the Summary banner (instead of
+    //     surfacing it only at Approve & Submit time).
+    const checklist: any = { intapp: null, workday: null, margin: null };
+    let checklistConfidence = 0.85;
+    let checklistNeedsReview = false;
+
+    try {
+      const screen = await runScreeningForDeal(dealId, userName, "agent");
+      const latest = await getLatestScreening(dealId);
+      checklist.intapp = {
+        result: screen.response.result,
+        riskLevel: screen.response.riskLevel,
+        hitCount: latest?.hits?.length || 0,
+        screeningId: latest?.id,
+      };
+      if (screen.response.result === "conflict") { checklistNeedsReview = true; checklistConfidence = 0.3; }
+      else if (screen.response.result === "review") { checklistNeedsReview = true; checklistConfidence = 0.55; }
+    } catch (e: any) {
+      checklist.intapp = { error: e?.message || "Intapp screening failed" };
+      checklistNeedsReview = true;
+      checklistConfidence = Math.min(checklistConfidence, 0.4);
+    }
+
+    try {
+      const wdProvider = await getWorkdayProvider();
+      const wdResult = await wdProvider.validateDeal(dealId, { trigger: "manual", actorName: userName });
+      checklist.workday = {
+        status: wdResult.status,
+        ok: wdResult.ok,
+        findingCount: wdResult.findings?.length || 0,
+        validationId: wdResult.validationId,
+        summary: wdResult.summary,
+      };
+      if (wdResult.status === "failed") {
+        checklistNeedsReview = true; checklistConfidence = Math.min(checklistConfidence, 0.4);
+      } else if (!wdResult.ok) {
+        checklistNeedsReview = true; checklistConfidence = Math.min(checklistConfidence, 0.65);
+      }
+    } catch (e: any) {
+      checklist.workday = { error: e?.message || "Workday validation failed" };
+      checklistNeedsReview = true;
+      checklistConfidence = Math.min(checklistConfidence, 0.4);
+    }
+
+    const marginTrigger = evaluatePracticeLeadTrigger({
+      totalFee: fee, marginPercent: margin, scopeItemCount: insertedScope.length,
+    });
+    checklist.margin = {
+      marginPercent: margin,
+      practiceLeadRequired: marginTrigger.required,
+      reason: marginTrigger.reason,
+      below25: margin < 25,
+    };
+    if (marginTrigger.required) { checklistNeedsReview = true; checklistConfidence = Math.min(checklistConfidence, 0.6); }
+
+    const checklistSummary = [
+      checklist.intapp?.result ? `Intapp: ${checklist.intapp.result}` : "Intapp: error",
+      checklist.workday?.status ? `Workday: ${checklist.workday.status}` : "Workday: error",
+      `Margin: ${margin.toFixed(1)}%${marginTrigger.required ? " (Practice Lead required)" : ""}`,
+    ].join(" · ");
+    await logStep(
+      "review",
+      "Review checklist",
+      checklistSummary,
+      checklist,
+      checklistConfidence,
+      checklistNeedsReview,
+    );
+
+    // 12. Final completion entry (so UI can detect "ready for review")
+    await db.insert(activityLog).values({
+      dealId,
+      action: "agent_complete",
+      description: `[Agent] Draft complete — ready for human review. ${agentRunSteps.length} pipeline steps executed.`,
+      userName,
+      metadata: { agentRun: { step: "complete", totalSteps: agentRunSteps.length, opportunityNumber: opp.opportunityNumber } },
+    });
+
+    res.status(201).json({
+      success: true,
+      dealId,
+      dealNumber,
+      steps: agentRunSteps,
+    });
+  });
+
+  // Approve & Submit an agent-drafted deal — creates an approval (which the
+  // existing routing in shared/policy.ts may upgrade to Practice Lead) and
+  // flips the deal to "submitted". Mirrors the wizard's Approve step.
+  app.post("/api/deals/:id/agent-approve", async (req: Request, res: Response) => {
+    const dealId = parseInt(req.params.id);
+    const userName = (req.header("x-user-name") || req.body?.userName || "Reviewer").toString();
+    const [deal] = await db.select().from(deals).where(eq(deals.id, dealId));
+    if (!deal) return res.status(404).json({ error: "Deal not found" });
+    if (deal.status !== "pendingReviewAgent") {
+      return res.status(400).json({ error: "Only pendingReviewAgent deals can be agent-approved" });
+    }
+
+    // Flip to draft so the standard submission gating engages cleanly.
+    await db.update(deals).set({ status: "draft", currentStep: 6, updatedAt: new Date() }).where(eq(deals.id, dealId));
+
+    // Run the same gates as the wizard's Approve step.
+    const intappGate = await assertSubmissionAllowed(dealId, userName);
+    if (!intappGate.allow) {
+      // Roll back status so banner re-appears
+      await db.update(deals).set({ status: "pendingReviewAgent" }).where(eq(deals.id, dealId));
+      return res.status(409).json({ error: intappGate.reason, code: "intapp_conflict", screening: intappGate.screening });
+    }
+    const wdGate = await onDealSubmitted(dealId, userName);
+    if (wdGate.blocked) {
+      await db.update(deals).set({ status: "pendingReviewAgent" }).where(eq(deals.id, dealId));
+      return res.status(409).json({ error: "WORKDAY_VALIDATION_BLOCKED", message: wdGate.reason, validationId: wdGate.validationId });
+    }
+
+    // Apply Practice Lead policy
+    const dealLines = await db.select().from(pricingLines).where(eq(pricingLines.dealId, dealId));
+    const dealItems = await db.select().from(dealScopeItems).where(eq(dealScopeItems.dealId, dealId));
+    const polFee = dealLines.reduce((s, l) => s + parseFloat(l.fee || "0"), 0);
+    const polCost = dealLines.reduce((s, l) => s + parseFloat(l.cost || "0"), 0);
+    const polMargin = polFee > 0 ? ((polFee - polCost) / polFee) * 100 : 0;
+    const trigger = evaluatePracticeLeadTrigger({ totalFee: polFee, marginPercent: polMargin, scopeItemCount: dealItems.length });
+
+    const approverRole = trigger.required ? "Practice Lead" : "Pricing Director";
+    const [approval] = await db.insert(approvals).values({
+      dealId,
+      approverName: deal.pdlName || userName,
+      approverRole,
+      submittedBy: userName,
+      status: "pending",
+      riskSummary: trigger.required ? trigger.reason : null,
+    }).returning();
+
+    await db.update(deals).set({ status: "submitted", updatedAt: new Date() }).where(eq(deals.id, dealId));
+    autoPushDeal(dealId, ["status"], userName).catch(() => {});
+    onDealSubmittedTrigger(dealId, userName).catch(() => {});
+    await db.insert(activityLog).values({
+      dealId,
+      action: "agent_approved_submitted",
+      description: `[Agent] Reviewer ${userName} approved & submitted agent-drafted deal for ${approverRole} review`,
+      userName,
+      metadata: { agentRun: { step: "approve_submit", approvalId: approval.id, approverRole } },
+    });
+    res.json({ success: true, approval, status: "submitted" });
+  });
+
+  // Discard an agent-drafted deal — archives it (which also unlinks the D365
+  // opportunity so it can be re-scoped or re-run).
+  app.post("/api/deals/:id/agent-discard", async (req: Request, res: Response) => {
+    const dealId = parseInt(req.params.id);
+    const userName = (req.header("x-user-name") || req.body?.userName || "Reviewer").toString();
+    const [deal] = await db.select().from(deals).where(eq(deals.id, dealId));
+    if (!deal) return res.status(404).json({ error: "Deal not found" });
+    if (deal.status !== "pendingReviewAgent") {
+      return res.status(400).json({ error: "Only pendingReviewAgent deals can be agent-discarded" });
+    }
+
+    let unlinkedOpp: string | null = null;
+    const [linkedOpp] = await db.select().from(dynamicsOpportunities).where(eq(dynamicsOpportunities.dealpadDealId, dealId));
+    if (linkedOpp) {
+      await unlinkOpportunity(linkedOpp.id, userName).catch(() => {});
+      unlinkedOpp = linkedOpp.opportunityNumber;
+    }
+
+    await db.update(deals).set({
+      archivedAt: new Date(),
+      archivedBy: userName,
+      status: "draft",
+      updatedAt: new Date(),
+    }).where(eq(deals.id, dealId));
+
+    await db.insert(activityLog).values({
+      dealId,
+      action: "agent_discarded",
+      description: `[Agent] Reviewer ${userName} discarded agent draft${unlinkedOpp ? ` (unlinked from D365 ${unlinkedOpp})` : ""}`,
+      userName,
+      metadata: { agentRun: { step: "discard", unlinkedOpportunityNumber: unlinkedOpp } },
+    });
+    res.json({ success: true, unlinkedOpportunityNumber: unlinkedOpp });
+  });
+
+  // Open an agent-drafted deal in the wizard for editing — moves currentStep
+  // back to 1 and snapshots the pre-edit state to the activity log so the
+  // original draft can be compared after Resubmit.
+  app.post("/api/deals/:id/agent-open-wizard", async (req: Request, res: Response) => {
+    const dealId = parseInt(req.params.id);
+    const userName = (req.header("x-user-name") || req.body?.userName || "Reviewer").toString();
+    const deal = await db.query.deals.findFirst({
+      where: eq(deals.id, dealId),
+      with: { scopeItems: { with: { scopeItem: true } }, pricingLines: true, promptResponses: true },
+    });
+    if (!deal) return res.status(404).json({ error: "Deal not found" });
+    if (deal.status !== "pendingReviewAgent") {
+      return res.status(400).json({ error: "Only pendingReviewAgent deals can be opened in the wizard" });
+    }
+
+    // Check we haven't already snapshotted to avoid duplicating on repeated opens.
+    const existingSnap = await db.select().from(activityLog)
+      .where(and(eq(activityLog.dealId, dealId), eq(activityLog.action, "agent_draft_snapshot")));
+    if (existingSnap.length === 0) {
+      await db.insert(activityLog).values({
+        dealId,
+        action: "agent_draft_snapshot",
+        description: `[Agent] Snapshot of original agent draft preserved before wizard editing by ${userName}`,
+        userName,
+        metadata: {
+          agentRun: {
+            step: "snapshot",
+            snapshot: {
+              totalFee: deal.totalFee, totalCost: deal.totalCost, totalHours: deal.totalHours,
+              marginPercent: deal.marginPercent, blendedRate: deal.blendedRate,
+              complexity: deal.complexity, businessUnit: deal.businessUnit, serviceLine: deal.serviceLine,
+              scopeItemCount: deal.scopeItems?.length || 0,
+              pricingLineCount: deal.pricingLines?.length || 0,
+              promptResponses: (deal.promptResponses || []).map((p: any) => ({ question: p.question, answer: p.answer, impactMultiplier: p.impactMultiplier })),
+              scopeItems: (deal.scopeItems || []).map((s: any) => ({ code: s.scopeItem?.code, name: s.scopeItem?.name, hours: s.adjustedHours })),
+            },
+          },
+        },
+      });
+    }
+
+    await db.update(deals).set({ currentStep: 1, updatedAt: new Date() }).where(eq(deals.id, dealId));
+    res.json({ success: true });
+  });
+
+  // Resubmit an agent-drafted deal back to Summary review (status remains
+  // pendingReviewAgent so the badge persists). Re-runs the risk narrative
+  // against the edited values and logs the resubmission.
+  app.post("/api/deals/:id/agent-resubmit", async (req: Request, res: Response) => {
+    const dealId = parseInt(req.params.id);
+    const userName = (req.header("x-user-name") || req.body?.userName || "Reviewer").toString();
+    const [deal] = await db.select().from(deals).where(eq(deals.id, dealId));
+    if (!deal) return res.status(404).json({ error: "Deal not found" });
+    if (deal.status !== "pendingReviewAgent") {
+      return res.status(400).json({ error: "Only pendingReviewAgent deals can be agent-resubmitted" });
+    }
+
+    // Re-sum totals from pricing lines
+    const lines = await db.select().from(pricingLines).where(eq(pricingLines.dealId, dealId));
+    const sumFee = lines.reduce((s, l) => s + parseFloat(l.fee || "0"), 0);
+    const sumCost = lines.reduce((s, l) => s + parseFloat(l.cost || "0"), 0);
+    const sumHours = lines.reduce((s, l) => s + parseFloat(l.hours || "0"), 0);
+    const margin = sumFee > 0 ? ((sumFee - sumCost) / sumFee) * 100 : 0;
+    const blended = sumHours > 0 ? sumFee / sumHours : 0;
+    const riskLevel = margin < 20 ? "High" : margin < 25 ? "Medium" : "Low";
+    const riskScore = riskLevel === "Low" ? 2.5 : riskLevel === "Medium" ? 5.5 : 8.0;
+    const narrative = `[Updated after wizard edits] ${deal.serviceLine || "consulting"} engagement totalling $${sumFee.toLocaleString()} at ${margin.toFixed(1)}% margin (${riskLevel} risk).`;
+
+    await db.update(deals).set({
+      totalFee: sumFee.toFixed(2),
+      totalCost: sumCost.toFixed(2),
+      totalHours: sumHours.toFixed(2),
+      marginPercent: margin.toFixed(2),
+      blendedRate: blended.toFixed(2),
+      aiSummary: narrative,
+      riskScore: String(riskScore),
+      currentStep: 7,
+      updatedAt: new Date(),
+    }).where(eq(deals.id, dealId));
+
+    await db.insert(activityLog).values({
+      dealId,
+      action: "agent_resubmit",
+      description: `[Agent] Reviewer ${userName} resubmitted edited draft — fee $${sumFee.toLocaleString()}, margin ${margin.toFixed(1)}%, risk ${riskLevel}`,
+      userName,
+      metadata: {
+        agentRun: {
+          step: "resubmit",
+          totalFee: sumFee, totalCost: sumCost, totalHours: sumHours,
+          marginPercent: margin, blendedRate: blended, riskLevel, riskScore,
+        },
+      },
+    });
+    res.json({ success: true });
   });
 
   // ========== ACTIVITY LOG ==========

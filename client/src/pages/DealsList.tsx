@@ -40,7 +40,7 @@ export function DealsList() {
   const restoreDeal = useRestoreDeal();
   const [, navigate] = useLocation();
   const [actionMenuId, setActionMenuId] = useState<number | null>(null);
-  const statuses = ["all", "draft", "in_progress", "submitted", "approved", "rejected"];
+  const statuses = ["all", "draft", "pendingReviewAgent", "in_progress", "submitted", "approved", "rejected"];
 
   const handleClone = (dealId: number, mode: "clone" | "renewal") => {
     setActionMenuId(null);

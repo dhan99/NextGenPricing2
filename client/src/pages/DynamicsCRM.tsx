@@ -6,13 +6,14 @@ import {
 } from "lucide-react";
 import {
   useDynamicsAccounts, useDynamicsOpportunities, useDynamicsPipeline,
-  useDynamicsSyncLog, useDynamicsSync, useImportOpportunity,
+  useDynamicsSyncLog, useDynamicsSync, useImportOpportunity, useAgentDraftOpportunity,
   useDynamicsSettings, useUpdateDynamicsSettings,
   useUpdateDynamicsAccount, useUpdateDynamicsOpportunity,
   useNightlyBatch, usePushDealToDynamics, useUnlinkOpportunity,
   useDynamicsScopeTemplates, useCreateOpportunity,
 } from "@/hooks/use-api";
 import { useAuth } from "@/context/AuthContext";
+import { cn } from "@/lib/utils";
 
 type Tab = "accounts" | "opportunities" | "pipeline" | "settings";
 
@@ -326,6 +327,8 @@ function OpportunitiesTab() {
   const { data: opps = [], isLoading } = useDynamicsOpportunities();
   const sync = useDynamicsSync();
   const importOpp = useImportOpportunity();
+  const agentDraft = useAgentDraftOpportunity();
+  const [agentRunOppId, setAgentRunOppId] = useState<number | null>(null);
   const update = useUpdateDynamicsOpportunity();
   const push = usePushDealToDynamics();
   const unlink = useUnlinkOpportunity();
@@ -454,10 +457,46 @@ function OpportunitiesTab() {
                             <Pencil className="w-3.5 h-3.5" />
                           </button>
                           <button onClick={() => importOpp.mutate({ id: o.id, userName: persona?.name })}
-                            disabled={importOpp.isPending}
+                            disabled={importOpp.isPending || agentDraft.isPending}
                             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-primary text-white text-xs font-medium hover:bg-primary/90 disabled:opacity-50">
                             <ArrowDownToLine className="w-3.5 h-3.5" /> Import to DealPad
                           </button>
+                          {(() => {
+                            const isLinked = !!o.dealpadDealId;
+                            const stageOk = ["Develop", "Propose"].includes(o.stage);
+                            const eligible = !isLinked && stageOk;
+                            const tooltip = isLinked
+                              ? "Already linked to a DealPad deal — Autonomous Agent unavailable"
+                              : !stageOk
+                                ? `Stage "${o.stage}" not eligible — Autonomous Agent requires Develop or Propose`
+                                : "Autonomous Agent will draft scope, prompts, pricing, scenarios, risk, and review checklist";
+                            const handleClick = async () => {
+                              setAgentRunOppId(o.id);
+                              try {
+                                const res: { dealId?: number } = await agentDraft.mutateAsync({ id: o.id, userName: persona?.name });
+                                if (res?.dealId) window.location.href = `/deals/${res.dealId}`;
+                              } catch {
+                                setAgentRunOppId(null);
+                              }
+                            };
+                            return (
+                              <button
+                                onClick={handleClick}
+                                disabled={!eligible || agentDraft.isPending || importOpp.isPending}
+                                title={tooltip}
+                                aria-label={tooltip}
+                                className={cn(
+                                  "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium",
+                                  eligible
+                                    ? "bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-50"
+                                    : "bg-purple-100 text-purple-400 cursor-not-allowed"
+                                )}
+                                data-testid={`button-agent-draft-${o.id}`}
+                              >
+                                <Sparkles className="w-3.5 h-3.5" /> Autonomous Agent
+                              </button>
+                            );
+                          })()}
                         </>
                       )}
                     </div>
@@ -547,6 +586,17 @@ function OpportunitiesTab() {
                         <button onClick={() => startEdit(o)} title="Edit in D365" className="text-muted-foreground hover:text-primary p-1">
                           <Pencil className="w-3.5 h-3.5" />
                         </button>
+                        <button
+                          disabled
+                          title={o.dealpadDealId
+                            ? `Already linked to DealPad deal #${o.dealpadDealId} — Autonomous Agent unavailable`
+                            : `Stage "${o.stage}" not eligible — Autonomous Agent requires Develop or Propose`}
+                          aria-label="Autonomous Agent unavailable"
+                          className="text-purple-300 cursor-not-allowed p-1"
+                          data-testid={`button-agent-draft-disabled-${o.id}`}
+                        >
+                          <Sparkles className="w-3.5 h-3.5" />
+                        </button>
                         {o.dealpadDealId && (
                           <button onClick={() => push.mutate({ dealId: o.dealpadDealId, userName: persona?.name })}
                             disabled={push.isPending} title="Push DealPad → D365"
@@ -576,6 +626,38 @@ function OpportunitiesTab() {
           </tbody>
         </table>
       </div>
+
+      {agentRunOppId !== null && (agentDraft.isPending || agentDraft.isError) && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center">
+                <Sparkles className="w-5 h-5 text-purple-600 animate-pulse" />
+              </div>
+              <div>
+                <h3 className="text-base font-semibold">Autonomous Agent</h3>
+                <p className="text-xs text-muted-foreground">Drafting deal end-to-end…</p>
+              </div>
+            </div>
+            {agentDraft.isPending ? (
+              <ul className="text-sm space-y-2 text-muted-foreground">
+                <li>• Resolving client and inferring engagement type</li>
+                <li>• Assembling scope from service-line catalog</li>
+                <li>• Auto-answering contextual prompts</li>
+                <li>• Computing pricing across roles</li>
+                <li>• Generating 3 staffing scenarios</li>
+                <li>• Writing risk narrative</li>
+              </ul>
+            ) : (
+              <div className="space-y-3">
+                <p className="text-sm text-red-600">{(agentDraft.error as any)?.message || "Agent run failed"}</p>
+                <button onClick={() => { setAgentRunOppId(null); agentDraft.reset(); }}
+                  className="w-full px-4 py-2 rounded-md border border-stone-300 text-sm hover:bg-stone-50">Close</button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

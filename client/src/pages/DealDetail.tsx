@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useRoute } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
-import { useDeal, useUpdateDeal, useScopeCatalog, useScopeTemplates, useApplyScopeTemplate, useDealScopeItems, useAddScopeItem, useRemoveScopeItem, useRoles, useDealPricing, useUpdatePricingLine, useDealScenarios, useSelectScenario, useDealApprovals, useSubmitApproval, useUpdateApproval, useDealPrompts, useUpdatePrompt, useEngagementInputSpec, useAIDealSimilarity, useAIEffortEstimation, useAIMarginAdvisor, useAIScenarioRecommendation, useAIRiskSummary, useDealIntappScreening, useRunIntappScreening, useIntappOverride, useAddIntappMitigation, useUpdateIntappMitigation, useWorkdayLatestValidation, useWorkdayCostCenters, useRunWorkdayValidation, useLinkWorkdayCostCenter, useOverrideWorkdayValidation, usePromptSets, useCongaTemplates, useDealEngagementLetters, useGenerateEngagementLetter } from "@/hooks/use-api";
+import { useDeal, useUpdateDeal, useScopeCatalog, useScopeTemplates, useApplyScopeTemplate, useDealScopeItems, useAddScopeItem, useRemoveScopeItem, useRoles, useDealPricing, useUpdatePricingLine, useDealScenarios, useSelectScenario, useDealApprovals, useSubmitApproval, useUpdateApproval, useDealPrompts, useUpdatePrompt, useEngagementInputSpec, useAIDealSimilarity, useAIEffortEstimation, useAIMarginAdvisor, useAIScenarioRecommendation, useAIRiskSummary, useDealIntappScreening, useRunIntappScreening, useIntappOverride, useAddIntappMitigation, useUpdateIntappMitigation, useWorkdayLatestValidation, useWorkdayCostCenters, useRunWorkdayValidation, useLinkWorkdayCostCenter, useOverrideWorkdayValidation, usePromptSets, useCongaTemplates, useDealEngagementLetters, useGenerateEngagementLetter, useAgentApproveDeal, useAgentDiscardDeal, useAgentOpenWizard, useAgentResubmit } from "@/hooks/use-api";
 import { ResultBadge as IntappResultBadge, RiskBadge as IntappRiskBadge, SourceBadge as IntappSourceBadge } from "./Intapp";
 import { ShieldAlert, ShieldCheck, Unlock } from "lucide-react";
 import { formatCurrency, formatPercent, formatNumber, formatRelativeTime, getStatusColor, getStatusLabel, cn } from "@/lib/utils";
@@ -34,7 +34,8 @@ export function DealDetail() {
   const [reviewBlockers, setReviewBlockers] = useState(0);
   const [reviewOverride, setReviewOverride] = useState(false);
   const reviewBlocked = currentStep === 5 && reviewBlockers > 0 && !reviewOverride;
-  const summaryUnlocked = (approvalsForGating || []).length > 0;
+  const isAgentDraft = deal?.status === "pendingReviewAgent";
+  const summaryUnlocked = (approvalsForGating || []).length > 0 || isAgentDraft;
   const summaryGated = currentStep === 6 && !summaryUnlocked;
   const advanceBlocked = reviewBlocked || summaryGated;
 
@@ -72,7 +73,12 @@ export function DealDetail() {
         {currentStep === 5 && <ReviewStep deal={deal} navigateToStep={navigateToStep} onReadiness={(b) => setReviewBlockers(b)} override={reviewOverride} setOverride={setReviewOverride} />}
         {currentStep === 6 && <ApprovalStep deal={deal} />}
         {currentStep === 7 && (summaryUnlocked
-          ? <SummaryStep deal={deal} />
+          ? (
+            <div className="space-y-6">
+              {isAgentDraft && <AgentDraftReviewBanner deal={deal} navigateToStep={navigateToStep} />}
+              <SummaryStep deal={deal} />
+            </div>
+          )
           : <div className="max-w-2xl mx-auto card p-8 text-center">
               <Clock className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
               <h2 className="text-lg font-semibold text-foreground mb-1">Summary locked</h2>
@@ -106,6 +112,9 @@ export function DealDetail() {
             )}
           </div>
 
+          {isAgentDraft && currentStep === 7 && (
+            <AgentResubmitButton dealId={deal.id} navigateToStep={navigateToStep} />
+          )}
           {currentStep < STEPS.length ? (
             <button
               onClick={() => !advanceBlocked && navigateToStep(Math.min(STEPS.length, currentStep + 1))}
@@ -2388,6 +2397,177 @@ function SummaryStep({ deal }: { deal: any }) {
           onClose={() => setLetterModalOpen(false)}
         />
       )}
+    </div>
+  );
+}
+
+function AgentResubmitButton({ dealId, navigateToStep }: { dealId: number; navigateToStep: (n: number) => void }) {
+  const { persona } = useAuth();
+  const resubmit = useAgentResubmit();
+  return (
+    <button
+      onClick={async () => {
+        await resubmit.mutateAsync({ dealId, userName: persona?.name });
+        navigateToStep(7);
+      }}
+      disabled={resubmit.isPending}
+      className="flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-semibold bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-50"
+      data-testid="button-agent-resubmit"
+    >
+      {resubmit.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+      Resubmit to Agent Review
+    </button>
+  );
+}
+
+function AgentDraftReviewBanner({ deal, navigateToStep }: { deal: any; navigateToStep: (n: number) => void }) {
+  const { persona } = useAuth();
+  const approve = useAgentApproveDeal();
+  const discard = useAgentDiscardDeal();
+  const openWizard = useAgentOpenWizard();
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const activities = (deal.activities || []) as any[];
+  const agentSteps = activities
+    .filter((a) => a?.metadata?.agentRun && a.action !== "agent_complete" && a.action !== "agent_draft_snapshot")
+    .map((a) => ({ ...a.metadata.agentRun, action: a.action, ts: a.createdAt, userName: a.userName }))
+    .reverse();
+
+  const handleApprove = async () => {
+    setError(null);
+    try {
+      await approve.mutateAsync({ dealId: deal.id, userName: persona?.name });
+      navigateToStep(7);
+    } catch (e: any) {
+      setError(e?.message || "Approve failed");
+    }
+  };
+  const handleDiscard = async () => {
+    setError(null);
+    try {
+      await discard.mutateAsync({ dealId: deal.id, userName: persona?.name });
+      window.location.href = "/deals";
+    } catch (e: any) {
+      setError(e?.message || "Discard failed");
+    }
+  };
+  const handleOpenWizard = async () => {
+    setError(null);
+    try {
+      await openWizard.mutateAsync({ dealId: deal.id, userName: persona?.name });
+      navigateToStep(1);
+    } catch (e: any) {
+      setError(e?.message || "Open wizard failed");
+    }
+  };
+
+  return (
+    <div className="card p-0 overflow-hidden border-purple-300" data-testid="agent-draft-banner">
+      <div className="bg-gradient-to-r from-purple-600 to-indigo-600 px-6 py-4 text-white">
+        <div className="flex items-start gap-3">
+          <Sparkles className="w-6 h-6 mt-0.5" />
+          <div className="flex-1">
+            <h2 className="text-lg font-bold">Pending Review · Agent Draft</h2>
+            <p className="text-sm opacity-90 mt-0.5">
+              The Autonomous Agent has drafted scope, assumptions, pricing, scenarios, and risk for this deal.
+              Review the values below and choose an action.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div className="p-6 space-y-4">
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={handleApprove}
+            disabled={approve.isPending || discard.isPending || openWizard.isPending}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 disabled:opacity-50"
+            data-testid="button-agent-approve"
+          >
+            {approve.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
+            Approve & Submit
+          </button>
+          <button
+            onClick={handleOpenWizard}
+            disabled={approve.isPending || discard.isPending || openWizard.isPending}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-white border border-stone-300 text-sm font-semibold hover:bg-stone-50 disabled:opacity-50"
+            data-testid="button-agent-open-wizard"
+          >
+            {openWizard.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Pencil className="w-4 h-4" />}
+            Open in Wizard
+          </button>
+          {!confirmDiscard ? (
+            <button
+              onClick={() => setConfirmDiscard(true)}
+              disabled={approve.isPending || discard.isPending || openWizard.isPending}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-white border border-red-300 text-red-700 text-sm font-semibold hover:bg-red-50 disabled:opacity-50"
+              data-testid="button-agent-discard"
+            >
+              <Archive className="w-4 h-4" /> Discard Draft
+            </button>
+          ) : (
+            <div className="inline-flex items-center gap-2 px-3 py-2 rounded-md bg-red-50 border border-red-300">
+              <span className="text-xs text-red-800">Confirm discard?</span>
+              <button onClick={handleDiscard} disabled={discard.isPending}
+                className="px-2 py-1 rounded bg-red-600 text-white text-xs font-semibold hover:bg-red-700 disabled:opacity-50">
+                {discard.isPending ? "…" : "Yes, discard"}
+              </button>
+              <button onClick={() => setConfirmDiscard(false)}
+                className="px-2 py-1 rounded border border-stone-300 text-xs">Cancel</button>
+            </div>
+          )}
+        </div>
+
+        {error && <p className="text-sm text-red-600">{error}</p>}
+
+        {deal.aiSummary && (
+          <div className="p-3 rounded-md bg-purple-50 border border-purple-200">
+            <p className="text-[11px] uppercase tracking-wider text-purple-700 font-semibold mb-1">Agent Risk Narrative</p>
+            <p className="text-sm text-foreground">{deal.aiSummary}</p>
+          </div>
+        )}
+
+        <div>
+          <h3 className="text-sm font-semibold text-foreground mb-2 flex items-center gap-2">
+            <Layers className="w-4 h-4 text-purple-600" /> Agent Run Details
+          </h3>
+          {agentSteps.length === 0 ? (
+            <p className="text-xs text-muted-foreground">No agent activity recorded yet.</p>
+          ) : (
+            <ol className="space-y-2">
+              {agentSteps.map((s, idx) => (
+                <li key={idx} className="p-3 rounded-md border border-stone-200 bg-stone-50/50">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 uppercase">
+                          {s.step}
+                        </span>
+                        <p className="text-sm font-semibold text-foreground">{s.label}</p>
+                        {s.needsReview && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 font-semibold uppercase">
+                            Needs Review
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-1">{s.summary}</p>
+                    </div>
+                    <div className="text-[11px] text-muted-foreground flex flex-col items-end flex-shrink-0">
+                      {typeof s.confidence === "number" && (
+                        <span className={cn("font-semibold", s.confidence >= 0.7 ? "text-emerald-700" : s.confidence >= 0.5 ? "text-amber-700" : "text-red-700")}>
+                          {Math.round(s.confidence * 100)}% confidence
+                        </span>
+                      )}
+                      <span>{formatRelativeTime(s.ts)}</span>
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ol>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

@@ -32,6 +32,7 @@ export function getStatusColor(status: string): string {
     case "submitted": return "bg-warning/10 text-warning";
     case "pending_lead_review": return "bg-amber-100 text-amber-800";
     case "pending_bu_approval": return "bg-violet-100 text-violet-800";
+    case "pendingReviewAgent": return "bg-purple-100 text-purple-800";
     case "approved": return "bg-success/10 text-success";
     case "rejected": return "bg-destructive/10 text-destructive";
     default: return "bg-muted text-muted-foreground";
@@ -62,6 +63,7 @@ export function getStatusLabel(status: string): string {
     case "submitted": return "Submitted";
     case "pending_lead_review": return "Lead Review";
     case "pending_bu_approval": return "BU Approval";
+    case "pendingReviewAgent": return "Agent Draft";
     case "approved": return "Approved";
     case "rejected": return "Rejected";
     case "pending": return "Pending";

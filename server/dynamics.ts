@@ -273,7 +273,7 @@ async function pushDealToDynamics(dealId: number, actorName: string | undefined,
 }
 
 // Match opportunity name to a scope template by keyword
-function tmplKey(name: string): string | null {
+export function tmplKey(name: string): string | null {
   const n = (name || "").toLowerCase();
   if (n.includes("audit")) return "Annual Audit";
   if (n.includes("tax provision") || n.includes("tax outsourc")) return "Tax Provision Outsourcing";
@@ -284,7 +284,7 @@ function tmplKey(name: string): string | null {
   if (n.includes("cyber") || n.includes("security")) return "Cybersecurity Assessment";
   return null;
 }
-function pickTemplateForName(name: string) {
+export function pickTemplateForName(name: string) {
   const k = tmplKey(name);
   return k ? SCOPE_TEMPLATES[k] : null;
 }

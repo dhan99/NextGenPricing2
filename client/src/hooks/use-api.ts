@@ -318,6 +318,64 @@ export function useImportOpportunity() {
     },
   });
 }
+export function useAgentDraftOpportunity() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, userName }: { id: number; userName?: string }) =>
+      fetchApi(`/api/dynamics/opportunities/${id}/agent-draft`, { method: "POST", body: JSON.stringify({ userName }) }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["dyn-opps"] });
+      qc.invalidateQueries({ queryKey: ["dyn-synclog"] });
+      qc.invalidateQueries({ queryKey: ["deals"] });
+      qc.invalidateQueries({ queryKey: ["clients"] });
+    },
+  });
+}
+export function useAgentApproveDeal() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ dealId, userName }: { dealId: number; userName?: string }) =>
+      fetchApi(`/api/deals/${dealId}/agent-approve`, { method: "POST", body: JSON.stringify({ userName }) }),
+    onSuccess: (_d, vars) => {
+      qc.invalidateQueries({ queryKey: ["deal", vars.dealId] });
+      qc.invalidateQueries({ queryKey: ["deals"] });
+      qc.invalidateQueries({ queryKey: ["activity"] });
+    },
+  });
+}
+export function useAgentDiscardDeal() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ dealId, userName }: { dealId: number; userName?: string }) =>
+      fetchApi(`/api/deals/${dealId}/agent-discard`, { method: "POST", body: JSON.stringify({ userName }) }),
+    onSuccess: (_d, vars) => {
+      qc.invalidateQueries({ queryKey: ["deal", vars.dealId] });
+      qc.invalidateQueries({ queryKey: ["deals"] });
+      qc.invalidateQueries({ queryKey: ["dyn-opps"] });
+    },
+  });
+}
+export function useAgentOpenWizard() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ dealId, userName }: { dealId: number; userName?: string }) =>
+      fetchApi(`/api/deals/${dealId}/agent-open-wizard`, { method: "POST", body: JSON.stringify({ userName }) }),
+    onSuccess: (_d, vars) => {
+      qc.invalidateQueries({ queryKey: ["deal", vars.dealId] });
+    },
+  });
+}
+export function useAgentResubmit() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ dealId, userName }: { dealId: number; userName?: string }) =>
+      fetchApi(`/api/deals/${dealId}/agent-resubmit`, { method: "POST", body: JSON.stringify({ userName }) }),
+    onSuccess: (_d, vars) => {
+      qc.invalidateQueries({ queryKey: ["deal", vars.dealId] });
+      qc.invalidateQueries({ queryKey: ["deals"] });
+    },
+  });
+}
 export function usePushDealToDynamics() {
   const qc = useQueryClient();
   return useMutation({
