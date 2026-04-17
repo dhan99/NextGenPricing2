@@ -611,6 +611,9 @@ async function start() {
 
     await seedDefaultPromptSet();
     console.log("Default prompt set ready");
+
+    const { loadSeedSnapshot } = await import("./snapshot-loader");
+    await loadSeedSnapshot();
   } catch (err) {
     console.error("Database initialization error:", err);
   }
