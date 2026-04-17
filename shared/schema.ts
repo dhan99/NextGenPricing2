@@ -287,6 +287,11 @@ export const intappSettings = pgTable("intapp_settings", {
   liveApiKeySecret: text("live_api_key_secret"),
   policyVersion: text("policy_version").default("4w-pilot-v1"),
   pilotEndsOn: text("pilot_ends_on"),
+  qrmNotifyOnConflict: boolean("qrm_notify_on_conflict").default(true),
+  qrmNotifyChannel: text("qrm_notify_channel").default("email"),
+  qrmNotifyRecipients: text("qrm_notify_recipients"),
+  qrmTeamsWebhookUrl: text("qrm_teams_webhook_url"),
+  appBaseUrl: text("app_base_url"),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 

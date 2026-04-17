@@ -365,6 +365,31 @@ export async function runScreeningForDeal(
     source: screening.source,
   });
 
+  // Push notify QRM on conflict so reviewers don't have to poll the cockpit.
+  if (response.result === "conflict" && settings.qrmNotifyOnConflict) {
+    try {
+      await notifyQrmOnConflict({
+        settings,
+        deal,
+        clientName: payload.clientName,
+        screeningId: screening.id,
+        externalRef: response.externalRef,
+        riskTier: response.riskTier,
+        hits: response.hits,
+        narrative: response.narrative,
+        trigger,
+      });
+    } catch (e: any) {
+      await logEvent({
+        dealId, screeningId: screening.id,
+        eventType: "qrm_notification_failed",
+        message: `QRM conflict notification failed: ${e?.message || e}`,
+        metadata: { error: String(e?.message || e) },
+        source: screening.source,
+      });
+    }
+  }
+
   return { screening: { ...screening, ...response, status: "complete", hitCount: response.hits.length }, response };
 }
 
@@ -432,6 +457,223 @@ export async function reconcileMitigationStatus(screeningId: number) {
   }
 
   return s;
+}
+
+// ====================================================================
+// QRM NOTIFICATIONS — push when a deal hits a blocking conflict.
+// Email is "simulated-send" (logged + recorded) since this PoC has no
+// SMTP/SendGrid wiring; Teams is a real outbound webhook POST when a URL
+// is configured. Both paths are persisted to intapp_events for audit.
+// ====================================================================
+interface QrmNotifyArgs {
+  settings: any;
+  deal: { id: number; title: string; dealNumber: string };
+  clientName: string;
+  screeningId: number;
+  externalRef: string;
+  riskTier: "low" | "medium" | "high";
+  hits: IntappHit[];
+  narrative: string;
+  trigger: string;
+}
+
+function buildDealLink(settings: any, dealId: number): string | null {
+  const base = (settings.appBaseUrl || process.env.APP_BASE_URL || process.env.REPLIT_DEV_DOMAIN || "").trim();
+  // Without an absolute base URL the link would be relative — useless inside
+  // an email or Teams card. Suppress it instead of sending a broken /deals/:id.
+  if (!base) return null;
+  const host = base.startsWith("http") ? base.replace(/\/+$/, "") : `https://${base.replace(/\/+$/, "")}`;
+  return `${host}/deals/${dealId}`;
+}
+
+/**
+ * Validate a Teams incoming-webhook URL before we POST to it.
+ * Hard-locks the destination to Microsoft's official webhook hosts so the
+ * configurable URL field cannot be turned into an SSRF sink (e.g. internal
+ * metadata endpoints, private IPs, attacker-controlled hosts). Returns null
+ * if the URL is acceptable, or a human-readable reason otherwise.
+ */
+export function validateTeamsWebhookUrl(raw: string): string | null {
+  let u: URL;
+  try { u = new URL(raw); } catch { return "not a valid URL"; }
+  if (u.protocol !== "https:") return "must use https";
+  if (u.username || u.password) return "credentials in URL are not allowed";
+  const host = u.hostname.toLowerCase();
+  // Reject anything that looks like a literal IP — webhook hosts are DNS names.
+  if (/^[0-9.]+$/.test(host) || host.includes(":") || host === "localhost") {
+    return "host must be a Microsoft Teams webhook DNS name, not an IP/localhost";
+  }
+  // Microsoft Teams incoming-webhook hosts (legacy + workflow + GCC variants).
+  const allowed = [
+    "outlook.office.com",
+    "outlook.office365.com",
+  ];
+  const allowedSuffixes = [
+    ".webhook.office.com",
+    ".webhook.office365.com",
+    ".logic.azure.com",        // Power Automate / workflow webhooks
+    ".logic.azure.us",
+  ];
+  const ok = allowed.includes(host) || allowedSuffixes.some(s => host.endsWith(s));
+  if (!ok) return `host ${host} is not on the Microsoft Teams webhook allow-list`;
+  return null;
+}
+
+async function sendEmailReal(args: {
+  recipients: string[]; subject: string; body: string;
+}): Promise<{ ok: true } | { ok: false; reason: string }> {
+  const apiKey = process.env.SENDGRID_API_KEY;
+  const from = process.env.SENDGRID_FROM_EMAIL || process.env.QRM_NOTIFY_FROM;
+  if (!apiKey || !from) {
+    return { ok: false, reason: "no mail provider configured (set SENDGRID_API_KEY + SENDGRID_FROM_EMAIL)" };
+  }
+  try {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 8000);
+    const r = await fetch("https://api.sendgrid.com/v3/mail/send", {
+      method: "POST",
+      signal: ctrl.signal,
+      headers: {
+        "Authorization": `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        personalizations: [{ to: args.recipients.map(e => ({ email: e })) }],
+        from: { email: from, name: "DealPad QRM Alerts" },
+        subject: args.subject,
+        content: [{ type: "text/plain", value: args.body }],
+      }),
+    });
+    clearTimeout(t);
+    if (!r.ok) {
+      const text = await r.text().catch(() => "");
+      return { ok: false, reason: `SendGrid responded ${r.status} ${text.slice(0, 200)}` };
+    }
+    return { ok: true };
+  } catch (e: any) {
+    return { ok: false, reason: `mail provider error: ${e?.message || e}` };
+  }
+}
+
+async function notifyQrmOnConflict(a: QrmNotifyArgs) {
+  const channel = (a.settings.qrmNotifyChannel || "email").toLowerCase();
+  const recipientsRaw = (a.settings.qrmNotifyRecipients || "").trim();
+  const recipients = recipientsRaw
+    ? recipientsRaw.split(/[,;\s]+/).map((s: string) => s.trim()).filter(Boolean)
+    : [];
+  const teamsUrl = (a.settings.qrmTeamsWebhookUrl || "").trim();
+  const dealLink = buildDealLink(a.settings, a.deal.id);
+
+  const subject = `[Intapp CONFLICT · ${a.riskTier.toUpperCase()}] ${a.clientName} — ${a.deal.dealNumber}`;
+  const hitLines = a.hits.map(h =>
+    `  • [${h.severity.toUpperCase()}] ${h.hitType.replace(/_/g, " ")} — ${h.matchedEntity}\n      ${h.description}\n      → ${h.recommendation}`
+  ).join("\n");
+  const body =
+    `An Intapp Risk screening returned CONFLICT and is blocking submission.\n\n` +
+    `Client:   ${a.clientName}\n` +
+    `Deal:     ${a.deal.dealNumber} — ${a.deal.title}\n` +
+    `Tier:     ${a.riskTier}\n` +
+    `Trigger:  ${a.trigger}\n` +
+    `Ref:      ${a.externalRef}\n` +
+    (dealLink ? `Open:     ${dealLink}\n` : "") +
+    `\nFindings (${a.hits.length}):\n${hitLines}\n\n` +
+    `Narrative:\n${a.narrative}\n\n` +
+    `Recommended next steps:\n` +
+    `  1. Open the deal and review each hit in the Intapp panel.\n` +
+    `  2. Log mitigations or apply a QRM override (with written justification).\n` +
+    `  3. Re-run the screening to confirm clearance before submission.`;
+
+  const want = {
+    email: channel === "email" || channel === "both",
+    teams: channel === "teams" || channel === "both",
+  };
+  const dispatched: string[] = [];
+  const skipped: string[] = [];
+
+  if (want.email) {
+    if (recipients.length === 0) {
+      skipped.push("email (no recipients configured)");
+    } else {
+      const send = await sendEmailReal({ recipients, subject, body });
+      if (send.ok) {
+        dispatched.push(`email→${recipients.length} recipient(s)`);
+      } else {
+        // Fall back to simulated audit trail when the provider isn't wired so
+        // the pilot can still demonstrate the flow end-to-end. Never silently
+        // claim success — the skipped reason is recorded verbatim.
+        console.log(`[Intapp QRM email · simulated] to=${recipients.join(",")} subject="${subject}"\n${body}`);
+        skipped.push(`email send failed (${send.reason}); recorded as simulated send`);
+      }
+    }
+  }
+
+  if (want.teams) {
+    if (!teamsUrl) {
+      skipped.push("teams (no webhook URL configured)");
+    } else if (validateTeamsWebhookUrl(teamsUrl) !== null) {
+      // Refuse to POST anywhere except a Microsoft Teams webhook host. This
+      // prevents the user-configurable URL from becoming an SSRF sink.
+      skipped.push(`teams (rejected webhook URL: ${validateTeamsWebhookUrl(teamsUrl)})`);
+    } else {
+      const card = {
+        "@type": "MessageCard",
+        "@context": "https://schema.org/extensions",
+        themeColor: a.riskTier === "high" ? "B91C1C" : a.riskTier === "medium" ? "B45309" : "047857",
+        summary: subject,
+        title: subject,
+        sections: [{
+          activityTitle: `${a.clientName} — ${a.deal.dealNumber}`,
+          activitySubtitle: a.deal.title,
+          facts: [
+            { name: "Tier", value: a.riskTier },
+            { name: "Trigger", value: a.trigger },
+            { name: "Ref", value: a.externalRef },
+            { name: "Hits", value: String(a.hits.length) },
+          ],
+          text: a.narrative,
+        }, {
+          title: "Findings",
+          text: a.hits.map(h => `**${h.severity.toUpperCase()} · ${h.hitType.replace(/_/g, " ")}** — ${h.matchedEntity}\n\n${h.description}\n\n_${h.recommendation}_`).join("\n\n---\n\n"),
+        }],
+        potentialAction: dealLink ? [{
+          "@type": "OpenUri",
+          name: "Open deal in DealPad",
+          targets: [{ os: "default", uri: dealLink }],
+        }] : undefined,
+      };
+      const ctrl = new AbortController();
+      const t = setTimeout(() => ctrl.abort(), 8000);
+      try {
+        const r = await fetch(teamsUrl, {
+          method: "POST",
+          signal: ctrl.signal,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(card),
+        });
+        if (!r.ok) throw new Error(`Teams webhook responded ${r.status}`);
+        dispatched.push("teams webhook");
+      } catch (e: any) {
+        skipped.push(`teams (webhook error: ${e?.message || e})`);
+      } finally {
+        clearTimeout(t);
+      }
+    }
+  }
+
+  if (channel === "none") skipped.push("notifications disabled (channel=none)");
+
+  await logEvent({
+    dealId: a.deal.id,
+    screeningId: a.screeningId,
+    eventType: "qrm_notification_sent",
+    message: dispatched.length > 0
+      ? `QRM notified of ${a.riskTier}-tier conflict via ${dispatched.join(" + ")}.`
+      : `QRM notification skipped: ${skipped.join("; ") || "no channel selected"}.`,
+    metadata: {
+      channel, recipients, teamsConfigured: !!teamsUrl,
+      dispatched, skipped, subject, dealLink,
+    },
+  });
 }
 
 // Latest screening helper
@@ -581,12 +823,27 @@ function requireRoles(req: Request, res: Response, allowed: string[]): { name: s
   return id;
 }
 
-function maskSecrets<T extends Record<string, any>>(s: T): T & { apiTokenMasked: boolean; liveApiKeyMasked: boolean } {
+function maskSecrets<T extends Record<string, any>>(s: T): T & {
+  apiTokenMasked: boolean; liveApiKeyMasked: boolean; qrmTeamsWebhookMasked: boolean;
+} {
   const out: any = { ...s };
   out.apiTokenMasked = !!out.apiTokenSecret;
   out.liveApiKeyMasked = !!out.liveApiKeySecret;
+  out.qrmTeamsWebhookMasked = !!out.qrmTeamsWebhookUrl;
   if (out.apiTokenSecret) out.apiTokenSecret = "***";
   if (out.liveApiKeySecret) out.liveApiKeySecret = "***";
+  // Teams incoming-webhook URLs ARE secrets — anyone with the URL can post into
+  // the channel. Never echo back the full URL in API responses; surface only
+  // host + a tail fingerprint so QRM can confirm which webhook is configured.
+  if (out.qrmTeamsWebhookUrl) {
+    try {
+      const u = new URL(out.qrmTeamsWebhookUrl);
+      const tail = out.qrmTeamsWebhookUrl.slice(-6);
+      out.qrmTeamsWebhookUrl = `https://${u.hostname}/…${tail}`;
+    } catch {
+      out.qrmTeamsWebhookUrl = "***";
+    }
+  }
   return out;
 }
 
@@ -665,11 +922,35 @@ export function registerIntappRoutes(app: Express) {
       "autoScreenOnClientChange", "nightlyRescreen",
       "apiBaseUrl", "liveTenantUrl", "liveClientId",
       "policyVersion", "pilotEndsOn",
+      "qrmNotifyOnConflict", "qrmNotifyChannel", "qrmNotifyRecipients",
+      "qrmTeamsWebhookUrl", "appBaseUrl",
     ];
     const patch: any = { updatedAt: new Date() };
     const changed: string[] = [];
     for (const k of allowed) {
       if (req.body?.[k] !== undefined) { patch[k] = req.body[k]; changed.push(k); }
+    }
+    // Validate Teams webhook URL up-front so a bad / dangerous URL is never
+    // persisted. Empty string clears it. The "***" sentinel + masked-host
+    // strings echoed by GET must NOT overwrite the stored secret.
+    if (typeof patch.qrmTeamsWebhookUrl === "string") {
+      const v = patch.qrmTeamsWebhookUrl.trim();
+      if (v === "" ) {
+        patch.qrmTeamsWebhookUrl = null;
+      } else if (v === "***" || v.includes("…")) {
+        delete patch.qrmTeamsWebhookUrl;
+        changed.splice(changed.indexOf("qrmTeamsWebhookUrl"), 1);
+      } else {
+        const reason = validateTeamsWebhookUrl(v);
+        if (reason) return res.status(400).json({ error: `Teams webhook URL rejected: ${reason}` });
+        patch.qrmTeamsWebhookUrl = v;
+      }
+    }
+    if (typeof patch.qrmNotifyChannel === "string") {
+      const allowedChannels = ["email", "teams", "both", "none"];
+      if (!allowedChannels.includes(patch.qrmNotifyChannel)) {
+        return res.status(400).json({ error: `qrmNotifyChannel must be one of ${allowedChannels.join(", ")}` });
+      }
     }
     // Secret writes are accepted but never echoed back; "***" sentinel = leave unchanged.
     if (req.body?.apiTokenSecret && req.body.apiTokenSecret !== "***") {

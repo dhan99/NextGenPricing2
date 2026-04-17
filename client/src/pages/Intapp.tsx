@@ -349,6 +349,67 @@ function SettingsTab() {
         </div>
       </div>
 
+      <div className="card p-5 space-y-4">
+        <div>
+          <h3 className="text-sm font-semibold text-foreground">QRM conflict notifications</h3>
+          <p className="text-xs text-muted-foreground mt-1">
+            When a screening returns <span className="font-semibold text-red-700">CONFLICT</span>, push the deal link, hits and recommended actions to QRM so reviewers don't have to poll the cockpit.
+          </p>
+        </div>
+        <ToggleRow label="Notify QRM on conflict"
+          desc="Master switch. When off, no email or Teams message is sent — only the in-app cockpit and audit log are updated."
+          checked={!!settings.qrmNotifyOnConflict} onChange={(v) => set("qrmNotifyOnConflict", v)} />
+        <div>
+          <label className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">Channel</label>
+          <div className="mt-1 flex items-center gap-2">
+            {["email", "teams", "both", "none"].map((c) => (
+              <button key={c} onClick={() => set("qrmNotifyChannel", c)}
+                className={`px-3 py-1.5 text-xs rounded-md font-medium border capitalize ${
+                  (settings.qrmNotifyChannel || "email") === c
+                    ? "bg-primary text-white border-primary"
+                    : "bg-white border-stone-300 text-foreground hover:bg-stone-50"
+                }`}>{c}</button>
+            ))}
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="col-span-2">
+            <label className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">Recipients (comma-separated emails)</label>
+            <input type="text" defaultValue={settings.qrmNotifyRecipients || ""}
+              onBlur={(e) => set("qrmNotifyRecipients", e.target.value)}
+              placeholder="qrm-leads@armanino.com, partner-on-call@armanino.com"
+              className="w-full mt-1 px-3 py-2 border border-stone-300 rounded-md text-sm focus:outline-none focus:border-primary" />
+            <div className="text-[11px] text-muted-foreground mt-1">
+              Pilot mode: emails are simulated-send (recorded in the audit log; no SMTP wired). Live cutover swaps in your firm's mail relay.
+            </div>
+          </div>
+          <div className="col-span-2">
+            <label className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">
+              Microsoft Teams incoming-webhook URL {settings.qrmTeamsWebhookMasked && <span className="text-emerald-700 normal-case">· stored ({settings.qrmTeamsWebhookUrl})</span>}
+            </label>
+            <input type="password" defaultValue=""
+              onBlur={(e) => { const v = e.target.value.trim(); if (v) set("qrmTeamsWebhookUrl", v); }}
+              placeholder={settings.qrmTeamsWebhookMasked ? "•••• stored ••••  (paste a new URL to replace)" : "https://<tenant>.webhook.office.com/webhookb2/…"}
+              className="w-full mt-1 px-3 py-2 border border-stone-300 rounded-md text-sm focus:outline-none focus:border-primary font-mono" />
+            <div className="text-[11px] text-muted-foreground mt-1">
+              Stored as a secret (host + last 6 chars echoed back, never the full URL). Only Microsoft webhook hosts (<code>*.webhook.office.com</code>, <code>outlook.office.com</code>, <code>*.logic.azure.com</code>) are accepted; anything else is rejected to prevent SSRF.
+            </div>
+            <button
+              onClick={() => { if (confirm("Clear the stored Teams webhook URL?")) set("qrmTeamsWebhookUrl", ""); }}
+              className="mt-1 text-[11px] text-red-700 hover:underline">
+              Clear stored webhook
+            </button>
+          </div>
+          <div className="col-span-2">
+            <label className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">App base URL (used in deal links)</label>
+            <input type="text" defaultValue={settings.appBaseUrl || ""}
+              onBlur={(e) => set("appBaseUrl", e.target.value)}
+              placeholder="https://dealpad.armanino.com"
+              className="w-full mt-1 px-3 py-2 border border-stone-300 rounded-md text-sm focus:outline-none focus:border-primary" />
+          </div>
+        </div>
+      </div>
+
       <div className="card p-5 bg-stone-50">
         <h3 className="text-sm font-semibold text-foreground mb-2">Cutover plan: simulated → live</h3>
         <ol className="text-xs text-muted-foreground space-y-1.5 list-decimal pl-5">
