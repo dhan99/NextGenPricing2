@@ -11,6 +11,11 @@ import {
   Network,
   ScrollText,
   ArrowRight,
+  User,
+  Monitor,
+  Server,
+  Database,
+  Workflow,
 } from "lucide-react";
 
 type ContextId =
@@ -361,6 +366,268 @@ const contextRelations = [
   { from: "All", to: "Analytics", label: "read-only aggregation" },
 ];
 
+interface SeqMessage {
+  from: string;
+  to: string;
+  label: string;
+  note?: string;
+  kind?: "call" | "return" | "self";
+  group?: string;
+}
+
+const seqActors: { id: string; name: string; sub: string; icon: typeof User; color: string }[] = [
+  { id: "rev", name: "Reviewer", sub: "PDL", icon: User, color: "bg-stone-700" },
+  { id: "ui", name: "UI", sub: "DynamicsCRM", icon: Monitor, color: "bg-blue-600" },
+  { id: "api", name: "API", sub: "Express", icon: Server, color: "bg-primary" },
+  { id: "db", name: "DB", sub: "PostgreSQL", icon: Database, color: "bg-emerald-600" },
+  { id: "engines", name: "Engines", sub: "Catalog · Pricing · AI", color: "bg-violet-600", icon: Workflow },
+  { id: "ext", name: "External", sub: "D365 · Intapp · Workday", icon: Network, color: "bg-amber-600" },
+];
+
+const seqGroups: { name: string; color: string; messages: SeqMessage[] }[] = [
+  {
+    name: "Trigger",
+    color: "border-stone-300",
+    messages: [
+      { from: "rev", to: "ui", label: "Click 'Autonomous Agent'", kind: "call" },
+      { from: "ui", to: "api", label: "POST /api/dynamics/opportunities/:id/agent-draft", kind: "call" },
+      { from: "api", to: "db", label: "Validate opp (stage=Develop/Propose, not linked)", kind: "call" },
+      { from: "api", to: "db", label: "Resolve client (or auto-create stub)", kind: "call" },
+    ],
+  },
+  {
+    name: "1 · Setup",
+    color: "border-amber-300",
+    messages: [
+      { from: "api", to: "engines", label: "pickTemplateForName(opp.name) → BU / serviceLine / complexity", kind: "call" },
+      { from: "api", to: "db", label: "INSERT deal (status=pendingReviewAgent, currentStep=7)", kind: "call" },
+      { from: "api", to: "db", label: "log activity: agent_setup", kind: "call" },
+      { from: "api", to: "ext", label: "linkDealToOpportunity → write back dealpadDealId to D365", kind: "call" },
+    ],
+  },
+  {
+    name: "2 · Prompts (context-aware)",
+    color: "border-blue-300",
+    messages: [
+      { from: "api", to: "db", label: "createDefaultPrompts + load prompt-set options", kind: "call" },
+      { from: "api", to: "engines", label: "pickContextualAnswer(prompt, opp + client ctx)", kind: "call" },
+      { from: "engines", to: "api", label: "answer · multiplier · confidence · needsReview · rationale", kind: "return" },
+      { from: "api", to: "db", label: "UPDATE prompt_responses + log agent_prompts (per-prompt detail)", kind: "call" },
+    ],
+  },
+  {
+    name: "3 · Scope",
+    color: "border-cyan-300",
+    messages: [
+      { from: "api", to: "engines", label: "match catalog by template + serviceLine + BU keywords", kind: "call" },
+      { from: "engines", to: "api", label: "4–8 catalog items", kind: "return" },
+      { from: "api", to: "db", label: "INSERT deal_scope_items + log agent_scope", kind: "call" },
+    ],
+  },
+  {
+    name: "4 · Pricing",
+    color: "border-emerald-300",
+    messages: [
+      { from: "api", to: "engines", label: "seed pricing lines · recalc fee/cost/hours/margin", kind: "call" },
+      { from: "engines", to: "api", label: "totals", kind: "return" },
+      { from: "api", to: "db", label: "INSERT pricing_lines + UPDATE deal totals + log agent_pricing", kind: "call" },
+    ],
+  },
+  {
+    name: "5 · Scenarios",
+    color: "border-violet-300",
+    messages: [
+      { from: "api", to: "engines", label: "build 3 scenarios · pick recommended", kind: "call" },
+      { from: "api", to: "db", label: "INSERT scenarios + log agent_scenarios", kind: "call" },
+    ],
+  },
+  {
+    name: "6 · Risk narrative",
+    color: "border-red-300",
+    messages: [
+      { from: "api", to: "engines", label: "synthesize risk (UC-5): margin + complexity + screening hints", kind: "call" },
+      { from: "engines", to: "api", label: "narrative · risk score · approval likelihood", kind: "return" },
+      { from: "api", to: "db", label: "log agent_risk", kind: "call" },
+    ],
+  },
+  {
+    name: "7 · Review checklist (gates preview)",
+    color: "border-orange-300",
+    messages: [
+      { from: "api", to: "ext", label: "dry-run Intapp screening", kind: "call" },
+      { from: "api", to: "ext", label: "dry-run Workday validation", kind: "call" },
+      { from: "ext", to: "api", label: "hits, mitigations, headroom", kind: "return" },
+      { from: "api", to: "db", label: "log agent_review (intapp + workday + margin)", kind: "call" },
+      { from: "api", to: "ui", label: "201 Created { dealId, agentRun: [...steps] }", kind: "return" },
+      { from: "ui", to: "rev", label: "Redirect to /deals/:dealId (Summary view)", kind: "call" },
+    ],
+  },
+];
+
+const reviewerActions: { id: string; label: string; description: string; calls: string[] }[] = [
+  {
+    id: "approve",
+    label: "Approve & Submit",
+    description: "Runs the same Intapp + Workday gates as the wizard, then creates an approval and flips status to submitted.",
+    calls: ["POST /agent-approve", "Intapp gate", "Workday gate", "INSERT approval"],
+  },
+  {
+    id: "wizard",
+    label: "Open in Wizard",
+    description: "Snapshots the original draft to activity_log, sets currentStep=1, and lets the reviewer edit. Resubmit recomputes totals and refreshes the risk narrative.",
+    calls: ["POST /agent-open-wizard", "snapshot draft", "currentStep=1", "POST /agent-resubmit"],
+  },
+  {
+    id: "discard",
+    label: "Discard Draft",
+    description: "Archives the deal and unlinks the D365 opportunity so it can be re-scoped.",
+    calls: ["POST /agent-discard", "archive deal", "unlink D365 opp"],
+  },
+];
+
+function ActorChip({ actor }: { actor: typeof seqActors[number] }) {
+  const Icon = actor.icon;
+  return (
+    <div className="flex flex-col items-center gap-1 w-32 shrink-0">
+      <div className={`w-10 h-10 rounded-lg ${actor.color} flex items-center justify-center text-white shadow-sm`}>
+        <Icon className="w-5 h-5" />
+      </div>
+      <div className="text-center">
+        <div className="text-[11px] font-semibold text-foreground">{actor.name}</div>
+        <div className="text-[10px] text-muted-foreground leading-tight">{actor.sub}</div>
+      </div>
+    </div>
+  );
+}
+
+function SeqRow({ msg, actorIndex }: { msg: SeqMessage; actorIndex: Map<string, number> }) {
+  const fromIdx = actorIndex.get(msg.from) ?? 0;
+  const toIdx = actorIndex.get(msg.to) ?? 0;
+  const total = seqActors.length;
+  const minIdx = Math.min(fromIdx, toIdx);
+  const maxIdx = Math.max(fromIdx, toIdx);
+  const isReturn = msg.kind === "return";
+  const reverse = fromIdx > toIdx;
+
+  return (
+    <div className="relative h-9 flex items-center">
+      <div className="absolute inset-0 flex">
+        {seqActors.map((_, i) => (
+          <div key={i} className="flex-1 flex justify-center">
+            <div className="w-px h-full bg-stone-200" />
+          </div>
+        ))}
+      </div>
+      <div
+        className="absolute top-1/2 -translate-y-1/2 flex items-center"
+        style={{
+          left: `calc(${(minIdx / total) * 100}% + ${100 / total / 2}%)`,
+          width: `calc(${((maxIdx - minIdx) / total) * 100}%)`,
+        }}
+      >
+        <div
+          className={`relative flex-1 h-px ${
+            isReturn ? "border-t border-dashed border-stone-400" : "bg-stone-700"
+          }`}
+        >
+          <div
+            className={`absolute top-1/2 -translate-y-1/2 ${reverse ? "left-0" : "right-0"} w-0 h-0`}
+            style={{
+              borderTop: "4px solid transparent",
+              borderBottom: "4px solid transparent",
+              [reverse ? "borderRight" : "borderLeft"]: `6px solid ${isReturn ? "#94a3b8" : "#334155"}`,
+            }}
+          />
+          <div
+            className={`absolute -top-5 ${isReturn ? "text-stone-500 italic" : "text-foreground"} text-[11px] font-mono whitespace-nowrap px-2 py-0.5 bg-white rounded border border-stone-200`}
+            style={{
+              left: "50%",
+              transform: "translateX(-50%)",
+              maxWidth: "100%",
+            }}
+          >
+            {msg.label}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AutonomousAgentSequence() {
+  const actorIndex = new Map(seqActors.map((a, i) => [a.id, i]));
+  return (
+    <div className="card p-6 overflow-x-auto">
+      <div className="min-w-[900px]">
+        <div className="flex justify-between items-start mb-2 sticky top-0 bg-white z-10 pb-3 border-b border-stone-200">
+          {seqActors.map((a) => (
+            <ActorChip key={a.id} actor={a} />
+          ))}
+        </div>
+
+        <div className="space-y-6 pt-4">
+          {seqGroups.map((group) => (
+            <div
+              key={group.name}
+              className={`relative rounded-lg border-l-4 ${group.color} bg-stone-50/40 px-3 py-3`}
+            >
+              <div className="text-[10px] uppercase tracking-wider font-bold text-stone-600 mb-3 px-2">
+                {group.name}
+              </div>
+              <div className="space-y-7">
+                {group.messages.map((m, i) => (
+                  <SeqRow key={i} msg={m} actorIndex={actorIndex} />
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="mt-6 rounded-lg border border-stone-200 bg-white p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <Sparkles className="w-4 h-4 text-primary" />
+            <h4 className="text-sm font-semibold text-foreground">
+              Reviewer outcome (one of three, on the Summary page)
+            </h4>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            {reviewerActions.map((a) => (
+              <div key={a.id} className="rounded-md border border-stone-200 p-3 bg-stone-50/50">
+                <div className="text-sm font-semibold text-foreground mb-1">{a.label}</div>
+                <p className="text-xs text-muted-foreground leading-relaxed mb-2">{a.description}</p>
+                <div className="flex flex-wrap gap-1">
+                  {a.calls.map((c) => (
+                    <span
+                      key={c}
+                      className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-white border border-stone-200 text-stone-600"
+                    >
+                      {c}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="mt-4 flex items-center gap-4 text-[11px] text-muted-foreground">
+          <div className="flex items-center gap-1.5">
+            <div className="w-6 h-px bg-stone-700" />
+            <span>Call</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <div className="w-6 h-px border-t border-dashed border-stone-400" />
+            <span>Return</span>
+          </div>
+          <div className="ml-auto">
+            Each step also writes to <code className="font-mono text-[10px] bg-stone-100 px-1 py-0.5 rounded">activity_log.metadata.agentRun</code>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function MethodBadge({ method }: { method: string }) {
   const colors: Record<string, string> = {
     GET: "bg-emerald-100 text-emerald-700",
@@ -438,6 +705,16 @@ export function ArchitectureDDD() {
             </div>
           ))}
         </div>
+      </div>
+
+      <div className="space-y-3">
+        <div>
+          <h2 className="text-xl font-semibold text-foreground">DDD in action — Autonomous Agent execution</h2>
+          <p className="text-sm text-muted-foreground mt-1 max-w-3xl">
+            The Autonomous Agent is the clearest example of bounded contexts paying off. One pipeline orchestrates Setup → Scope → Pricing → Approval contexts in order, each step writing back to its own tables and producing an auditable trail.
+          </p>
+        </div>
+        <AutonomousAgentSequence />
       </div>
 
       <div className="space-y-3">
