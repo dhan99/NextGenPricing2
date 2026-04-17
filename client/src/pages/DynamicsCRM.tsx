@@ -557,7 +557,7 @@ function OpportunitiesTab() {
                         {o.dealpadDealId && (
                           <button
                             onClick={() => {
-                              if (confirm(`Unlink ${o.opportunityNumber} from DealPad deal #${o.dealpadDealId}?\n\nThe deal stays intact, but the opportunity becomes available again in the New Deal flow.`)) {
+                              if (confirm(`Unlink ${o.opportunityNumber} from DealPad deal #${o.dealpadDealId}?\n\nThe deal stays intact, but the opportunity becomes available again in the scoping flow.`)) {
                                 unlink.mutate({ id: o.id, userName: persona?.name });
                               }
                             }}

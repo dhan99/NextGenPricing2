@@ -13,7 +13,7 @@ export function Sidebar() {
 
   const navigation = [
     { name: "Dashboard", href: "/", icon: LayoutDashboard, show: true },
-    { name: "Deals", href: "/deals", icon: FileText, show: true },
+    { name: "Engagements", href: "/deals", icon: FileText, show: true },
     { name: "Analytics", href: "/analytics", icon: BarChart3, show: hasPermission("viewDeals") },
     { name: "Dynamics CRM", href: "/integrations/dynamics", icon: Database, show: true },
     { name: "Intapp Risk", href: "/integrations/intapp", icon: ShieldAlert, show: true },

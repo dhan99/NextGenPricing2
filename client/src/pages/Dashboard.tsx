@@ -204,7 +204,7 @@ export function Dashboard() {
           <Link href="/deals/new">
             <button className="btn-primary">
               <FileText className="w-4 h-4" />
-              New Deal
+              Scope an Engagement
             </button>
           </Link>
         )}

@@ -53,9 +53,9 @@ export function DealsList() {
     <div className="p-8 max-w-7xl mx-auto">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-foreground tracking-tight">Deals</h1>
+          <h1 className="text-2xl font-bold text-foreground tracking-tight">Engagements</h1>
           <p className="text-muted-foreground text-sm mt-1">
-            {filtered.length} deal{filtered.length !== 1 ? "s" : ""}
+            {filtered.length} engagement{filtered.length !== 1 ? "s" : ""}
             {standaloneCount > 0 && archiveView === "active" && (
               <span className="ml-2 inline-flex items-center gap-1 text-amber-700">
                 <Unlink className="w-3 h-3" /> {standaloneCount} not linked to a Dynamics opportunity
@@ -65,7 +65,7 @@ export function DealsList() {
         </div>
         {hasPermission("createDeals") && (
           <Link href="/deals/new">
-            <button className="btn-primary"><Plus className="w-4 h-4" /> New Deal</button>
+            <button className="btn-primary"><Plus className="w-4 h-4" /> Scope an Engagement</button>
           </Link>
         )}
       </div>

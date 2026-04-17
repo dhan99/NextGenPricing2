@@ -82,7 +82,7 @@ export function NewDeal() {
       <div className="flex items-center gap-4 mb-8">
         <Link href="/deals"><span className="text-muted-foreground hover:text-foreground cursor-pointer"><ArrowLeft className="w-5 h-5" /></span></Link>
         <div>
-          <h1 className="text-2xl font-bold text-foreground tracking-tight">Create New Deal</h1>
+          <h1 className="text-2xl font-bold text-foreground tracking-tight">Scope an Engagement</h1>
           <p className="text-muted-foreground text-sm mt-1">Set up a new pricing engagement</p>
         </div>
       </div>
@@ -321,7 +321,7 @@ export function NewDeal() {
             {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : (isRenewal ? <Sparkles className="w-4 h-4" /> : <FileText className="w-4 h-4" />)}
             {submitting
               ? (isRenewal ? "Building Leadsheet..." : "Creating...")
-              : (isRenewal ? "Open Renewal Leadsheet" : "Create Deal")}
+              : (isRenewal ? "Open Renewal Leadsheet" : "Start Scoping")}
           </button>
         </div>
       </form>
