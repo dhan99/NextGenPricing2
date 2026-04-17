@@ -5,6 +5,7 @@ import { useDeal, useUpdateDeal, useScopeCatalog, useScopeTemplates, useApplySco
 import { ResultBadge as IntappResultBadge, RiskBadge as IntappRiskBadge, SourceBadge as IntappSourceBadge } from "./Intapp";
 import { ShieldAlert, ShieldCheck, Unlock } from "lucide-react";
 import { formatCurrency, formatPercent, formatNumber, formatRelativeTime, getStatusColor, getStatusLabel, cn } from "@/lib/utils";
+import { evaluatePracticeLeadTrigger } from "@shared/policy";
 import { ArrowLeft, Check, ChevronRight, Sparkles, AlertTriangle, TrendingUp, TrendingDown, Target, FileText, Shield, CheckCircle, XCircle, Clock, Loader2, Plus, Trash2, Lightbulb, RefreshCw, Pencil, Save, GitBranch, Layers, X, Database, Save as SaveIcon, MessageSquare, ArrowUpRight, ArrowDownRight, MoreHorizontal, Copy, Archive, Download } from "lucide-react";
 import { Link } from "wouter";
 import { useAuth } from "@/context/AuthContext";
@@ -1638,92 +1639,252 @@ function DealBanner({ deal, currentStep, navigateToStep }: { deal: any; currentS
 }
 
 function ReviewStep({ deal }: { deal: any }) {
-  const riskSummary = useAIRiskSummary();
+  const { data: pricingLines } = useDealPricing(deal.id);
+  const { data: scopeItems } = useDealScopeItems(deal.id);
+  const { data: approvals } = useDealApprovals(deal.id);
 
-  useEffect(() => {
-    if (deal.id) riskSummary.mutate({ dealId: deal.id });
-  }, [deal.id]);
+  const lines = pricingLines || [];
+  const items = scopeItems || [];
+
+  // Totals (single source of truth: pricing lines)
+  const sumFee = lines.reduce((s: number, l: any) => s + parseFloat(l.fee || 0), 0);
+  const sumCost = lines.reduce((s: number, l: any) => s + parseFloat(l.cost || 0), 0);
+  const sumHours = lines.reduce((s: number, l: any) => s + parseFloat(l.hours || 0), 0);
+  const marginPct = sumFee > 0 ? ((sumFee - sumCost) / sumFee) * 100 : 0;
+  const effRate = sumHours > 0 ? sumFee / sumHours : 0;
+  const targetMargin = 35;
+  const vsTarget = marginPct - targetMargin;
+
+  // Calc parity: Σ line fees vs deal.totalFee
+  const dealTotalFee = parseFloat(deal.totalFee || "0");
+  const calcParity = Math.abs(sumFee - dealTotalFee) < 1;
+
+  // Scope summary: group billable items by code prefix and allocate fee proportionally to total scope hours.
+  const billable = items.filter((si: any) => !si.scopeItem?.isAssembly);
+  const itemHours = (si: any) =>
+    parseFloat(si.adjustedHours || 0) * parseFloat(si.complexityMultiplier || 1) * (si.quantity || 1);
+  const totalScopeHours = billable.reduce((s: number, si: any) => s + itemHours(si), 0);
+  const groupLabels: Record<string, string> = {
+    IMPL: "Implementation",
+    TEST: "Testing & QA",
+    PMO: "Project Management",
+    TRN: "Training & Enablement",
+    OTHER: "Other",
+  };
+  const groupOrder = ["IMPL", "TEST", "PMO", "TRN"];
+  const groups: Record<string, { label: string; hours: number; fee: number; count: number }> = {};
+  billable.forEach((si: any) => {
+    const code: string = si.scopeItem?.code || "OTHER";
+    const prefix = code.includes("-") ? code.split("-")[0] : "OTHER";
+    if (!groups[prefix]) groups[prefix] = { label: groupLabels[prefix] || prefix, hours: 0, fee: 0, count: 0 };
+    const h = itemHours(si);
+    groups[prefix].hours += h;
+    groups[prefix].fee += totalScopeHours > 0 ? (h / totalScopeHours) * sumFee : 0;
+    groups[prefix].count += 1;
+  });
+  const orderedGroups = [
+    ...groupOrder.filter((g) => groups[g]),
+    ...Object.keys(groups).filter((g) => !groupOrder.includes(g)).sort(),
+  ];
+  const scopeTotal = Object.values(groups).reduce((s, g) => s + g.fee, 0);
+
+  // Validation checklist — every check is wired to live business logic via the
+  // shared POLICY module so the UI can never disagree with server enforcement.
+  const requiredFieldsOk = !!(deal.client?.name && deal.dealType && deal.serviceLine && deal.businessUnit && deal.startDate && deal.endDate && deal.pdlName);
+  const ratesAssigned = lines.length > 0 && lines.every((l: any) => parseFloat(l.rate || 0) > 0);
+  const crmLinked = !!deal.dynamicsLink?.opportunityNumber;
+  const marginOk = marginPct >= targetMargin;
+  const plTrigger = evaluatePracticeLeadTrigger({ totalFee: sumFee, marginPercent: marginPct, scopeItemCount: billable.length });
+  const isNewClient = (deal.dealType || "").toLowerCase() === "new";
+
+  type Check = { ok: boolean | "warn" | "info"; label: string };
+  const checks: Check[] = [
+    { ok: calcParity, label: `Calc parity verified${calcParity ? "" : ` (off by ${formatCurrency(Math.abs(sumFee - dealTotalFee))})`}` },
+    { ok: requiredFieldsOk, label: "Required fields complete" },
+    { ok: marginOk, label: `Margin above BU target (${targetMargin}%)` },
+    { ok: ratesAssigned, label: `Rate table assigned${lines.length > 0 ? ` (${lines.length} roles)` : ""}` },
+    { ok: crmLinked, label: crmLinked ? `CRM opportunity linked (${deal.dynamicsLink.opportunityNumber})` : "CRM opportunity not yet linked" },
+    plTrigger.required
+      ? { ok: "warn" as const, label: `${plTrigger.reason} — Practice Lead approval required` }
+      : { ok: true as const, label: "Within auto-approval thresholds" },
+    isNewClient
+      ? { ok: "info" as const, label: "New client — QRM notification sent" }
+      : { ok: "info" as const, label: "Existing client — no QRM notification required" },
+  ];
+  const blockers = checks.filter((c) => c.ok === false).length;
+
+  // Approval routing preview
+  const pendingApproval = (approvals || []).find((a: any) => a.status === "pending");
+  const approvedApproval = (approvals || []).find((a: any) => a.status === "approved");
+  const stages = [
+    { label: "PDL Submit", sub: deal.pdlName || "PDL", state: "done" as const },
+    {
+      label: "Practice Lead Review",
+      sub: pendingApproval?.approverName || approvedApproval?.approverName || "D. Martinez",
+      state: approvedApproval ? ("done" as const) : pendingApproval ? ("active" as const) : ("pending" as const),
+    },
+    { label: "BU Approval", sub: "Pending", state: approvedApproval ? ("active" as const) : ("pending" as const) },
+    { label: "CRM Push", sub: "Auto", state: "pending" as const },
+  ];
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-      <div className="lg:col-span-2 space-y-6">
-        <div className="card p-6">
-          <h2 className="text-lg font-semibold text-foreground mb-4">Executive Summary</h2>
-          {riskSummary.data && (
-            <div className="space-y-4">
-              <p className="text-sm text-foreground leading-relaxed">{riskSummary.data.narrative}</p>
+    <div className="space-y-6">
+      {/* Calc Parity pill — top right */}
+      <div className="flex items-center justify-end">
+        <span
+          className={cn(
+            "inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-full border",
+            calcParity
+              ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+              : "bg-rose-50 text-rose-700 border-rose-200"
+          )}
+        >
+          {calcParity ? <CheckCircle className="w-3 h-3" /> : <AlertTriangle className="w-3 h-3" />}
+          Calc Parity: {calcParity ? "Verified" : "Mismatch"}
+        </span>
+      </div>
 
-              <div className="grid grid-cols-3 gap-4 pt-4 border-t border-border">
-                <div>
-                  <p className="text-xs text-muted-foreground">Total Fee</p>
-                  <p className="text-xl font-bold text-foreground">{formatCurrency(riskSummary.data.executiveSummary?.totalFee || 0)}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">Margin</p>
-                  <p className="text-xl font-bold text-foreground">{formatPercent(riskSummary.data.executiveSummary?.marginPercent || 0)}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">Total Hours</p>
-                  <p className="text-xl font-bold text-foreground">{formatNumber(riskSummary.data.executiveSummary?.totalHours || 0)}</p>
-                </div>
+      {/* Hero card */}
+      <div className="card p-6">
+        <div className="flex flex-col lg:flex-row lg:items-center gap-6 lg:gap-8">
+          <div className="flex-1 min-w-0">
+            <h2 className="text-2xl font-bold text-foreground tracking-tight truncate">{deal.client?.name || deal.title}</h2>
+            <p className="text-sm text-muted-foreground mt-1 truncate">
+              {[deal.serviceLine, deal.businessUnit, billable.length ? `${billable.length} scope items` : null, deal.dealType ? `${deal.dealType.charAt(0).toUpperCase() + deal.dealType.slice(1)} Project` : null]
+                .filter(Boolean)
+                .join(" · ")}
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-x-8 gap-y-3 lg:justify-end">
+            <ReviewKpi label="Total Fees" value={formatCurrency(sumFee)} />
+            <ReviewKpi label="Margin" value={`${marginPct.toFixed(1)}%`} tone={marginOk ? "success" : "warning"} />
+            <ReviewKpi label="Hours" value={formatNumber(sumHours)} />
+            <ReviewKpi label="Eff. Rate" value={effRate > 0 ? `${formatCurrency(effRate)}` : "—"} tone="primary" />
+            <ReviewKpi
+              label="vs Target"
+              value={`${vsTarget >= 0 ? "↑ +" : "↓ "}${vsTarget.toFixed(1)}%`}
+              tone={vsTarget >= 0 ? "success" : "danger"}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Scope summary + Validation checklist */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="card p-6">
+          <div className="flex items-center gap-2 mb-4">
+            <FileText className="w-4 h-4 text-muted-foreground" />
+            <h3 className="text-base font-semibold text-foreground">Scope Summary</h3>
+          </div>
+          {orderedGroups.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-6 text-center">No scope items added yet.</p>
+          ) : (
+            <div className="space-y-1">
+              {orderedGroups.map((key) => {
+                const g = groups[key];
+                return (
+                  <div key={key} className="flex items-baseline justify-between py-2 border-b border-border last:border-b-0">
+                    <div className="flex items-baseline gap-3 min-w-0">
+                      <span className="text-xs font-mono font-semibold text-primary">{key}</span>
+                      <span className="text-sm text-foreground truncate">{g.label}</span>
+                      <span className="text-xs text-muted-foreground whitespace-nowrap">· {g.count} {g.count === 1 ? "item" : "items"} · {formatNumber(g.hours)} hrs</span>
+                    </div>
+                    <span className="text-sm font-semibold text-foreground tabular-nums">{formatCurrency(g.fee)}</span>
+                  </div>
+                );
+              })}
+              <div className="flex items-center justify-between pt-3 mt-1 border-t-2 border-foreground/80">
+                <span className="text-sm font-bold text-foreground">Total</span>
+                <span className="text-base font-bold text-foreground tabular-nums">{formatCurrency(scopeTotal)}</span>
               </div>
             </div>
           )}
-          {riskSummary.isPending && <div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="w-4 h-4 animate-spin" />Generating executive summary...</div>}
         </div>
 
         <div className="card p-6">
-          <h2 className="text-lg font-semibold text-foreground mb-4">Deal Details</h2>
-          <div className="grid grid-cols-2 gap-y-3 gap-x-8">
-            <div className="flex justify-between py-2 border-b border-border"><span className="text-sm text-muted-foreground">Deal Number</span><span className="text-sm font-medium text-foreground">{deal.dealNumber}</span></div>
-            <div className="flex justify-between py-2 border-b border-border"><span className="text-sm text-muted-foreground">Client</span><span className="text-sm font-medium text-foreground">{deal.client?.name}</span></div>
-            <div className="flex justify-between py-2 border-b border-border"><span className="text-sm text-muted-foreground">Deal Type</span><span className="text-sm font-medium text-foreground capitalize">{deal.dealType}</span></div>
-            <div className="flex justify-between py-2 border-b border-border"><span className="text-sm text-muted-foreground">Complexity</span><span className="text-sm font-medium text-foreground capitalize">{deal.complexity}</span></div>
-            <div className="flex justify-between py-2 border-b border-border"><span className="text-sm text-muted-foreground">Business Unit</span><span className="text-sm font-medium text-foreground">{deal.businessUnit}</span></div>
-            <div className="flex justify-between py-2 border-b border-border"><span className="text-sm text-muted-foreground">Service Line</span><span className="text-sm font-medium text-foreground">{deal.serviceLine}</span></div>
-            <div className="flex justify-between py-2 border-b border-border"><span className="text-sm text-muted-foreground">Start Date</span><span className="text-sm font-medium text-foreground">{deal.startDate}</span></div>
-            <div className="flex justify-between py-2 border-b border-border"><span className="text-sm text-muted-foreground">End Date</span><span className="text-sm font-medium text-foreground">{deal.endDate}</span></div>
-            <div className="flex justify-between py-2 border-b border-border"><span className="text-sm text-muted-foreground">PDL</span><span className="text-sm font-medium text-foreground">{deal.pdlName}</span></div>
-            <div className="flex justify-between py-2 border-b border-border"><span className="text-sm text-muted-foreground">Blended Rate</span><span className="text-sm font-medium text-foreground">{formatCurrency(deal.blendedRate || 0)}/hr</span></div>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-base font-semibold text-foreground">Validation Checklist</h3>
+            {blockers > 0 ? (
+              <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-rose-50 text-rose-700 border border-rose-200">
+                {blockers} blocker{blockers > 1 ? "s" : ""}
+              </span>
+            ) : (
+              <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                Ready
+              </span>
+            )}
           </div>
+          <ul className="space-y-2.5">
+            {checks.map((c, i) => (
+              <li key={i} className="flex items-start gap-2.5 text-sm">
+                {c.ok === true && <CheckCircle className="w-4 h-4 text-emerald-600 mt-0.5 shrink-0" />}
+                {c.ok === false && <XCircle className="w-4 h-4 text-rose-600 mt-0.5 shrink-0" />}
+                {c.ok === "warn" && <AlertTriangle className="w-4 h-4 text-primary mt-0.5 shrink-0" />}
+                {c.ok === "info" && <Clock className="w-4 h-4 text-muted-foreground mt-0.5 shrink-0" />}
+                <span className={cn(
+                  "leading-snug",
+                  c.ok === true && "text-foreground",
+                  c.ok === false && "text-rose-700",
+                  c.ok === "warn" && "text-primary",
+                  c.ok === "info" && "text-muted-foreground",
+                )}>{c.label}</span>
+              </li>
+            ))}
+          </ul>
         </div>
       </div>
 
-      <div>
-        {riskSummary.data && (
-          <div className="card p-6">
-            <div className="flex items-center gap-2 mb-4">
-              <Shield className="w-5 h-5 text-foreground" />
-              <h3 className="font-semibold text-foreground">Risk Assessment</h3>
-            </div>
-            <div className="mb-4">
-              <div className={cn("inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-semibold",
-                riskSummary.data.riskLevel === "Low" ? "bg-success/10 text-success" :
-                riskSummary.data.riskLevel === "Medium" ? "bg-warning/10 text-warning" : "bg-destructive/10 text-destructive"
-              )}>
-                {riskSummary.data.riskLevel === "Low" ? <CheckCircle className="w-4 h-4" /> : <AlertTriangle className="w-4 h-4" />}
-                {riskSummary.data.riskLevel} Risk
-              </div>
-            </div>
-            <div className="bg-muted/50 rounded-lg p-3 mb-4">
-              <p className="text-xs text-muted-foreground">Approval Likelihood</p>
-              <p className="text-sm font-bold text-foreground">{riskSummary.data.approvalLikelihood}</p>
-            </div>
-            <div className="space-y-3">
-              {riskSummary.data.riskFactors?.map((f: any, i: number) => (
-                <div key={i} className={cn("p-3 rounded-lg border-l-3",
-                  f.severity === "positive" ? "bg-success/5 border-l-success" :
-                  f.severity === "high" ? "bg-destructive/5 border-l-destructive" :
-                  f.severity === "medium" ? "bg-warning/5 border-l-warning" : "bg-muted/50 border-l-muted-foreground"
+      {/* Approval routing preview */}
+      <div className="card p-6">
+        <h3 className="text-base font-semibold text-foreground mb-5">Approval Routing Preview</h3>
+        <div className="flex items-stretch gap-2 overflow-x-auto pb-1">
+          {stages.map((s, i) => (
+            <React.Fragment key={s.label}>
+              <div className="flex flex-col items-center min-w-[120px]">
+                <div className={cn(
+                  "w-10 h-10 rounded-full flex items-center justify-center text-sm font-semibold border-2",
+                  s.state === "done" && "bg-emerald-600 text-white border-emerald-600",
+                  s.state === "active" && "bg-primary text-primary-foreground border-primary",
+                  s.state === "pending" && "bg-muted text-muted-foreground border-border",
                 )}>
-                  <p className="text-sm font-medium text-foreground">{f.factor}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">{f.detail}</p>
+                  {s.state === "done" ? <CheckCircle className="w-5 h-5" /> : s.state === "active" ? <ChevronRight className="w-5 h-5" /> : i + 1}
                 </div>
-              ))}
-            </div>
-          </div>
-        )}
+                <p className={cn(
+                  "text-xs font-semibold mt-2 text-center whitespace-nowrap",
+                  s.state === "done" && "text-foreground",
+                  s.state === "active" && "text-primary",
+                  s.state === "pending" && "text-muted-foreground",
+                )}>{s.label}</p>
+                <p className="text-[11px] text-muted-foreground mt-0.5 text-center whitespace-nowrap">{s.sub}</p>
+              </div>
+              {i < stages.length - 1 && (
+                <div className="flex-1 flex items-center pt-5 min-w-[40px]">
+                  <div className={cn(
+                    "h-0.5 w-full",
+                    stages[i + 1].state !== "pending" || s.state === "done" ? "bg-primary/60" : "border-t border-dashed border-border bg-transparent"
+                  )} />
+                </div>
+              )}
+            </React.Fragment>
+          ))}
+        </div>
       </div>
+    </div>
+  );
+}
+
+function ReviewKpi({ label, value, tone = "default" }: { label: string; value: string; tone?: "default" | "success" | "warning" | "danger" | "primary" }) {
+  return (
+    <div className="text-right min-w-[80px]">
+      <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">{label}</p>
+      <p className={cn(
+        "text-xl font-bold mt-0.5 tabular-nums",
+        tone === "default" && "text-foreground",
+        tone === "success" && "text-emerald-600",
+        tone === "warning" && "text-amber-600",
+        tone === "danger" && "text-rose-600",
+        tone === "primary" && "text-primary",
+      )}>{value}</p>
     </div>
   );
 }

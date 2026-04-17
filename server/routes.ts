@@ -1,6 +1,7 @@
 import { Express, Request, Response } from "express";
 import { db } from "./db";
 import { clients, deals, scopeCatalog, dealScopeItems, scopeTemplates, scopeTemplateItems, roles, rateCards, rateCardEntries, pricingLines, scenarios, approvals, promptResponses, activityLog, changeOrders, dynamicsOpportunities, promptSets, promptSetItems } from "../shared/schema";
+import { evaluatePracticeLeadTrigger } from "../shared/policy";
 import { eq, desc, sql, and, count, isNull, isNotNull, asc } from "drizzle-orm";
 
 function escapeHtml(str: string | null | undefined): string {
@@ -1322,10 +1323,28 @@ export function registerRoutes(app: Express) {
       });
     }
 
-    const [approval] = await db.insert(approvals).values({
-      dealId,
-      ...req.body,
-    }).returning();
+    // Apply shared approval policy so the approver routed here matches what
+    // the Review & Submit checklist promised. If policy requires Practice
+    // Lead approval (high fee, low margin, or large scope), override any
+    // approver supplied in the request body.
+    const dealLines = await db.select().from(pricingLines).where(eq(pricingLines.dealId, dealId));
+    const dealItems = await db.select().from(dealScopeItems).where(eq(dealScopeItems.dealId, dealId));
+    const polFee = dealLines.reduce((s, l) => s + parseFloat(l.fee || "0"), 0);
+    const polCost = dealLines.reduce((s, l) => s + parseFloat(l.cost || "0"), 0);
+    const polMargin = polFee > 0 ? ((polFee - polCost) / polFee) * 100 : 0;
+    const trigger = evaluatePracticeLeadTrigger({
+      totalFee: polFee,
+      marginPercent: polMargin,
+      scopeItemCount: dealItems.length,
+    });
+
+    const approvalPayload: any = { dealId, ...req.body };
+    if (trigger.required) {
+      approvalPayload.approverRole = "Practice Lead";
+      approvalPayload.riskSummary = trigger.reason;
+    }
+
+    const [approval] = await db.insert(approvals).values(approvalPayload).returning();
 
     await db.update(deals).set({ status: "submitted" }).where(eq(deals.id, dealId));
     autoPushDeal(dealId, ["status"], actor).catch(() => {});
