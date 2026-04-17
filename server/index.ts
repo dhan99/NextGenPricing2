@@ -690,6 +690,20 @@ async function start() {
     res.download(path.join(process.cwd(), "DealPad_Architecture_Document.md"), "DealPad_Architecture_Document.md");
   });
 
+  app.get("/integrations-doc/download-pptx", (_req, res) => {
+    res.download(
+      path.join(process.cwd(), "exports", "Integrations-API-Overview.pptx"),
+      "DealPad-Integrations-API-Overview.pptx",
+    );
+  });
+
+  app.get("/integrations-doc/download-md", (_req, res) => {
+    res.download(
+      path.join(process.cwd(), "docs", "integrations", "api-overview.md"),
+      "DealPad-Integrations-API-Overview.md",
+    );
+  });
+
   const clientDistPath = path.join(process.cwd(), "dist", "public");
   app.use(express.static(clientDistPath));
   app.get("/{*path}", (_req, res) => {

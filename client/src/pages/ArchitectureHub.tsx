@@ -1,9 +1,10 @@
 import { useState, useRef, useEffect } from "react";
-import { Layers, Network, MessageSquare, FileText, Send, Bot, User, ChevronRight, Sparkles, Database, Server, Brain, Shield, Cpu, Cloud, BarChart3, ArrowRight, ExternalLink } from "lucide-react";
+import { Layers, Network, MessageSquare, FileText, Send, Bot, User, ChevronRight, Sparkles, Database, Server, Brain, Shield, Cpu, Cloud, BarChart3, ArrowRight, ExternalLink, Plug } from "lucide-react";
 import { Architecture } from "./Architecture";
 import { ArchitectureInteractive } from "./ArchitectureInteractive";
+import { ArchitectureIntegrations } from "./ArchitectureIntegrations";
 
-type ViewMode = "overview" | "interactive" | "chat" | "document";
+type ViewMode = "overview" | "interactive" | "integrations" | "chat" | "document";
 
 interface ChatMessage {
   role: "user" | "assistant";
@@ -327,6 +328,7 @@ export function ArchitectureHub() {
   const views: { id: ViewMode; label: string; icon: typeof Layers; description: string }[] = [
     { id: "overview", label: "System Overview", icon: Layers, description: "Full system diagram with AI, data, and integration layers" },
     { id: "interactive", label: "Interactive Explorer", icon: Network, description: "Click-to-explore component map with detail panels" },
+    { id: "integrations", label: "Integrations", icon: Plug, description: "Dynamics 365 + Workday — endpoints, auth, mapping, samples" },
     { id: "chat", label: "Architecture AI", icon: MessageSquare, description: "Ask questions about the architecture in natural language" },
     { id: "document", label: "Full Document", icon: FileText, description: "1,900-line architecture document with 17 Mermaid diagrams" },
   ];
@@ -372,6 +374,11 @@ export function ArchitectureHub() {
         {view === "interactive" && (
           <div className="overflow-y-auto">
             <ArchitectureInteractive />
+          </div>
+        )}
+        {view === "integrations" && (
+          <div className="overflow-y-auto">
+            <ArchitectureIntegrations />
           </div>
         )}
         {view === "chat" && (
