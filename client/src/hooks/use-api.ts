@@ -1,11 +1,32 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 async function fetchApi(url: string, options?: RequestInit) {
-  const res = await fetch(url, {
-    headers: { "Content-Type": "application/json" },
-    ...options,
-  });
-  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    ...((options?.headers as Record<string, string>) || {}),
+  };
+  try {
+    const personaRaw = typeof window !== "undefined" ? localStorage.getItem("dealpad_persona") : null;
+    if (personaRaw) {
+      const role = String(personaRaw).toLowerCase();
+      const personaNames: Record<string, string> = {
+        pdl: "Michael Torres", sll: "Sarah Chen", po: "James Wright",
+        fin: "Lisa Park", qrm: "David Kim", it: "Alex Rivera",
+      };
+      headers["x-user-role"] = role;
+      headers["x-user-name"] = personaNames[role] || role.toUpperCase();
+    }
+  } catch {}
+  const res = await fetch(url, { ...options, headers });
+  if (!res.ok) {
+    let body: any = null;
+    try { body = await res.json(); } catch {}
+    const msg = body?.error || `API error: ${res.status}`;
+    const err: any = new Error(msg);
+    err.status = res.status;
+    err.body = body;
+    throw err;
+  }
   return res.json();
 }
 
@@ -368,4 +389,103 @@ export function useAIScenarioRecommendation() {
 
 export function useAIRiskSummary() {
   return useMutation({ mutationFn: (data: any) => fetchApi("/api/ai/risk-summary", { method: "POST", body: JSON.stringify(data) }) });
+}
+
+// ============ INTAPP RISK & COMPLIANCE ============
+export function useIntappSettings() {
+  return useQuery({ queryKey: ["intapp-settings"], queryFn: () => fetchApi("/api/intapp/settings") });
+}
+
+export function useUpdateIntappSettings() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: any) => fetchApi("/api/intapp/settings", { method: "PATCH", body: JSON.stringify(body) }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["intapp-settings"] });
+      qc.invalidateQueries({ queryKey: ["intapp-events"] });
+      qc.invalidateQueries({ queryKey: ["intapp-dashboard"] });
+    },
+  });
+}
+
+export function useIntappScreenings(dealId?: number) {
+  return useQuery({
+    queryKey: ["intapp-screenings", dealId || "all"],
+    queryFn: () => fetchApi(`/api/intapp/screenings${dealId ? `?dealId=${dealId}` : ""}`),
+  });
+}
+
+export function useDealIntappScreening(dealId: number) {
+  return useQuery({
+    queryKey: ["intapp-deal-screening", dealId],
+    queryFn: () => fetchApi(`/api/intapp/deals/${dealId}/screening`),
+    enabled: !!dealId,
+    refetchInterval: 5000,
+  });
+}
+
+export function useRunIntappScreening() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ dealId, userName }: { dealId: number; userName?: string }) =>
+      fetchApi(`/api/intapp/deals/${dealId}/screen`, { method: "POST", body: JSON.stringify({ userName }) }),
+    onSuccess: (_, { dealId }) => {
+      qc.invalidateQueries({ queryKey: ["intapp-deal-screening", dealId] });
+      qc.invalidateQueries({ queryKey: ["intapp-screenings"] });
+      qc.invalidateQueries({ queryKey: ["intapp-events"] });
+      qc.invalidateQueries({ queryKey: ["intapp-dashboard"] });
+    },
+  });
+}
+
+export function useAddIntappMitigation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ screeningId, dealId, ...body }: any) =>
+      fetchApi(`/api/intapp/screenings/${screeningId}/mitigations`, { method: "POST", body: JSON.stringify(body) }),
+    onSuccess: (_, vars: any) => {
+      if (vars.dealId) qc.invalidateQueries({ queryKey: ["intapp-deal-screening", vars.dealId] });
+      qc.invalidateQueries({ queryKey: ["intapp-events"] });
+    },
+  });
+}
+
+export function useUpdateIntappMitigation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...body }: any) =>
+      fetchApi(`/api/intapp/mitigations/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+    onSuccess: (_, vars: any) => {
+      if (vars.dealId) qc.invalidateQueries({ queryKey: ["intapp-deal-screening", vars.dealId] });
+    },
+  });
+}
+
+export function useIntappOverride() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ dealId, ...body }: any) =>
+      fetchApi(`/api/intapp/deals/${dealId}/override`, { method: "POST", body: JSON.stringify(body) }),
+    onSuccess: (_, vars: any) => {
+      qc.invalidateQueries({ queryKey: ["intapp-deal-screening", vars.dealId] });
+      qc.invalidateQueries({ queryKey: ["intapp-events"] });
+      qc.invalidateQueries({ queryKey: ["intapp-dashboard"] });
+    },
+  });
+}
+
+export function useIntappEvents(dealId?: number) {
+  return useQuery({
+    queryKey: ["intapp-events", dealId || "all"],
+    queryFn: () => fetchApi(`/api/intapp/events${dealId ? `?dealId=${dealId}` : ""}`),
+    refetchInterval: 5000,
+  });
+}
+
+export function useIntappDashboard() {
+  return useQuery({
+    queryKey: ["intapp-dashboard"],
+    queryFn: () => fetchApi("/api/intapp/dashboard"),
+    refetchInterval: 8000,
+  });
 }

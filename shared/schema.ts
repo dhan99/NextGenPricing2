@@ -271,6 +271,78 @@ export const dynamicsSettings = pgTable("dynamics_settings", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
+// ============ INTAPP RISK & COMPLIANCE (simulation, swappable to live) ============
+export const intappSettings = pgTable("intapp_settings", {
+  id: serial("id").primaryKey(),
+  mode: text("mode").notNull().default("simulated"),
+  autoScreenOnSubmit: boolean("auto_screen_on_submit").default(true),
+  blockSubmitOnConflict: boolean("block_submit_on_conflict").default(true),
+  allowQrmOverride: boolean("allow_qrm_override").default(true),
+  autoScreenOnClientChange: boolean("auto_screen_on_client_change").default(false),
+  nightlyRescreen: boolean("nightly_rescreen").default(false),
+  apiBaseUrl: text("api_base_url"),
+  apiTokenSecret: text("api_token_secret"),
+  liveTenantUrl: text("live_tenant_url"),
+  liveClientId: text("live_client_id"),
+  liveApiKeySecret: text("live_api_key_secret"),
+  policyVersion: text("policy_version").default("4w-pilot-v1"),
+  pilotEndsOn: text("pilot_ends_on"),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const intappScreenings = pgTable("intapp_screenings", {
+  id: serial("id").primaryKey(),
+  dealId: integer("deal_id").references(() => deals.id).notNull(),
+  source: text("source").notNull().default("simulated"),
+  status: text("status").notNull().default("pending"),
+  result: text("result").default("pending"),
+  riskTier: text("risk_tier").default("low"),
+  hitCount: integer("hit_count").default(0),
+  policyVersion: text("policy_version"),
+  externalRef: text("external_ref"),
+  requestedBy: text("requested_by"),
+  requestedAt: timestamp("requested_at").defaultNow().notNull(),
+  completedAt: timestamp("completed_at"),
+  payloadSnapshot: jsonb("payload_snapshot"),
+  narrative: text("narrative"),
+});
+
+export const intappHits = pgTable("intapp_hits", {
+  id: serial("id").primaryKey(),
+  screeningId: integer("screening_id").references(() => intappScreenings.id).notNull(),
+  hitType: text("hit_type").notNull(),
+  severity: text("severity").notNull().default("low"),
+  matchedEntity: text("matched_entity"),
+  description: text("description"),
+  recommendation: text("recommendation"),
+  externalRef: text("external_ref"),
+});
+
+export const intappMitigations = pgTable("intapp_mitigations", {
+  id: serial("id").primaryKey(),
+  screeningId: integer("screening_id").references(() => intappScreenings.id).notNull(),
+  hitId: integer("hit_id").references(() => intappHits.id),
+  status: text("status").notNull().default("pending"),
+  action: text("action").notNull(),
+  notes: text("notes"),
+  resolvedBy: text("resolved_by"),
+  resolvedAt: timestamp("resolved_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const intappEvents = pgTable("intapp_events", {
+  id: serial("id").primaryKey(),
+  dealId: integer("deal_id").references(() => deals.id),
+  screeningId: integer("screening_id").references(() => intappScreenings.id),
+  eventType: text("event_type").notNull(),
+  source: text("source").default("simulated"),
+  actorName: text("actor_name"),
+  actorRole: text("actor_role"),
+  message: text("message"),
+  metadata: jsonb("metadata"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 export const dealsRelations = relations(deals, ({ one, many }) => ({
   client: one(clients, { fields: [deals.clientId], references: [clients.id] }),
   scopeItems: many(dealScopeItems),

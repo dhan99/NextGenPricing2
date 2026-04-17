@@ -102,9 +102,17 @@ async function recalcPricingFromScope(dealId: number) {
 }
 
 import { registerDynamicsRoutes, autoPushDeal } from "./dynamics";
+import {
+  registerIntappRoutes,
+  onDealSubmittedTrigger,
+  assertSubmissionAllowed,
+  onClientChangedTrigger,
+  startNightlyRescreenLoop,
+} from "./intapp";
 
 export function registerRoutes(app: Express) {
   registerDynamicsRoutes(app);
+  registerIntappRoutes(app);
 
 
   // ========== DASHBOARD ==========
@@ -146,6 +154,21 @@ export function registerRoutes(app: Express) {
     const [result] = await db.select().from(clients).where(eq(clients.id, parseInt(req.params.id)));
     if (!result) return res.status(404).json({ error: "Client not found" });
     res.json(result);
+  });
+
+  app.patch("/api/clients/:id", async (req: Request, res: Response) => {
+    const id = parseInt(req.params.id);
+    const [prior] = await db.select().from(clients).where(eq(clients.id, id));
+    if (!prior) return res.status(404).json({ error: "Client not found" });
+    const [updated] = await db.update(clients).set(req.body).where(eq(clients.id, id)).returning();
+    // Fire Intapp client-change trigger when risk-relevant attributes change.
+    const watched = ["industry", "region", "relationshipYears", "name"];
+    const changed = watched.some(k => req.body?.[k] !== undefined && (prior as any)[k] !== updated[k as keyof typeof updated]);
+    if (changed) {
+      const actor = (req.header("x-user-name") || "Client Edit").trim();
+      onClientChangedTrigger(id, actor).catch(() => {});
+    }
+    res.json(updated);
   });
 
   // ========== DEALS ==========
@@ -214,6 +237,15 @@ export function registerRoutes(app: Express) {
 
   app.patch("/api/deals/:id", async (req: Request, res: Response) => {
     const dealId = parseInt(req.params.id);
+    const [prior] = await db.select({ status: deals.status }).from(deals).where(eq(deals.id, dealId));
+    // SERVER-SIDE GATING: a status transition to "submitted" must pass Intapp screening.
+    if (req.body?.status === "submitted" && prior?.status !== "submitted") {
+      const actor = (req.header("x-user-name") || req.body?.userName || "Unknown").trim();
+      const gate = await assertSubmissionAllowed(dealId, actor);
+      if (!gate.allow) {
+        return res.status(409).json({ error: gate.reason, code: "intapp_conflict", screening: gate.screening });
+      }
+    }
     const [updated] = await db.update(deals)
       .set({ ...req.body, updatedAt: new Date() })
       .where(eq(deals.id, dealId))
@@ -222,10 +254,15 @@ export function registerRoutes(app: Express) {
     const changedFields = Object.keys(req.body || {});
     if (req.body.complexity) {
       await recalcPricingFromScope(dealId);
-      // Recalc changes derived totals; mark them changed so auto-push fee trigger fires
       if (!changedFields.includes("totalFee")) changedFields.push("totalFee", "totalCost", "totalHours");
     }
     autoPushDeal(dealId, changedFields, req.body?.userName).catch(() => {});
+    if (prior?.status !== "submitted" && updated.status === "submitted") {
+      // Gating already passed (assertSubmissionAllowed ran a fresh screening
+      // above). Fire the post-submit trigger to record the audit event.
+      const actor = (req.header("x-user-name") || req.body?.userName || "Unknown").trim();
+      onDealSubmittedTrigger(dealId, actor).catch(() => {});
+    }
     res.json(updated);
   });
 
@@ -267,6 +304,31 @@ export function registerRoutes(app: Express) {
       description: `Deal "${updated.title}" restored from archive`,
     });
     res.json(updated);
+  });
+
+  // ------------------------------------------------------------------
+  // Submission gating: dedicated endpoint that runs Intapp screening
+  // SYNCHRONOUSLY before transitioning a deal to "submitted". Use this
+  // route from the UI instead of PATCHing status directly.
+  // ------------------------------------------------------------------
+  app.post("/api/deals/:id/submit", async (req: Request, res: Response) => {
+    const dealId = parseInt(req.params.id);
+    const actor = (req.header("x-user-name") || req.body?.userName || "Unknown").trim();
+    const gate = await assertSubmissionAllowed(dealId, actor);
+    if (!gate.allow) {
+      return res.status(409).json({
+        error: gate.reason,
+        code: "intapp_conflict",
+        screening: gate.screening,
+      });
+    }
+    const [updated] = await db.update(deals)
+      .set({ status: "submitted", updatedAt: new Date() })
+      .where(eq(deals.id, dealId)).returning();
+    if (!updated) return res.status(404).json({ error: "Deal not found" });
+    autoPushDeal(dealId, ["status"], actor).catch(() => {});
+    onDealSubmittedTrigger(dealId, actor).catch(() => {});
+    res.json({ deal: updated, screening: gate.screening });
   });
 
   app.post("/api/deals/:id/clone", async (req: Request, res: Response) => {
@@ -727,13 +789,26 @@ export function registerRoutes(app: Express) {
 
   app.post("/api/deals/:dealId/approvals", async (req: Request, res: Response) => {
     const dealId = parseInt(req.params.dealId);
+    const actor = (req.header("x-user-name") || req.body?.submittedBy || req.body?.userName || "Unknown").trim();
+    // SERVER-SIDE GATING: refuse to create the approval (and refuse to flip
+    // the deal to "submitted") if the latest Intapp screening is a conflict
+    // and gating is enabled. Override path is /api/intapp/.../override.
+    const gate = await assertSubmissionAllowed(dealId, actor);
+    if (!gate.allow) {
+      return res.status(409).json({
+        error: gate.reason,
+        code: "intapp_conflict",
+        screening: gate.screening,
+      });
+    }
     const [approval] = await db.insert(approvals).values({
       dealId,
       ...req.body,
     }).returning();
 
     await db.update(deals).set({ status: "submitted" }).where(eq(deals.id, dealId));
-    autoPushDeal(dealId, ["status"], req.body?.userName).catch(() => {});
+    autoPushDeal(dealId, ["status"], actor).catch(() => {});
+    onDealSubmittedTrigger(dealId, actor).catch(() => {});
 
     await db.insert(activityLog).values({
       dealId,

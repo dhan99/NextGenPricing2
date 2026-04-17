@@ -84,6 +84,23 @@ export function Dashboard() {
     });
   }, [deals, searchTerm, statusFilter]);
 
+  // Intapp Risk dashboard data (QRM cockpit tile)
+  const { data: intappDash } = useQuery<any>({
+    queryKey: ["intapp-dashboard"],
+    queryFn: async () => {
+      const r = await fetch("/api/intapp/dashboard", {
+        headers: {
+          "x-user-name": persona?.name || "",
+          "x-user-role": persona?.role || "",
+        },
+      });
+      if (!r.ok) return null;
+      return r.json();
+    },
+    enabled: role === "qrm",
+    refetchInterval: 30000,
+  });
+
   // AI Insights
   const { data: insightsData, isLoading: insightsLoading, refetch: refetchInsights } = useQuery<{ capability: string; insights: Insight[] }>({
     queryKey: ["dashboard-insights", role],
@@ -155,10 +172,10 @@ export function Dashboard() {
       { label: "Pending Review", value: String(summary?.pendingApprovals ?? "--"), icon: AlertCircle, href: "/deals?status=submitted" },
     ],
     qrm: [
-      { label: "Active Deals", value: String(summary?.totalDeals ?? "--"), icon: FileText, href: "/deals" },
-      { label: "Pending Reviews", value: String(summary?.pendingApprovals ?? "--"), icon: AlertCircle, href: "/deals?status=submitted" },
-      { label: "Avg Margin", value: summary ? `${summary.averageMargin}%` : "--", icon: TrendingUp, valueClass: "text-emerald-600" },
-      { label: "Risk Flags", value: "2", icon: Shield, href: "/deals", valueClass: "text-red-600" },
+      { label: "Active Conflicts", value: String(intappDash?.summary?.conflictCount ?? "--"), icon: Shield, href: "/integrations/intapp", valueClass: "text-red-600" },
+      { label: "Reviews", value: String(intappDash?.summary?.reviewCount ?? "--"), icon: AlertCircle, href: "/integrations/intapp", valueClass: "text-amber-600" },
+      { label: "Open Mitigations", value: String(intappDash?.summary?.openMitigations ?? "--"), icon: ShieldCheck, href: "/integrations/intapp" },
+      { label: "Pending Reviews", value: String(summary?.pendingApprovals ?? "--"), icon: FileText, href: "/deals?status=submitted" },
     ],
     it: [
       { label: "Active Deals", value: String(summary?.totalDeals ?? "--"), icon: FileText },
@@ -210,6 +227,56 @@ export function Dashboard() {
           );
         })}
       </div>
+
+      {role === "qrm" && intappDash && (
+        <div className="card mb-6">
+          <div className="px-5 py-3 border-b border-border flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Shield className="w-4 h-4 text-red-600" />
+              <h2 className="text-sm font-semibold text-foreground">Intapp Risk &amp; Compliance</h2>
+              <span className="text-[10px] uppercase tracking-wide px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">{intappDash.mode === "live" ? "LIVE" : "Pilot · Simulated"}</span>
+            </div>
+            <Link href="/integrations/intapp" className="text-xs text-primary hover:underline flex items-center gap-1">
+              Open cockpit <ArrowRight className="w-3 h-3" />
+            </Link>
+          </div>
+          <div className="p-5 grid grid-cols-1 md:grid-cols-2 gap-5">
+            <div>
+              <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Open Conflicts</h3>
+              {(intappDash.openConflicts || []).length === 0 ? (
+                <p className="text-sm text-muted-foreground">No active conflicts. All screened deals are clear or mitigated.</p>
+              ) : (
+                <ul className="space-y-2">
+                  {intappDash.openConflicts.slice(0, 5).map((c: any) => (
+                    <li key={c.id} className="flex items-center justify-between text-sm border-b border-border pb-2 last:border-0">
+                      <Link href={`/deals/${c.dealId}`} className="hover:underline">
+                        <div className="font-medium text-foreground">{c.dealNumber} · {c.clientName}</div>
+                        <div className="text-xs text-muted-foreground truncate max-w-md">{c.narrative}</div>
+                      </Link>
+                      <span className="text-[10px] uppercase font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-700">{c.riskTier}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+            <div>
+              <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Recent Activity</h3>
+              {(intappDash.recentEvents || []).length === 0 ? (
+                <p className="text-sm text-muted-foreground">No screening events yet.</p>
+              ) : (
+                <ul className="space-y-1.5">
+                  {intappDash.recentEvents.slice(0, 6).map((e: any) => (
+                    <li key={e.id} className="text-xs text-muted-foreground flex items-center gap-2">
+                      <span className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-muted">{e.eventType}</span>
+                      <span className="flex-1 truncate">{e.actor || "system"} · {new Date(e.createdAt).toLocaleString()}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left: Deals list with search + filter */}

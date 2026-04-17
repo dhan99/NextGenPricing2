@@ -1,7 +1,9 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRoute } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
-import { useDeal, useUpdateDeal, useScopeCatalog, useDealScopeItems, useAddScopeItem, useRemoveScopeItem, useRoles, useDealPricing, useUpdatePricingLine, useDealScenarios, useSelectScenario, useDealApprovals, useSubmitApproval, useUpdateApproval, useDealPrompts, useUpdatePrompt, useCloneDeal, useAIDealSimilarity, useAIEffortEstimation, useAIMarginAdvisor, useAIScenarioRecommendation, useAIRiskSummary } from "@/hooks/use-api";
+import { useDeal, useUpdateDeal, useScopeCatalog, useDealScopeItems, useAddScopeItem, useRemoveScopeItem, useRoles, useDealPricing, useUpdatePricingLine, useDealScenarios, useSelectScenario, useDealApprovals, useSubmitApproval, useUpdateApproval, useDealPrompts, useUpdatePrompt, useCloneDeal, useAIDealSimilarity, useAIEffortEstimation, useAIMarginAdvisor, useAIScenarioRecommendation, useAIRiskSummary, useDealIntappScreening, useRunIntappScreening, useIntappOverride, useAddIntappMitigation, useUpdateIntappMitigation } from "@/hooks/use-api";
+import { ResultBadge as IntappResultBadge, RiskBadge as IntappRiskBadge, SourceBadge as IntappSourceBadge } from "./Intapp";
+import { ShieldAlert, ShieldCheck, Unlock } from "lucide-react";
 import { formatCurrency, formatPercent, formatNumber, getStatusColor, getStatusLabel, cn } from "@/lib/utils";
 import { ArrowLeft, Check, ChevronRight, Sparkles, AlertTriangle, TrendingUp, Target, FileText, Shield, CheckCircle, XCircle, Clock, Loader2, Plus, Trash2, Lightbulb, Copy, RefreshCw, Pencil, Save, GitBranch } from "lucide-react";
 import { Link, useLocation } from "wouter";
@@ -1012,8 +1014,13 @@ function ApprovalStep({ deal }: { deal: any }) {
     setReviewComment("");
   };
 
+  const { data: screening } = useDealIntappScreening(deal.id);
+  const runScreen = useRunIntappScreening();
+  const blocked = screening?.result === "conflict";
+
   return (
     <div className="max-w-3xl mx-auto space-y-6">
+      <IntappCompliancePanel deal={deal} />
       <div className="card p-6">
         <h2 className="text-lg font-semibold text-foreground mb-4">Approval Status</h2>
         {(approvals || []).length === 0 ? (
@@ -1021,9 +1028,17 @@ function ApprovalStep({ deal }: { deal: any }) {
             <Clock className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
             <p className="text-sm text-muted-foreground">No approval requests submitted yet.</p>
             {hasPermission("editDeals") && (
-              <button className="btn-primary mt-4" onClick={() => {
-                submitApproval.mutate({ dealId: deal.id, data: { approverName: "Practice Leader", approverRole: "Service Line Lead", status: "pending", notes: "Auto-submitted for review", submittedBy: persona?.name } });
-              }}>Submit for Approval</button>
+              <button
+                disabled={blocked}
+                title={blocked ? "Resolve the Intapp conflict above before submitting." : ""}
+                className="btn-primary mt-4 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-2"
+                onClick={() => {
+                  if (!screening) runScreen.mutate({ dealId: deal.id, userName: persona?.name });
+                  submitApproval.mutate({ dealId: deal.id, data: { approverName: "Practice Leader", approverRole: "Service Line Lead", status: "pending", notes: "Auto-submitted for review", submittedBy: persona?.name } });
+                }}>
+                {blocked && <ShieldAlert className="w-4 h-4" />}
+                {blocked ? "Blocked by Intapp conflict" : "Submit for Approval"}
+              </button>
             )}
           </div>
         ) : (
@@ -1216,6 +1231,216 @@ function SummaryStep({ deal }: { deal: any }) {
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+// ============ INTAPP COMPLIANCE PANEL ============
+function IntappCompliancePanel({ deal }: { deal: any }) {
+  const { data: screening, isLoading } = useDealIntappScreening(deal.id);
+  const runScreen = useRunIntappScreening();
+  const override = useIntappOverride();
+  const updateMit = useUpdateIntappMitigation();
+  const addMit = useAddIntappMitigation();
+  const { persona } = useAuth();
+  const [showOverride, setShowOverride] = useState(false);
+  const [justification, setJustification] = useState("");
+  const [showMitForm, setShowMitForm] = useState(false);
+  const [mitAction, setMitAction] = useState("");
+  const [mitNotes, setMitNotes] = useState("");
+  const isQRM = persona?.role === "qrm";
+  const canMitigate = ["qrm", "pdl", "sll"].includes(persona?.role || "");
+
+  if (isLoading) {
+    return (
+      <div className="card p-5 flex items-center gap-3 text-sm text-muted-foreground">
+        <Loader2 className="w-4 h-4 animate-spin" /> Checking Intapp Risk &amp; Compliance...
+      </div>
+    );
+  }
+
+  if (!screening) {
+    return (
+      <div className="card p-5 border-amber-200 bg-amber-50/50">
+        <div className="flex items-start gap-3">
+          <ShieldAlert className="w-5 h-5 text-amber-700 mt-0.5" />
+          <div className="flex-1">
+            <h3 className="text-sm font-semibold text-foreground">No Intapp screening on file</h3>
+            <p className="text-xs text-muted-foreground mt-1">
+              Run a conflicts/sanctions/PEP/independence screening before submitting this deal for approval.
+            </p>
+          </div>
+          <button onClick={() => runScreen.mutate({ dealId: deal.id, userName: persona?.name })}
+            disabled={runScreen.isPending}
+            className="inline-flex items-center gap-2 px-3 py-2 rounded-md bg-primary text-white text-xs font-medium hover:bg-primary/90 disabled:opacity-50">
+            {runScreen.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Shield className="w-4 h-4" />}
+            Run screening
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const isBlocked = screening.result === "conflict";
+  const isOverridden = screening.result === "override_approved";
+  const isClear = screening.result === "clear";
+  const isReview = screening.result === "review";
+
+  const banner = isBlocked
+    ? { cls: "border-red-200 bg-red-50/60", icon: <ShieldAlert className="w-5 h-5 text-red-700" />, title: "Submission BLOCKED — Intapp conflict detected" }
+    : isOverridden
+      ? { cls: "border-violet-200 bg-violet-50/60", icon: <Unlock className="w-5 h-5 text-violet-700" />, title: "QRM override applied — proceed with documented justification" }
+      : isReview
+        ? { cls: "border-amber-200 bg-amber-50/60", icon: <ShieldAlert className="w-5 h-5 text-amber-700" />, title: "Review required — mitigations recommended" }
+        : isClear
+          ? { cls: "border-emerald-200 bg-emerald-50/60", icon: <ShieldCheck className="w-5 h-5 text-emerald-700" />, title: "Cleared by Intapp — no compliance issues" }
+          : { cls: "border-stone-200 bg-stone-50", icon: <Shield className="w-5 h-5 text-stone-600" />, title: "Screening pending" };
+
+  const handleOverride = () => {
+    if (justification.trim().length < 10) return;
+    override.mutate({ dealId: deal.id, justification, userName: persona?.name, userRole: persona?.role });
+    setJustification("");
+    setShowOverride(false);
+  };
+
+  return (
+    <div className={`card p-5 border ${banner.cls}`}>
+      <div className="flex items-start gap-3 mb-3">
+        {banner.icon}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h3 className="text-sm font-semibold text-foreground">{banner.title}</h3>
+            <IntappResultBadge result={screening.result} />
+            <IntappRiskBadge tier={screening.riskTier} />
+            <IntappSourceBadge source={screening.source} />
+            {screening.externalRef && <span className="text-[10px] font-mono text-muted-foreground">{screening.externalRef}</span>}
+          </div>
+          <p className="text-xs text-muted-foreground mt-1.5 whitespace-pre-line">{screening.narrative}</p>
+        </div>
+        <button onClick={() => runScreen.mutate({ dealId: deal.id, userName: persona?.name })}
+          disabled={runScreen.isPending}
+          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-white border border-stone-300 text-xs font-medium hover:bg-stone-50 disabled:opacity-50">
+          {runScreen.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+          Re-screen
+        </button>
+      </div>
+
+      {(screening.hits || []).length > 0 && (
+        <div className="space-y-2 mt-3 pt-3 border-t border-stone-200/60">
+          {screening.hits.map((h: any) => (
+            <div key={h.id} className={cn("p-3 rounded-md text-xs",
+              h.severity === "high" ? "bg-red-50 border border-red-100" :
+              h.severity === "medium" ? "bg-amber-50 border border-amber-100" :
+              "bg-stone-50 border border-stone-200"
+            )}>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-semibold text-foreground capitalize">{h.hitType.replace(/_/g, " ")}</span>
+                <IntappRiskBadge tier={h.severity} />
+                {h.matchedEntity && <span className="text-muted-foreground">· {h.matchedEntity}</span>}
+                {h.externalRef && <span className="text-[10px] font-mono text-muted-foreground">{h.externalRef}</span>}
+              </div>
+              <p className="text-muted-foreground mt-1">{h.description}</p>
+              <p className="text-foreground mt-1"><span className="font-medium">Recommendation:</span> {h.recommendation}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {((screening.mitigations || []).length > 0 || canMitigate) && (
+        <div className="mt-3 pt-3 border-t border-stone-200/60">
+          <div className="flex items-center justify-between mb-1.5">
+            <div className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">Mitigations on file</div>
+            {canMitigate && !showMitForm && (
+              <button onClick={() => setShowMitForm(true)}
+                className="text-[11px] font-medium text-primary hover:underline">+ Add mitigation</button>
+            )}
+          </div>
+          {(screening.mitigations || []).map((m: any) => {
+            const done = m.status === "resolved" || m.status === "completed";
+            return (
+              <div key={m.id} className="text-xs text-foreground py-1 flex items-center gap-2">
+                {done ? <CheckCircle className="w-3.5 h-3.5 text-emerald-600" /> : <Clock className="w-3.5 h-3.5 text-amber-600" />}
+                <span className="font-medium">{m.action}</span>
+                {m.notes && <span className="text-muted-foreground">— {m.notes}</span>}
+                {m.resolvedBy && <span className="text-muted-foreground">— by {m.resolvedBy}</span>}
+                {!done && canMitigate && (
+                  <button
+                    onClick={() => updateMit.mutate({ id: m.id, dealId: deal.id, status: "resolved" } as any)}
+                    disabled={updateMit.isPending}
+                    className="ml-auto text-[11px] font-medium text-emerald-700 hover:underline disabled:opacity-50">
+                    Resolve
+                  </button>
+                )}
+              </div>
+            );
+          })}
+          {showMitForm && canMitigate && (
+            <div className="mt-2 space-y-2">
+              <input
+                type="text" value={mitAction} onChange={(e) => setMitAction(e.target.value)}
+                placeholder="Mitigation action (e.g., Obtained partner concurrence; EDD on file)"
+                className="w-full px-3 py-2 border border-stone-300 rounded-md text-xs focus:outline-none focus:border-primary" />
+              <textarea
+                value={mitNotes} onChange={(e) => setMitNotes(e.target.value)}
+                placeholder="Notes (optional)"
+                className="w-full min-h-[50px] px-3 py-2 border border-stone-300 rounded-md text-xs resize-y focus:outline-none focus:border-primary" />
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    if (mitAction.trim().length < 3) return;
+                    addMit.mutate({
+                      screeningId: screening.id,
+                      dealId: deal.id,
+                      action: mitAction,
+                      notes: mitNotes,
+                      status: "pending",
+                    } as any);
+                    setMitAction(""); setMitNotes(""); setShowMitForm(false);
+                  }}
+                  disabled={addMit.isPending || mitAction.trim().length < 3}
+                  className="px-3 py-1.5 rounded-md bg-primary text-white text-xs font-medium hover:bg-primary/90 disabled:opacity-50">
+                  Save mitigation
+                </button>
+                <button onClick={() => { setShowMitForm(false); setMitAction(""); setMitNotes(""); }}
+                  className="px-3 py-1.5 rounded-md bg-white border border-stone-300 text-xs font-medium hover:bg-stone-50">Cancel</button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {isBlocked && isQRM && (
+        <div className="mt-4 pt-3 border-t border-red-200">
+          {!showOverride ? (
+            <button onClick={() => setShowOverride(true)}
+              className="inline-flex items-center gap-2 px-3 py-2 rounded-md bg-violet-600 text-white text-xs font-medium hover:bg-violet-700">
+              <Unlock className="w-3.5 h-3.5" /> QRM override
+            </button>
+          ) : (
+            <div className="space-y-2">
+              <label className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">Justification (audit-logged, required)</label>
+              <textarea value={justification} onChange={(e) => setJustification(e.target.value)}
+                className="w-full min-h-[80px] px-3 py-2 border border-stone-300 rounded-md text-sm resize-y focus:outline-none focus:border-primary"
+                placeholder="Document the partner concurrence, mitigation actions, and policy basis for the override..." />
+              <div className="flex items-center gap-2">
+                <button onClick={handleOverride} disabled={justification.trim().length < 10 || override.isPending}
+                  className="px-3 py-1.5 rounded-md bg-violet-600 text-white text-xs font-medium hover:bg-violet-700 disabled:opacity-50">
+                  Apply override
+                </button>
+                <button onClick={() => { setShowOverride(false); setJustification(""); }}
+                  className="px-3 py-1.5 rounded-md bg-white border border-stone-300 text-xs font-medium hover:bg-stone-50">
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+      {isBlocked && !isQRM && (
+        <div className="mt-3 pt-3 border-t border-red-200 text-xs text-muted-foreground">
+          Switch to a QRM persona (e.g., David Kim) to apply an override, or attach mitigations from the Intapp admin page.
+        </div>
+      )}
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import { useLocation, Link } from "wouter";
-import { LayoutDashboard, FileText, Settings, ChevronDown, BookOpen, DollarSign, Layers, LogOut, Shield, BarChart3, Database } from "lucide-react";
+import { LayoutDashboard, FileText, Settings, ChevronDown, BookOpen, DollarSign, Layers, LogOut, Shield, BarChart3, Database, ShieldAlert } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
 import { useAuth } from "@/context/AuthContext";
@@ -16,6 +16,7 @@ export function Sidebar() {
     { name: "Deals", href: "/deals", icon: FileText, show: true },
     { name: "Analytics", href: "/analytics", icon: BarChart3, show: hasPermission("viewDeals") },
     { name: "Dynamics CRM", href: "/integrations/dynamics", icon: Database, show: true },
+    { name: "Intapp Risk", href: "/integrations/intapp", icon: ShieldAlert, show: true },
     { name: "Architecture", href: "/architecture", icon: Layers, show: true },
   ];
 

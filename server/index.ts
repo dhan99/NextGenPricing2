@@ -286,6 +286,82 @@ async function pushSchema() {
       nightly_batch_enabled BOOLEAN DEFAULT TRUE,
       updated_at TIMESTAMP DEFAULT NOW() NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS intapp_settings (
+      id SERIAL PRIMARY KEY,
+      mode TEXT NOT NULL DEFAULT 'simulated',
+      auto_screen_on_submit BOOLEAN DEFAULT TRUE,
+      block_submit_on_conflict BOOLEAN DEFAULT TRUE,
+      allow_qrm_override BOOLEAN DEFAULT TRUE,
+      auto_screen_on_client_change BOOLEAN DEFAULT FALSE,
+      nightly_rescreen BOOLEAN DEFAULT FALSE,
+      api_base_url TEXT,
+      api_token_secret TEXT,
+      live_tenant_url TEXT,
+      live_client_id TEXT,
+      live_api_key_secret TEXT,
+      policy_version TEXT DEFAULT '4w-pilot-v1',
+      pilot_ends_on TEXT,
+      updated_at TIMESTAMP DEFAULT NOW() NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS intapp_screenings (
+      id SERIAL PRIMARY KEY,
+      deal_id INTEGER REFERENCES deals(id) NOT NULL,
+      source TEXT NOT NULL DEFAULT 'simulated',
+      status TEXT NOT NULL DEFAULT 'pending',
+      result TEXT DEFAULT 'pending',
+      risk_tier TEXT DEFAULT 'low',
+      hit_count INTEGER DEFAULT 0,
+      policy_version TEXT,
+      external_ref TEXT,
+      requested_by TEXT,
+      requested_at TIMESTAMP DEFAULT NOW() NOT NULL,
+      completed_at TIMESTAMP,
+      payload_snapshot JSONB,
+      narrative TEXT
+    );
+    CREATE TABLE IF NOT EXISTS intapp_hits (
+      id SERIAL PRIMARY KEY,
+      screening_id INTEGER REFERENCES intapp_screenings(id) NOT NULL,
+      hit_type TEXT NOT NULL,
+      severity TEXT NOT NULL DEFAULT 'low',
+      matched_entity TEXT,
+      description TEXT,
+      recommendation TEXT,
+      external_ref TEXT
+    );
+    CREATE TABLE IF NOT EXISTS intapp_mitigations (
+      id SERIAL PRIMARY KEY,
+      screening_id INTEGER REFERENCES intapp_screenings(id) NOT NULL,
+      hit_id INTEGER REFERENCES intapp_hits(id),
+      status TEXT NOT NULL DEFAULT 'pending',
+      action TEXT NOT NULL,
+      notes TEXT,
+      resolved_by TEXT,
+      resolved_at TIMESTAMP,
+      created_at TIMESTAMP DEFAULT NOW() NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS intapp_events (
+      id SERIAL PRIMARY KEY,
+      deal_id INTEGER REFERENCES deals(id),
+      screening_id INTEGER REFERENCES intapp_screenings(id),
+      event_type TEXT NOT NULL,
+      source TEXT DEFAULT 'simulated',
+      actor_name TEXT,
+      actor_role TEXT,
+      message TEXT,
+      metadata JSONB,
+      created_at TIMESTAMP DEFAULT NOW() NOT NULL
+    );
+  `);
+
+  // Backfill: add Intapp settings columns if table pre-existed without them
+  await db.execute(sql`
+    ALTER TABLE intapp_settings ADD COLUMN IF NOT EXISTS auto_screen_on_client_change BOOLEAN DEFAULT FALSE;
+    ALTER TABLE intapp_settings ADD COLUMN IF NOT EXISTS nightly_rescreen BOOLEAN DEFAULT FALSE;
+    ALTER TABLE intapp_settings ADD COLUMN IF NOT EXISTS live_tenant_url TEXT;
+    ALTER TABLE intapp_settings ADD COLUMN IF NOT EXISTS live_client_id TEXT;
+    ALTER TABLE intapp_settings ADD COLUMN IF NOT EXISTS live_api_key_secret TEXT;
   `);
 
   // Backfill: ensure unique constraint on dealpad_deal_id even if table pre-existed
@@ -315,6 +391,12 @@ async function start() {
   }
 
   registerRoutes(app);
+
+  // Start nightly Intapp re-screen loop (no-op until enabled in settings)
+  try {
+    const { startNightlyRescreenLoop } = await import("./intapp");
+    startNightlyRescreenLoop();
+  } catch (e) { console.error("Intapp nightly loop bootstrap error:", e); }
 
   app.get("/architecture-doc", (_req, res) => {
     res.sendFile(path.join(process.cwd(), "DealPad_Architecture_Document.html"));
