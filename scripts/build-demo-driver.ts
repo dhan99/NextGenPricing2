@@ -11,91 +11,37 @@ const MUTE = "#57534E";
 const RULE = "#E7E5E4";
 const PURPLE = "#7C3AED";
 const BLUE = "#2563EB";
-const GREEN = "#059669";
-const RED = "#DC2626";
 
-const PAGE = { size: "LETTER" as const, margin: 54 };
-const W = 612 - 108;
+const MARGIN = 54;
+const PAGE_W = 612;
+const PAGE_H = 792;
+const W = PAGE_W - MARGIN * 2;
+const BOTTOM = PAGE_H - MARGIN - 24; // reserve room for footer
 
-const doc = new PDFDocument({ ...PAGE, bufferPages: true, info: {
-  Title: "DealPad Demo Driver",
-  Author: "Armanino LLP — NextGenApp Pricing & Scoping 2.0",
-  Subject: "Stakeholder demo walkthrough",
-}});
+const doc = new PDFDocument({
+  size: "LETTER",
+  margins: { top: MARGIN, bottom: MARGIN + 24, left: MARGIN, right: MARGIN },
+  bufferPages: true,
+  autoFirstPage: false,
+  info: {
+    Title: "DealPad Demo Driver",
+    Author: "Armanino LLP — NextGenApp Pricing & Scoping 2.0",
+    Subject: "Stakeholder demo walkthrough",
+  },
+});
 doc.pipe(fs.createWriteStream(OUT));
 
-let pageNum = 0;
-
-function newPage() {
+function startPage() {
   doc.addPage();
-  pageNum++;
+  doc.x = MARGIN;
+  doc.y = MARGIN;
+  doc.fillColor(INK);
 }
 
-function H1(text: string) {
-  doc.fillColor(INK).font("Helvetica-Bold").fontSize(22).text(text, { paragraphGap: 4 });
-  doc.moveTo(doc.x, doc.y).lineTo(doc.x + 60, doc.y).lineWidth(3).strokeColor(AMBER).stroke();
-  doc.moveDown(0.8);
-  doc.strokeColor(RULE).lineWidth(1);
-}
-
-function H2(text: string) {
-  if (doc.y > 680) newPage();
-  doc.moveDown(0.4);
-  doc.fillColor(INK).font("Helvetica-Bold").fontSize(14).text(text);
-  doc.moveDown(0.3);
-}
-
-function H3(text: string, color: string = INK) {
-  if (doc.y > 700) newPage();
-  doc.fillColor(color).font("Helvetica-Bold").fontSize(11).text(text);
-  doc.moveDown(0.2);
-}
-
-function P(text: string, opts: { size?: number; color?: string; bold?: boolean } = {}) {
-  if (doc.y > 720) newPage();
-  doc.fillColor(opts.color ?? INK).font(opts.bold ? "Helvetica-Bold" : "Helvetica").fontSize(opts.size ?? 10).text(text, { align: "left", lineGap: 2 });
-}
-
-function muted(text: string) {
-  P(text, { color: MUTE, size: 9 });
-}
-
-function bullet(items: string[], color: string = INK) {
-  doc.font("Helvetica").fontSize(10).fillColor(color);
-  items.forEach((item) => {
-    if (doc.y > 720) newPage();
-    doc.text(`•  ${item}`, { indent: 4, lineGap: 2, paragraphGap: 2 });
-  });
-  doc.moveDown(0.3);
-}
-
-function rule() {
-  doc.moveDown(0.4);
-  doc.moveTo(doc.x, doc.y).lineTo(doc.x + W, doc.y).strokeColor(RULE).lineWidth(1).stroke();
-  doc.moveDown(0.4);
-}
-
-function callout(label: string, color: string, lines: string[]) {
-  if (doc.y > 640) newPage();
-  const startY = doc.y;
-  const padding = 10;
-  const labelHeight = 14;
-  const contentHeight = lines.length * 13 + 8;
-  const totalHeight = labelHeight + contentHeight + padding * 2;
-
-  doc.save();
-  doc.rect(doc.x, startY, W, totalHeight).fillAndStroke(hexFade(color, 0.06), color);
-  doc.restore();
-
-  doc.fillColor(color).font("Helvetica-Bold").fontSize(8.5).text(label.toUpperCase(), doc.x + padding, startY + padding, { width: W - padding * 2, characterSpacing: 0.6 });
-  doc.fillColor(INK).font("Helvetica").fontSize(9.5);
-  let y = startY + padding + labelHeight + 2;
-  lines.forEach((l) => {
-    doc.text(l, doc.x, y, { width: W - padding * 2 - 4 });
-    y += 13;
-  });
-  doc.x -= padding;
-  doc.y = startY + totalHeight + 6;
+function ensure(space: number) {
+  if (doc.y + space > BOTTOM) {
+    startPage();
+  }
 }
 
 function hexFade(hex: string, alpha: number): string {
@@ -107,98 +53,232 @@ function hexFade(hex: string, alpha: number): string {
   return `#${[mix(r), mix(g), mix(b)].map((v) => v.toString(16).padStart(2, "0")).join("")}`;
 }
 
+function H1(text: string) {
+  ensure(40);
+  doc.fillColor(INK).font("Helvetica-Bold").fontSize(22).text(text, MARGIN, doc.y, { width: W, lineBreak: false });
+  const y = doc.y + 26;
+  doc.moveTo(MARGIN, y).lineTo(MARGIN + 60, y).lineWidth(3).strokeColor(AMBER).stroke();
+  doc.x = MARGIN;
+  doc.y = y + 12;
+}
+
+function H2(text: string) {
+  ensure(28);
+  doc.moveDown(0.3);
+  doc.fillColor(INK).font("Helvetica-Bold").fontSize(14).text(text, MARGIN, doc.y, { width: W });
+  doc.x = MARGIN;
+  doc.moveDown(0.2);
+}
+
+function H3(text: string, color: string = INK) {
+  ensure(20);
+  doc.fillColor(color).font("Helvetica-Bold").fontSize(11).text(text, MARGIN, doc.y, { width: W });
+  doc.x = MARGIN;
+  doc.moveDown(0.15);
+}
+
+function P(text: string, opts: { size?: number; color?: string; bold?: boolean } = {}) {
+  const size = opts.size ?? 10;
+  doc.fillColor(opts.color ?? INK).font(opts.bold ? "Helvetica-Bold" : "Helvetica").fontSize(size);
+  const h = doc.heightOfString(text, { width: W, lineGap: 2 });
+  ensure(h + 4);
+  doc.text(text, MARGIN, doc.y, { width: W, lineGap: 2 });
+  doc.x = MARGIN;
+}
+
+function muted(text: string) {
+  P(text, { color: MUTE, size: 9 });
+}
+
+function bullet(items: string[]) {
+  doc.font("Helvetica").fontSize(10).fillColor(INK);
+  items.forEach((item) => {
+    const line = `•  ${item}`;
+    const h = doc.heightOfString(line, { width: W - 8, lineGap: 2 });
+    ensure(h + 4);
+    doc.text(line, MARGIN + 4, doc.y, { width: W - 8, lineGap: 2 });
+    doc.x = MARGIN;
+    doc.moveDown(0.1);
+  });
+  doc.moveDown(0.2);
+}
+
+function callout(label: string, color: string, lines: string[]) {
+  doc.font("Helvetica").fontSize(9.5);
+  const padding = 10;
+  const labelH = 13;
+  const lineHeights = lines.map((l) => doc.heightOfString(l, { width: W - padding * 2 }));
+  const contentH = lineHeights.reduce((a, b) => a + b, 0) + (lines.length - 1) * 2;
+  const totalH = labelH + contentH + padding * 2 + 2;
+
+  ensure(totalH + 8);
+  const startY = doc.y;
+
+  doc.save();
+  doc.rect(MARGIN, startY, W, totalH).fillAndStroke(hexFade(color, 0.06), color);
+  doc.restore();
+
+  doc.fillColor(color).font("Helvetica-Bold").fontSize(8.5)
+    .text(label.toUpperCase(), MARGIN + padding, startY + padding, {
+      width: W - padding * 2,
+      characterSpacing: 0.6,
+      lineBreak: false,
+    });
+
+  doc.fillColor(INK).font("Helvetica").fontSize(9.5);
+  let y = startY + padding + labelH + 2;
+  lines.forEach((line, i) => {
+    doc.text(line, MARGIN + padding, y, { width: W - padding * 2 });
+    y += lineHeights[i] + (i < lines.length - 1 ? 2 : 0);
+  });
+
+  doc.x = MARGIN;
+  doc.y = startY + totalH + 8;
+}
+
 function table(headers: string[], rows: string[][], colWidths?: number[]) {
   const widths = colWidths ?? headers.map(() => W / headers.length);
-  const lineH = 14;
-  if (doc.y > 660) newPage();
+  const headerH = 20;
 
-  const startX = doc.x;
-  const startY = doc.y;
-  doc.rect(startX, startY, W, lineH + 6).fill(AMBER_LIGHT);
-  doc.fillColor(INK).font("Helvetica-Bold").fontSize(9);
-  let x = startX + 6;
+  doc.font("Helvetica-Bold").fontSize(9);
+  ensure(headerH + 24);
+
+  // header
+  let y = doc.y;
+  doc.rect(MARGIN, y, W, headerH).fill(AMBER_LIGHT);
+  doc.fillColor(INK);
+  let cx = MARGIN + 6;
   headers.forEach((h, i) => {
-    doc.text(h, x, startY + 5, { width: widths[i] - 8, ellipsis: true });
-    x += widths[i];
+    doc.text(h, cx, y + 6, { width: widths[i] - 8, lineBreak: false, ellipsis: true });
+    cx += widths[i];
   });
-  let y = startY + lineH + 6;
+  y += headerH;
 
+  // rows
   doc.font("Helvetica").fontSize(9);
-  rows.forEach((row, rIdx) => {
+  for (let rIdx = 0; rIdx < rows.length; rIdx++) {
+    const row = rows[rIdx];
     const heights = row.map((cell, i) => doc.heightOfString(cell, { width: widths[i] - 8 }));
-    const rowH = Math.max(lineH, ...heights) + 6;
-    if (y + rowH > 740) {
-      newPage();
+    const rowH = Math.max(18, ...heights) + 6;
+
+    if (y + rowH > BOTTOM) {
+      // repeat header on next page
+      startPage();
       y = doc.y;
+      doc.font("Helvetica-Bold").fontSize(9);
+      doc.rect(MARGIN, y, W, headerH).fill(AMBER_LIGHT);
+      doc.fillColor(INK);
+      let hx = MARGIN + 6;
+      headers.forEach((h, i) => {
+        doc.text(h, hx, y + 6, { width: widths[i] - 8, lineBreak: false, ellipsis: true });
+        hx += widths[i];
+      });
+      y += headerH;
+      doc.font("Helvetica").fontSize(9);
     }
+
     if (rIdx % 2 === 1) {
-      doc.rect(startX, y, W, rowH).fill("#FAFAF9");
+      doc.rect(MARGIN, y, W, rowH).fill("#FAFAF9");
     }
     doc.fillColor(INK);
-    let cx = startX + 6;
+    let rx = MARGIN + 6;
     row.forEach((cell, i) => {
-      doc.text(cell, cx, y + 4, { width: widths[i] - 8 });
-      cx += widths[i];
+      doc.text(cell, rx, y + 4, { width: widths[i] - 8 });
+      rx += widths[i];
     });
-    doc.moveTo(startX, y + rowH).lineTo(startX + W, y + rowH).strokeColor(RULE).lineWidth(0.5).stroke();
+    doc.moveTo(MARGIN, y + rowH).lineTo(MARGIN + W, y + rowH).strokeColor(RULE).lineWidth(0.5).stroke();
     y += rowH;
-  });
-  doc.x = startX;
-  doc.y = y + 6;
+  }
+
+  doc.x = MARGIN;
+  doc.y = y + 8;
+}
+
+function sectionBanner(label: string, title: string, subtitle: string, color: string) {
+  startPage();
+  const bannerH = 64;
+  doc.rect(0, MARGIN - 14, PAGE_W, bannerH).fill(color);
+  doc.fillColor("white").font("Helvetica-Bold").fontSize(11)
+    .text(label.toUpperCase(), MARGIN, MARGIN - 4, { width: W, characterSpacing: 1.4, lineBreak: false });
+  doc.font("Helvetica-Bold").fontSize(20)
+    .text(title, MARGIN, MARGIN + 12, { width: W, lineBreak: false });
+  doc.font("Helvetica").fontSize(11)
+    .text(subtitle, MARGIN, MARGIN + 36, { width: W, lineBreak: false });
+  doc.x = MARGIN;
+  doc.y = MARGIN + bannerH + 4;
+  doc.fillColor(INK);
 }
 
 function stepHeader(num: string, title: string, persona: string) {
-  if (doc.y > 660) newPage();
-  doc.moveDown(0.3);
-  const startY = doc.y;
-  doc.rect(doc.x, startY, W, 30).fill(INK);
-  doc.fillColor(AMBER).font("Helvetica-Bold").fontSize(11).text(num, doc.x + 12, startY + 9, { continued: true, width: 60 });
-  doc.fillColor("white").text("  ·  " + title, { continued: true });
-  doc.fillColor(MUTE).font("Helvetica").fontSize(9).text(`   as ${persona}`, { width: W - 24 });
-  doc.x = PAGE.margin;
-  doc.y = startY + 38;
+  const headerH = 30;
+  ensure(headerH + 20);
+  const y = doc.y;
+  doc.rect(MARGIN, y, W, headerH).fill(INK);
+  doc.fillColor(AMBER).font("Helvetica-Bold").fontSize(11)
+    .text(num, MARGIN + 12, y + 9, { width: 70, lineBreak: false });
+  doc.fillColor("white").font("Helvetica-Bold").fontSize(11)
+    .text(title, MARGIN + 70, y + 9, { width: W - 70 - 200, lineBreak: false, ellipsis: true });
+  doc.fillColor("#A8A29E").font("Helvetica").fontSize(9)
+    .text(`as ${persona}`, MARGIN + W - 200, y + 11, { width: 188, align: "right", lineBreak: false, ellipsis: true });
+  doc.x = MARGIN;
+  doc.y = y + headerH + 10;
+  doc.fillColor(INK);
 }
 
 // ============================================================
 // COVER
 // ============================================================
-doc.rect(0, 0, 612, 792).fill("white");
-doc.rect(0, 0, 612, 220).fill(AMBER);
-doc.fillColor("white").font("Helvetica-Bold").fontSize(44).text("DealPad", 54, 70);
-doc.font("Helvetica").fontSize(16).text("Pricing & Scoping 2.0", 54, 124);
-doc.font("Helvetica-Bold").fontSize(11).text("ARMANINO LLP   ·   NEXTGENAPP", 54, 158, { characterSpacing: 1.2 });
+startPage();
+doc.rect(0, 0, PAGE_W, 220).fill(AMBER);
+doc.fillColor("white").font("Helvetica-Bold").fontSize(44)
+  .text("DealPad", MARGIN, 70, { width: W, lineBreak: false });
+doc.font("Helvetica").fontSize(16)
+  .text("Pricing & Scoping 2.0", MARGIN, 124, { width: W, lineBreak: false });
+doc.font("Helvetica-Bold").fontSize(11)
+  .text("ARMANINO LLP   ·   NEXTGENAPP", MARGIN, 158, { width: W, characterSpacing: 1.2, lineBreak: false });
 
-doc.fillColor(INK).font("Helvetica-Bold").fontSize(32).text("Demo Driver", 54, 280);
-doc.font("Helvetica").fontSize(14).fillColor(MUTE).text("End-to-end stakeholder walkthrough", 54, 322);
+doc.fillColor(INK).font("Helvetica-Bold").fontSize(32)
+  .text("Demo Driver", MARGIN, 280, { width: W, lineBreak: false });
+doc.font("Helvetica").fontSize(14).fillColor(MUTE)
+  .text("End-to-end stakeholder walkthrough", MARGIN, 322, { width: W, lineBreak: false });
 
-doc.fillColor(INK).font("Helvetica-Bold").fontSize(11).text("What this document covers", 54, 400);
-doc.font("Helvetica").fontSize(10.5).fillColor(INK).text(
-  "A scripted, click-by-click run through every major DealPad surface — with the exact data to enter, the catalog and configuration that gets consulted at each step, the talking points to make, and what the audience should see on screen. Use it as a presenter's notes for live demos, a self-paced trial for new users, or as a reference for the 4-week production pilot.",
-  54, 422, { width: 504, lineGap: 3, align: "left" }
-);
+doc.fillColor(INK).font("Helvetica-Bold").fontSize(11)
+  .text("What this document covers", MARGIN, 400, { width: W, lineBreak: false });
+doc.font("Helvetica").fontSize(10.5).fillColor(INK)
+  .text(
+    "A scripted, click-by-click run through every major DealPad surface — with the exact data to enter, the catalog and configuration that gets consulted at each step, the talking points to make, and what the audience should see on screen. Use it as a presenter's notes for live demos, a self-paced trial for new users, or as a reference for the 4-week production pilot.",
+    MARGIN, 422, { width: W, lineGap: 3, align: "left" }
+  );
 
-doc.fillColor(INK).font("Helvetica-Bold").fontSize(11).text("Two flows are demonstrated", 54, 530);
-doc.font("Helvetica").fontSize(10.5).fillColor(INK);
-doc.text("•  Flow A — Manual wizard: opportunity → 7 wizard steps → submit → approve → analytics", 54, 552, { width: 504 });
-doc.text("•  Flow B — Autonomous Agent: opportunity → 1-click → reviewer approves draft", 54, 568, { width: 504 });
+doc.fillColor(INK).font("Helvetica-Bold").fontSize(11)
+  .text("Two flows are demonstrated", MARGIN, 530, { width: W, lineBreak: false });
+doc.font("Helvetica").fontSize(10.5).fillColor(INK)
+  .text("•  Flow A — Manual wizard: opportunity -> 7 wizard steps -> submit -> approve -> analytics", MARGIN, 552, { width: W, lineBreak: false });
+doc.text("•  Flow B — Autonomous Agent: opportunity -> 1-click -> reviewer approves draft", MARGIN, 568, { width: W, lineBreak: false });
 
-doc.rect(54, 620, 504, 1).fill(RULE);
-doc.fillColor(MUTE).font("Helvetica").fontSize(9).text("Date", 54, 640);
-doc.fillColor(INK).font("Helvetica-Bold").fontSize(11).text("April 2026", 54, 654);
-doc.fillColor(MUTE).font("Helvetica").fontSize(9).text("Audience", 220, 640);
-doc.fillColor(INK).font("Helvetica-Bold").fontSize(11).text("Pilot stakeholders", 220, 654);
-doc.fillColor(MUTE).font("Helvetica").fontSize(9).text("Duration", 400, 640);
-doc.fillColor(INK).font("Helvetica-Bold").fontSize(11).text("~30 minutes", 400, 654);
+doc.rect(MARGIN, 620, W, 1).fill(RULE);
+doc.fillColor(MUTE).font("Helvetica").fontSize(9).text("Date", MARGIN, 640, { width: 160, lineBreak: false });
+doc.fillColor(INK).font("Helvetica-Bold").fontSize(11).text("April 2026", MARGIN, 654, { width: 160, lineBreak: false });
+doc.fillColor(MUTE).font("Helvetica").fontSize(9).text("Audience", MARGIN + 180, 640, { width: 160, lineBreak: false });
+doc.fillColor(INK).font("Helvetica-Bold").fontSize(11).text("Pilot stakeholders", MARGIN + 180, 654, { width: 160, lineBreak: false });
+doc.fillColor(MUTE).font("Helvetica").fontSize(9).text("Duration", MARGIN + 360, 640, { width: 160, lineBreak: false });
+doc.fillColor(INK).font("Helvetica-Bold").fontSize(11).text("~30 minutes", MARGIN + 360, 654, { width: 160, lineBreak: false });
 
-doc.fillColor(MUTE).font("Helvetica").fontSize(8).text("CONFIDENTIAL — Armanino LLP internal pilot material", 54, 740);
+{
+  const savedBottom = doc.page.margins.bottom;
+  doc.page.margins.bottom = 0;
+  doc.fillColor(MUTE).font("Helvetica").fontSize(8)
+    .text("CONFIDENTIAL — Armanino LLP internal pilot material", MARGIN, 740, { width: W, lineBreak: false });
+  doc.page.margins.bottom = savedBottom;
+}
 
 // ============================================================
 // AGENDA
 // ============================================================
-newPage();
+startPage();
 H1("Agenda");
 muted("A 30-minute live demo. Flow A and Flow B can run independently — pick one for shorter sessions.");
-doc.moveDown(0.5);
+doc.moveDown(0.4);
 
 table(
   ["#", "Section", "Time", "Persona"],
@@ -208,7 +288,7 @@ table(
     ["2", "Dashboard · pipeline at a glance", "2 min", "Michael Torres (PDL)"],
     ["3", "Dynamics CRM · opportunities to import", "3 min", "Michael Torres (PDL)"],
     ["A", "Flow A — Manual wizard (7 steps)", "10 min", "Michael Torres (PDL)"],
-    ["A.8", "Submit · Intapp + Workday gates · approval", "3 min", "Marcus Chen (QRM) → Jennifer Walsh (FIN)"],
+    ["A.8", "Submit · Intapp + Workday gates · approval", "3 min", "Marcus Chen -> Jennifer Walsh"],
     ["B", "Flow B — Autonomous Agent (1 click)", "5 min", "Michael Torres (PDL)"],
     ["4", "Analytics · margin & cycle KPIs", "2 min", "Jennifer Walsh (FIN)"],
     ["5", "Architecture Hub · DDD · integrations", "3 min", "IT Administrator"],
@@ -229,9 +309,10 @@ bullet([
 // ============================================================
 // SECTION 1 — PERSONAS
 // ============================================================
-newPage();
+startPage();
 H1("1 · Persona switcher");
 muted("Demonstrates role-based access. Sets the tone that DealPad is one platform serving six personas, each with their own surface.");
+doc.moveDown(0.3);
 
 H3("Action");
 bullet([
@@ -247,7 +328,7 @@ table(
     ["Michael Torres", "PDL — Practice Delivery Lead", "End-to-end deal scoping, pricing, delivery hand-off"],
     ["Rachel Kim", "SLL — Service Line Lead", "Service-line quality, staffing model, methodology fit"],
     ["Pricing Operations", "PO — Pricing Ops", "Rate cards, scope catalog, prompt sets, global config"],
-    ["Jennifer Walsh", "FIN — Finance / Practice Director", "Margin enforcement, approval thresholds, commercial sign-off"],
+    ["Jennifer Walsh", "FIN — Finance / Practice Director", "Margin enforcement, approval thresholds, sign-off"],
     ["Marcus Chen", "QRM — Quality & Risk Management", "Independence checks, conflict screening, mitigations"],
     ["IT Administrator", "IT — System Admin", "Integration health, RBAC, platform observability"],
   ],
@@ -262,9 +343,10 @@ callout("Talking point", AMBER, [
 // ============================================================
 // SECTION 2 — DASHBOARD
 // ============================================================
-newPage();
+startPage();
 H1("2 · Dashboard");
 muted("First screen Michael lands on. Establishes that DealPad already knows the state of his pipeline before he does anything.");
+doc.moveDown(0.3);
 
 H3("Action");
 bullet([
@@ -281,7 +363,7 @@ table(
     ["Total Pipeline ($)", "Sum of fee on deals not in Won/Lost", "Top-of-funnel health"],
     ["Win Rate (%)", "Won / (Won + Lost) over trailing 90d", "Conversion quality"],
     ["Avg Margin (%)", "Mean of deal margin across active deals", "Commercial discipline"],
-    ["Avg Cycle Time (days)", "Days from draft → submitted → approved", "Process efficiency"],
+    ["Avg Cycle Time (days)", "Days from draft -> submitted -> approved", "Process efficiency"],
   ],
   [140, 200, W - 340]
 );
@@ -302,9 +384,10 @@ callout("Talking point", AMBER, [
 // ============================================================
 // SECTION 3 — DYNAMICS CRM
 // ============================================================
-newPage();
+startPage();
 H1("3 · Dynamics CRM — opportunities");
 muted("This is where deals start. We surface live opportunities from D365 directly inside DealPad so the PDL never tab-switches.");
+doc.moveDown(0.3);
 
 H3("Action");
 bullet([
@@ -322,12 +405,12 @@ table(
     ["Helios Energy Inc — SOX Readiness", "Helios Energy Inc", "Develop", "$540,000"],
     ["Crestwood Holdings — 2026 Annual Audit", "Crestwood Holdings", "Qualify", "$412,000"],
   ],
-  [240, 130, 70, W - 440]
+  [220, 130, 70, W - 420]
 );
 
 callout("Config consulted", BLUE, [
   "D365 connection settings · stage mapping (Qualify/Develop/Propose/Close)",
-  "Account → Client resolution rules (auto-create stub if no match)",
+  "Account -> Client resolution rules (auto-create stub if no match)",
   "Eligibility for Autonomous Agent: stage in {Develop, Propose} AND no existing dealpadDealId",
 ]);
 
@@ -339,15 +422,10 @@ callout("Talking point", AMBER, [
 // ============================================================
 // FLOW A
 // ============================================================
-newPage();
-doc.rect(0, doc.y - 10, 612, 60).fill(BLUE);
-doc.fillColor("white").font("Helvetica-Bold").fontSize(20).text("Flow A · Manual wizard", PAGE.margin, doc.y + 10);
-doc.font("Helvetica").fontSize(11).text("PDL walks the deal through 7 wizard steps, then submits for approval", PAGE.margin, doc.y + 4);
-doc.x = PAGE.margin;
-doc.y += 50;
-doc.fillColor(INK);
+sectionBanner("FLOW A", "Manual wizard", "PDL walks the deal through 7 wizard steps, then submits for approval", BLUE);
 
 muted("Use the Helios Energy opportunity from the previous step. From the CRM page, click 'Import to DealPad' on its row. The system creates a draft deal at currentStep=1 and redirects to the wizard.");
+doc.moveDown(0.3);
 
 stepHeader("A.1", "Setup", "Michael Torres (PDL)");
 H3("Data to enter");
@@ -392,7 +470,7 @@ table(
     ["SOX-003", "Control Testing — Operating Effectiveness", "200", "SOX & Internal Controls"],
     ["SOX-004", "Deficiency Evaluation & Reporting", "60", "SOX & Internal Controls"],
   ],
-  [60, 230, 80, W - 370]
+  [60, 220, 80, W - 360]
 );
 callout("Catalog & config consulted", BLUE, [
   "scope_catalog table (filtered by BU + serviceLine)",
@@ -448,7 +526,7 @@ callout("Catalog & config consulted", BLUE, [
   "AI Margin Advisor (UC-3): warns inline if margin drops below the service-line floor",
 ]);
 
-stepHeader("A.5", "Review · pre-flight gates", "Michael Torres (PDL) → Marcus Chen (QRM)");
+stepHeader("A.5", "Review · pre-flight gates", "Michael Torres -> Marcus Chen");
 H3("Action");
 bullet([
   "Click 'Run Independence Screening' — calls Intapp.",
@@ -461,7 +539,7 @@ table(
   [
     ["Independence screening", "Intapp Risk", "No conflicts · or mitigations attached"],
     ["Cost center & budget headroom", "Workday", "Cost center exists · budget headroom > deal cost"],
-    ["Margin floor", "DealPad config", "Margin ≥ service-line floor (default 25%)"],
+    ["Margin floor", "DealPad config", "Margin >= service-line floor (default 25%)"],
   ],
   [180, 120, W - 300]
 );
@@ -475,7 +553,7 @@ H3("Approval routing rules");
 table(
   ["Condition", "Approver"],
   [
-    ["Margin ≥ 35% AND Fee ≤ $500K AND scope items < 8", "Auto-approved"],
+    ["Margin >= 35% AND Fee <= $500K AND scope items < 8", "Auto-approved"],
     ["Margin 25–34% OR Fee $500K–$2M", "Practice Delivery Lead (peer)"],
     ["Margin 20–24% OR Fee $2M–$5M", "Service Line Lead"],
     ["Margin < 20% OR Fee > $5M OR strategic flag", "Practice Director (Finance)"],
@@ -504,7 +582,7 @@ bullet([
 ]);
 callout("Catalog & config consulted", BLUE, [
   "Conga templates (per service line)",
-  "Field mapping: deal → EL placeholders (covers 47 fields end-to-end)",
+  "Field mapping: deal -> EL placeholders (covers 47 fields end-to-end)",
 ]);
 callout("Talking point", AMBER, [
   "From opportunity to ready-to-send engagement letter in under 20 minutes —",
@@ -514,27 +592,22 @@ callout("Talking point", AMBER, [
 // ============================================================
 // FLOW B
 // ============================================================
-newPage();
-doc.rect(0, doc.y - 10, 612, 60).fill(PURPLE);
-doc.fillColor("white").font("Helvetica-Bold").fontSize(20).text("Flow B · Autonomous Agent", PAGE.margin, doc.y + 10);
-doc.font("Helvetica").fontSize(11).text("Same outcome as Flow A — but in 1 click and ~5 seconds", PAGE.margin, doc.y + 4);
-doc.x = PAGE.margin;
-doc.y += 50;
-doc.fillColor(INK);
+sectionBanner("FLOW B", "Autonomous Agent", "Same outcome as Flow A — but in 1 click and ~5 seconds", PURPLE);
 
 muted("Use the Crestwood Holdings opportunity (or any other Develop/Propose-stage opp not yet linked). Setup time required: zero.");
+doc.moveDown(0.3);
 
 stepHeader("B.1", "Trigger the agent", "Michael Torres (PDL)");
 H3("Action");
 bullet([
   "Go to Dynamics CRM page.",
   "On the Crestwood row, click the purple 'Autonomous Agent' button.",
-  "Watch the progress modal: Setup → Prompts → Scope → Pricing → Scenarios → Risk → Review (~3–8 sec).",
+  "Watch the progress modal: Setup -> Prompts -> Scope -> Pricing -> Scenarios -> Risk -> Review (~3–8 sec).",
   "Land on the deal Summary page with status 'Pending Reviewer Approval (Agent Draft)'.",
 ]);
 callout("Catalog & config consulted", PURPLE, [
   "All of the same: scope_catalog, prompt_sets, rate_cards, approval_policies",
-  "Plus: pickTemplateForName() heuristic that maps opportunity name → BU/serviceLine/complexity",
+  "Plus: pickTemplateForName() heuristic that maps opportunity name -> BU/serviceLine/complexity",
   "Plus: pickContextualAnswer() per prompt — emits answer + multiplier + confidence + needsReview + rationale",
 ]);
 
@@ -566,9 +639,10 @@ callout("Talking point", AMBER, [
 // ============================================================
 // SECTION 4 — ANALYTICS
 // ============================================================
-newPage();
+startPage();
 H1("4 · Analytics");
 muted("Where Jennifer (Finance) and Service Line Leads spend their time. Live data from the same system of record — no spreadsheet exports.");
+doc.moveDown(0.3);
 
 H3("Action");
 bullet([
@@ -596,9 +670,10 @@ callout("Talking point", AMBER, [
 // ============================================================
 // SECTION 5 — ARCHITECTURE HUB
 // ============================================================
-newPage();
+startPage();
 H1("5 · Architecture Hub");
 muted("Quick technical credibility tour for IT-leaning stakeholders. Skip if audience is purely commercial.");
+doc.moveDown(0.3);
 
 H3("Action");
 bullet([
@@ -623,16 +698,17 @@ callout("Talking point", AMBER, [
 // ============================================================
 // APPENDIX
 // ============================================================
-newPage();
+startPage();
 H1("Appendix · Reference data");
 muted("Quick lookup tables for anything you get asked during the demo.");
+doc.moveDown(0.3);
 
 H2("A · Approval policy thresholds (default seed)");
 table(
   ["Tier", "Margin", "Fee", "Approver"],
   [
-    ["Auto", "≥ 35%", "≤ $500K", "System (no human approval)"],
-    ["Tier 1", "25–34%", "≤ $2M", "PDL (peer review)"],
+    ["Auto", ">= 35%", "<= $500K", "System (no human approval)"],
+    ["Tier 1", "25–34%", "<= $2M", "PDL (peer review)"],
     ["Tier 2", "20–24%", "$2M–$5M", "Service Line Lead"],
     ["Tier 3", "< 20% or strategic", "Any", "Practice Director (Finance)"],
   ],
@@ -644,7 +720,7 @@ table(
   ["Scenario", "Fee", "Hours", "Margin", "Picked"],
   [
     ["Conservative (senior-heavy)", "$495,000", "1,100", "30.0%", "—"],
-    ["Standard (balanced)", "$425,000", "1,200", "27.0%", "★ Recommended"],
+    ["Standard (balanced)", "$425,000", "1,200", "27.0%", "* Recommended"],
     ["Aggressive (cost-optimized)", "$365,000", "1,400", "30.0%", "—"],
   ],
   [200, 80, 80, 70, W - 430]
@@ -686,16 +762,20 @@ table(
 );
 
 // ============================================================
-// PAGE NUMBERS
+// PAGE NUMBERS — write into the bottom margin without triggering auto-pagination
 // ============================================================
 const range = doc.bufferedPageRange();
 for (let i = 0; i < range.count; i++) {
   doc.switchToPage(i);
   if (i === 0) continue;
+  const savedBottom = doc.page.margins.bottom;
+  doc.page.margins.bottom = 0;
   doc.fillColor(MUTE).font("Helvetica").fontSize(8);
-  doc.text(`DealPad Demo Driver  ·  Armanino LLP`, PAGE.margin, 760, { width: W / 2, align: "left", lineBreak: false });
-  doc.text(`${i} / ${range.count - 1}`, PAGE.margin + W / 2, 760, { width: W / 2, align: "right", lineBreak: false });
+  doc.text(`DealPad Demo Driver  ·  Armanino LLP`, MARGIN, PAGE_H - 30, { width: W / 2, align: "left", lineBreak: false });
+  doc.text(`${i} / ${range.count - 1}`, MARGIN + W / 2, PAGE_H - 30, { width: W / 2, align: "right", lineBreak: false });
+  doc.page.margins.bottom = savedBottom;
 }
 
+doc.flushPages();
 doc.end();
 console.log(`Wrote ${OUT}`);
