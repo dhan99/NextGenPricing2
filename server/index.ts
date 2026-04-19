@@ -695,6 +695,14 @@ async function start() {
     res.download(path.join(process.cwd(), "DealPad_Architecture_Document.md"), "DealPad_Architecture_Document.md");
   });
 
+  app.get("/demo-driver", (_req, res) => {
+    res.download(path.join(process.cwd(), "DealPad_Demo_Driver.pdf"), "DealPad_Demo_Driver.pdf");
+  });
+
+  app.get("/demo-driver/view", (_req, res) => {
+    res.sendFile(path.join(process.cwd(), "DealPad_Demo_Driver.pdf"));
+  });
+
   app.get("/integrations-doc/download-pptx", (_req, res) => {
     res.download(
       path.join(process.cwd(), "exports", "Integrations-API-Overview.pptx"),

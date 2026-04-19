@@ -24,3 +24,9 @@ id = "jlT2tF0TzXsBO-pnlbc8M"
 uri = "file://exports/DealPad_Integrations_Architecture.pptx"
 type = "slides"
 title = "DealPad Integrations Architecture (1 slide)"
+
+[[outputs]]
+id = "zdCKstmRYlMrNEIK3Ez9f"
+uri = "file://DealPad_Demo_Driver.pdf"
+type = "pdf"
+title = "DealPad Demo Driver — Stakeholder Walkthrough"
