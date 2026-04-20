@@ -1131,6 +1131,187 @@ function ScopeBreakdownPanel({ dealId, pricingLines }: { dealId: number; pricing
   );
 }
 
+// =============================================================================
+// RateCell — per-step rate override editor.
+// Click to open a popover with: new rate input, justification textarea, plus
+// "Save Override", "Reset to Standard", and "Cancel" actions. The cell shows
+// the active rate plus a tiny baseline + variance subtitle when overridden.
+// =============================================================================
+function RateCell({ line, dealId, updateLine }: { line: any; dealId: number; updateLine: any }) {
+  const { user } = useAuth();
+  const [open, setOpen] = useState(false);
+  const standardRate = parseFloat(line.standardRate ?? line.rate ?? "0");
+  const currentRate = parseFloat(line.rate ?? "0");
+  const variancePct = standardRate > 0 ? ((currentRate - standardRate) / standardRate * 100) : 0;
+  const overridden = !!line.rateOverridden;
+
+  const [draftRate, setDraftRate] = useState<string>(String(currentRate));
+  const [draftReason, setDraftReason] = useState<string>(line.overrideReason || "");
+
+  // Reset local draft whenever the popover opens or upstream rate changes.
+  useEffect(() => {
+    if (open) {
+      setDraftRate(String(currentRate));
+      setDraftReason(line.overrideReason || "");
+    }
+  }, [open, currentRate, line.overrideReason]);
+
+  const submitOverride = () => {
+    const newRate = parseFloat(draftRate || "0");
+    if (!Number.isFinite(newRate) || newRate <= 0) return;
+    const isOverride = Math.abs(newRate - standardRate) > 0.01;
+    if (isOverride && draftReason.trim().length < 5) {
+      // Force a meaningful justification on overrides — empty/short reasons
+      // would defeat the audit trail this feature exists to provide.
+      return;
+    }
+    updateLine.mutate({
+      dealId,
+      id: line.id,
+      data: {
+        hours: line.hours,
+        rate: String(newRate),
+        costRate: line.costRate,
+        overrideReason: isOverride ? draftReason.trim() : null,
+        overrideBy: isOverride ? (user?.name || "PDL") : null,
+      },
+    });
+    setOpen(false);
+  };
+
+  const resetToStandard = () => {
+    updateLine.mutate({
+      dealId,
+      id: line.id,
+      data: {
+        hours: line.hours,
+        rate: String(standardRate),
+        costRate: line.costRate,
+        overrideReason: null,
+        overrideBy: null,
+      },
+    });
+    setOpen(false);
+  };
+
+  const varianceTone =
+    !overridden ? "text-muted-foreground"
+    : variancePct < 0 ? "text-emerald-700"
+    : Math.abs(variancePct) > 10 ? "text-rose-700"
+    : "text-amber-700";
+
+  return (
+    <div className="relative inline-block">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className={cn(
+          "group flex flex-col items-end gap-0.5 px-2 py-1 rounded transition-colors",
+          "hover:bg-muted focus:outline-none focus:ring-2 focus:ring-primary/30",
+          overridden && "ring-1 ring-amber-300 bg-amber-50/80",
+        )}
+        title={overridden ? `Override of standard ${formatCurrency(standardRate)}/hr` : "Click to override rate"}
+      >
+        <span className={cn("text-sm font-semibold tabular-nums", overridden ? "text-amber-900" : "text-foreground")}>
+          {formatCurrency(currentRate)}
+        </span>
+        {overridden && (
+          <span className={cn("text-[10px] font-medium tabular-nums leading-none", varianceTone)}>
+            std {formatCurrency(standardRate)} · {variancePct >= 0 ? "+" : ""}{variancePct.toFixed(1)}%
+          </span>
+        )}
+      </button>
+
+      {open && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+          <div className="absolute right-0 z-50 mt-1 w-80 rounded-xl border border-border bg-card shadow-xl p-4 text-left">
+            <div className="flex items-start justify-between mb-3">
+              <div>
+                <h4 className="text-sm font-semibold text-foreground">Override rate</h4>
+                <p className="text-[11px] text-muted-foreground mt-0.5">
+                  {line.role?.name} · standard {formatCurrency(standardRate)}/hr
+                </p>
+              </div>
+              <button onClick={() => setOpen(false)} className="text-muted-foreground hover:text-foreground">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <label className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">New rate ($/hr)</label>
+            <input
+              type="number"
+              step="1"
+              value={draftRate}
+              onChange={(e) => setDraftRate(e.target.value)}
+              className="mt-1 w-full px-3 py-2 text-sm rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+              autoFocus
+            />
+            {(() => {
+              const r = parseFloat(draftRate || "0");
+              if (!Number.isFinite(r) || r <= 0 || standardRate <= 0) return null;
+              const v = (r - standardRate) / standardRate * 100;
+              const tone = Math.abs(v) < 0.01 ? "text-muted-foreground"
+                : v < 0 ? "text-emerald-700"
+                : Math.abs(v) > 10 ? "text-rose-700" : "text-amber-700";
+              return (
+                <p className={cn("text-[11px] mt-1 font-medium tabular-nums", tone)}>
+                  Variance vs standard: {v >= 0 ? "+" : ""}{v.toFixed(1)}%
+                  {Math.abs(v) > 10 && " — Finance review recommended"}
+                </p>
+              );
+            })()}
+
+            <label className="block text-[11px] font-medium uppercase tracking-wide text-muted-foreground mt-3">
+              Justification {Math.abs(parseFloat(draftRate || "0") - standardRate) > 0.01 && <span className="text-rose-600">*</span>}
+            </label>
+            <textarea
+              value={draftReason}
+              onChange={(e) => setDraftReason(e.target.value)}
+              rows={3}
+              placeholder="e.g. Strategic discount for first-year client; partner sponsor approved."
+              className="mt-1 w-full px-3 py-2 text-sm rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary resize-none"
+            />
+            {Math.abs(parseFloat(draftRate || "0") - standardRate) > 0.01 && draftReason.trim().length > 0 && draftReason.trim().length < 5 && (
+              <p className="text-[11px] text-rose-700 mt-1">Justification must be at least 5 characters.</p>
+            )}
+
+            <div className="flex items-center justify-between gap-2 mt-4">
+              {overridden ? (
+                <button
+                  onClick={resetToStandard}
+                  className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground"
+                >
+                  <RefreshCw className="w-3 h-3" />
+                  Reset to standard
+                </button>
+              ) : <span />}
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setOpen(false)}
+                  className="px-3 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={submitOverride}
+                  disabled={
+                    Math.abs(parseFloat(draftRate || "0") - standardRate) > 0.01 &&
+                    draftReason.trim().length < 5
+                  }
+                  className="px-3 py-1.5 text-xs font-semibold text-white bg-primary rounded-lg hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Save
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 function PricingStep({ deal }: { deal: any }) {
   const { data: pricingLines } = useDealPricing(deal.id);
   const updateLine = useUpdatePricingLine();
@@ -1138,6 +1319,14 @@ function PricingStep({ deal }: { deal: any }) {
   const [optionsOpen, setOptionsOpen] = useState(false);
   const { data: scenariosForBadge } = useDealScenarios(deal.id);
   const selectedScenario = (scenariosForBadge || []).find((s: any) => s.isRecommended);
+  const overrideLines = (pricingLines || []).filter((l: any) => l.rateOverridden);
+  const overrideCount = overrideLines.length;
+  const overrideFeeImpact = overrideLines.reduce((acc: number, l: any) => {
+    const std = parseFloat(l.standardRate || l.rate || "0");
+    const cur = parseFloat(l.rate || "0");
+    const hrs = parseFloat(l.hours || "0");
+    return acc + (cur - std) * hrs;
+  }, 0);
 
   useEffect(() => {
     if (pricingLines && pricingLines.length > 0) {
@@ -1243,12 +1432,40 @@ function PricingStep({ deal }: { deal: any }) {
         </div>
         <ScopeBreakdownPanel dealId={deal.id} pricingLines={pricingLines || []} />
         <div className="card overflow-hidden">
-          <div className="px-6 py-4 border-b border-border flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-foreground">Pricing Grid</h2>
+          <div className="px-6 py-4 border-b border-border flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <h2 className="text-lg font-semibold text-foreground">Pricing Grid</h2>
+              {overrideCount > 0 && (
+                <span
+                  className="inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-semibold rounded-full bg-amber-100 text-amber-900 border border-amber-300"
+                  title={`${overrideCount} line${overrideCount === 1 ? "" : "s"} overridden${
+                    overrideFeeImpact !== 0
+                      ? ` · net fee impact ${overrideFeeImpact >= 0 ? "+" : ""}${formatCurrency(overrideFeeImpact)}`
+                      : ""
+                  }`}
+                >
+                  <AlertTriangle className="w-3 h-3" />
+                  {overrideCount} rate override{overrideCount === 1 ? "" : "s"}
+                  {overrideFeeImpact !== 0 && (
+                    <span className="font-normal opacity-80 ml-1">
+                      ({overrideFeeImpact >= 0 ? "+" : ""}{formatCurrency(overrideFeeImpact)})
+                    </span>
+                  )}
+                </span>
+              )}
+            </div>
             <div className="flex items-center gap-4">
               <div className="text-right"><p className="text-xs text-muted-foreground">Blended Rate</p><p className="text-sm font-bold text-foreground">{totals.hours > 0 ? formatCurrency(totals.fee / totals.hours) : "--"}/hr</p></div>
             </div>
           </div>
+          {overrideCount > 0 && (
+            <div className="px-6 py-2.5 bg-amber-50/70 border-b border-amber-200 flex items-start gap-2">
+              <ShieldAlert className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+              <p className="text-xs text-amber-900 leading-relaxed">
+                <strong>{overrideCount} role{overrideCount === 1 ? "" : "s"}</strong> on this deal use a non-standard rate. Each override is captured in the audit log with the justification you provided and will be surfaced to Finance during approval review.
+              </p>
+            </div>
+          )}
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
@@ -1265,7 +1482,7 @@ function PricingStep({ deal }: { deal: any }) {
               </thead>
               <tbody className="divide-y divide-border">
                 {(pricingLines || []).map((line: any) => (
-                  <tr key={line.id} className="hover:bg-muted/30">
+                  <tr key={line.id} className={cn("hover:bg-muted/30", line.rateOverridden && "bg-amber-50/40")}>
                     <td className="px-6 py-3 text-sm font-medium text-foreground">{line.role?.name}</td>
                     <td className="px-4 py-3 text-sm text-muted-foreground">{line.role?.level}</td>
                     <td className="px-4 py-3 text-right">
@@ -1279,7 +1496,9 @@ function PricingStep({ deal }: { deal: any }) {
                         className="w-20 text-right text-sm font-medium text-foreground bg-transparent border border-transparent hover:border-input focus:border-primary rounded px-2 py-1 outline-none transition-colors"
                       />
                     </td>
-                    <td className="px-4 py-3 text-right text-sm text-foreground">{formatCurrency(line.rate)}</td>
+                    <td className="px-4 py-3 text-right">
+                      <RateCell line={line} dealId={deal.id} updateLine={updateLine} />
+                    </td>
                     <td className="px-4 py-3 text-right text-sm text-muted-foreground">{formatCurrency(line.costRate)}</td>
                     <td className="px-4 py-3 text-right text-sm font-semibold text-foreground">{formatCurrency(line.fee)}</td>
                     <td className="px-4 py-3 text-right text-sm text-muted-foreground">{formatCurrency(line.cost)}</td>

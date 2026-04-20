@@ -737,6 +737,9 @@ export function registerRoutes(app: Express) {
     }
 
     if (source.pricingLines?.length) {
+      // Cloned/renewed deals start with the new line's `rate` as the baseline
+      // — overrides from the source deal do NOT carry over silently. The new
+      // PDL must re-justify any non-standard rate on this deal.
       await db.insert(pricingLines).values(
         source.pricingLines.map((pl: any) => ({
           dealId: newDeal.id,
@@ -749,6 +752,11 @@ export function registerRoutes(app: Express) {
           fee: pl.fee,
           cost: pl.cost,
           margin: pl.margin,
+          standardRate: pl.standardRate || pl.rate,
+          rateOverridden: false,
+          overrideReason: null,
+          overrideBy: null,
+          overrideAt: null,
         }))
       );
     }
@@ -815,6 +823,14 @@ export function registerRoutes(app: Express) {
         fee: (hours * rate).toFixed(2),
         cost: (hours * costRate).toFixed(2),
         margin: (hours * (rate - costRate)).toFixed(2),
+        // Reset baseline to the prior-year rate and clear any line-level
+        // override metadata — the pricing on this deal has just been re-anchored
+        // to the parent, so prior overrides no longer apply.
+        standardRate: rate.toFixed(2),
+        rateOverridden: false,
+        overrideReason: null,
+        overrideBy: null,
+        overrideAt: null,
       }).where(eq(pricingLines.id, line.id));
     }
 
@@ -850,11 +866,23 @@ export function registerRoutes(app: Express) {
       const newRate = parseFloat(line.rate) * factor;
       const hours = parseFloat(line.hours || "0");
       const costRate = parseFloat(line.costRate || "0");
+      const standardRate = parseFloat(line.standardRate || line.rate || "0");
+      const isOverride = standardRate > 0 && Math.abs(newRate - standardRate) > 0.01;
       await db.update(pricingLines).set({
         rate: newRate.toFixed(2),
         fee: (hours * newRate).toFixed(2),
         cost: (hours * costRate).toFixed(2),
         margin: (hours * (newRate - costRate)).toFixed(2),
+        // Bulk rate adjustment doesn't redefine the baseline — but it does
+        // change the line's relationship to it. Re-derive the override flag
+        // so the UI banner stays in sync. Reason/actor are inherited from
+        // the bulk action (if anything was already overridden, treat the new
+        // rate as still an override; otherwise mark as system-applied so the
+        // audit log can identify why).
+        rateOverridden: isOverride,
+        overrideReason: isOverride ? (line.overrideReason || `Bulk rate adjustment ${((factor - 1) * 100).toFixed(1)}%`) : null,
+        overrideBy: isOverride ? (line.overrideBy || req.body.userName || "System") : null,
+        overrideAt: isOverride ? (line.overrideAt || new Date()) : null,
       }).where(eq(pricingLines.id, line.id));
     }
 
@@ -1337,6 +1365,10 @@ export function registerRoutes(app: Express) {
                 fee: String(hours * rate),
                 cost: String(hours * costRate),
                 margin: String(hours * (rate - costRate)),
+                // Capture the role-card baseline so we can render variance
+                // and detect overrides on subsequent edits.
+                standardRate: String(rate),
+                rateOverridden: false,
               };
             })
           );
@@ -1378,16 +1410,121 @@ export function registerRoutes(app: Express) {
   });
 
   app.patch("/api/deals/:dealId/pricing/:id", async (req: Request, res: Response) => {
-    const hours = parseFloat(req.body.hours || "0");
-    const rate = parseFloat(req.body.rate || "0");
-    const costRate = parseFloat(req.body.costRate || "0");
-    const [updated] = await db.update(pricingLines).set({
-      ...req.body,
-      dealId: parseInt(req.params.dealId),
+    const dealId = parseInt(req.params.dealId);
+    const lineId = parseInt(req.params.id);
+
+    // Load existing line so we know the standardRate baseline and can detect
+    // a rate-override transition (none -> overridden, overridden -> reset).
+    const [existing] = await db.select().from(pricingLines).where(eq(pricingLines.id, lineId));
+    if (!existing) return res.status(404).json({ error: "Pricing line not found" });
+
+    // The baseline is server-controlled. We NEVER let the client influence it
+    // through the PATCH body — that would let a caller redefine "standard"
+    // and erase variance from the audit trail. If the line predates this
+    // column, fall back to its current rate so the override math has a
+    // basis; once set, it is permanent for the life of the line.
+    const role = await db.query.roles.findFirst({ where: eq(roles.id, existing.roleId) });
+    const standardRate = parseFloat(
+      existing.standardRate || (role?.defaultRate ?? existing.rate) || "0"
+    );
+
+    const hours = parseFloat(req.body.hours ?? existing.hours ?? "0");
+    const rate = parseFloat(req.body.rate ?? existing.rate ?? "0");
+    const costRate = parseFloat(req.body.costRate ?? existing.costRate ?? "0");
+
+    // Detect override: anything not within $0.01 of standard counts as override.
+    const isOverride = standardRate > 0 && Math.abs(rate - standardRate) > 0.01;
+    const wasOverride = !!existing.rateOverridden;
+
+    // Server-side enforcement of the same justification rule the UI applies,
+    // so direct API calls cannot bypass the audit-trail requirement.
+    const proposedReason = (req.body.overrideReason ?? existing.overrideReason ?? "").toString().trim();
+    const willTransitionIntoOverride = isOverride && (!wasOverride || parseFloat(existing.rate || "0") !== rate);
+    if (willTransitionIntoOverride && proposedReason.length < 5) {
+      return res.status(400).json({
+        error: "overrideReason must be at least 5 characters when overriding the standard rate.",
+      });
+    }
+
+    const overrideReason = isOverride ? (proposedReason || null) : null;
+    const overrideBy = isOverride
+      ? (req.body.overrideBy ?? existing.overrideBy ?? null)
+      : null;
+
+    // Strip any caller-supplied baseline / override-state fields before the
+    // generic spread so they cannot bypass our derivation above.
+    const { standardRate: _ignoreStdRate, rateOverridden: _ignoreFlag,
+      overrideAt: _ignoreOverrideAt, ...sanitizedBody } = req.body || {};
+
+    const updateValues: any = {
+      ...sanitizedBody,
+      dealId,
+      hours: String(hours),
+      rate: String(rate),
+      costRate: String(costRate),
       fee: String(hours * rate),
       cost: String(hours * costRate),
       margin: String(hours * (rate - costRate)),
-    }).where(eq(pricingLines.id, parseInt(req.params.id))).returning();
+      standardRate: String(standardRate),
+      rateOverridden: isOverride,
+      overrideReason,
+      overrideBy,
+    };
+    // Stamp override timestamp on transition into override or on a fresh
+    // override edit (rate changed while already overridden). Clear on reset.
+    if (isOverride) {
+      const rateChanged = parseFloat(existing.rate || "0") !== rate;
+      if (!wasOverride || rateChanged) updateValues.overrideAt = new Date();
+    } else {
+      updateValues.overrideAt = null;
+    }
+
+    const [updated] = await db.update(pricingLines)
+      .set(updateValues)
+      .where(eq(pricingLines.id, lineId))
+      .returning();
+
+    // Audit trail: only log on a meaningful override transition or change of
+    // override rate, not on every hours edit. Keeps activity feed signal-rich.
+    const rateChanged = parseFloat(existing.rate || "0") !== rate;
+    if (rateChanged && (isOverride || wasOverride)) {
+      const [withRole] = await db.query.pricingLines.findMany({
+        where: eq(pricingLines.id, lineId),
+        with: { role: true },
+        limit: 1,
+      });
+      const roleName = withRole?.role?.name || `Role ${updated.roleId}`;
+      const variancePct = standardRate > 0 ? ((rate - standardRate) / standardRate * 100) : 0;
+      let action: string;
+      let description: string;
+      if (isOverride && !wasOverride) {
+        action = "rate_override_set";
+        description = `Rate override on ${roleName}: $${standardRate.toFixed(0)} -> $${rate.toFixed(0)} (${variancePct >= 0 ? "+" : ""}${variancePct.toFixed(1)}% vs standard)`;
+      } else if (isOverride && wasOverride) {
+        action = "rate_override_changed";
+        description = `Rate override on ${roleName} updated: $${parseFloat(existing.rate).toFixed(0)} -> $${rate.toFixed(0)} (now ${variancePct >= 0 ? "+" : ""}${variancePct.toFixed(1)}% vs standard $${standardRate.toFixed(0)})`;
+      } else {
+        action = "rate_override_cleared";
+        description = `Rate override on ${roleName} reset to standard ($${standardRate.toFixed(0)}/hr)`;
+      }
+      await db.insert(activityLog).values({
+        dealId,
+        action,
+        description,
+        userName: overrideBy || existing.overrideBy || "PDL",
+        metadata: {
+          pricingLineId: lineId,
+          roleId: updated.roleId,
+          roleName,
+          standardRate,
+          previousRate: parseFloat(existing.rate || "0"),
+          newRate: rate,
+          variancePct: Number(variancePct.toFixed(2)),
+          reason: overrideReason || null,
+        },
+      });
+    }
+
     res.json(updated);
   });
 
@@ -1489,6 +1626,11 @@ export function registerRoutes(app: Express) {
       const newCost = parseFloat(l.cost || "0") * cMul;
       const newRate = newHours > 0 ? newFee / newHours : parseFloat(l.rate || "0");
       const newCostRate = newHours > 0 ? newCost / newHours : parseFloat(l.costRate || "0");
+      // Selecting a scenario re-baselines the line — the scenario rate is
+      // the new "standard" for this deal-option pairing. Clear any previous
+      // line-level override so the override banner doesn't lie about the new
+      // numbers (it would otherwise still show the prior override flag with
+      // a baseline that no longer matches the visible rate).
       await db.update(pricingLines).set({
         hours: newHours.toFixed(2),
         rate: newRate.toFixed(2),
@@ -1496,6 +1638,11 @@ export function registerRoutes(app: Express) {
         fee: newFee.toFixed(2),
         cost: newCost.toFixed(2),
         margin: (newFee - newCost).toFixed(2),
+        standardRate: newRate.toFixed(2),
+        rateOverridden: false,
+        overrideReason: null,
+        overrideBy: null,
+        overrideAt: null,
       }).where(eq(pricingLines.id, l.id));
     }
 

@@ -130,6 +130,15 @@ export const pricingLines = pgTable("pricing_lines", {
   fee: decimal("fee", { precision: 12, scale: 2 }).default("0"),
   cost: decimal("cost", { precision: 12, scale: 2 }).default("0"),
   margin: decimal("margin", { precision: 12, scale: 2 }).default("0"),
+  // ---- Per-step rate override (US: rate override by step) -----------------
+  // standardRate is the rate-card-derived baseline captured at line creation
+  // and never overwritten by a user edit. It is the comparator used to decide
+  // whether a line is currently "overridden" and to render the variance badge.
+  standardRate: decimal("standard_rate", { precision: 8, scale: 2 }),
+  rateOverridden: boolean("rate_overridden").default(false),
+  overrideReason: text("override_reason"),
+  overrideBy: text("override_by"),
+  overrideAt: timestamp("override_at"),
 });
 
 export const scenarios = pgTable("scenarios", {
