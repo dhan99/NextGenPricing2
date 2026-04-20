@@ -2,9 +2,9 @@ import type { Request, Response, Express } from "express";
 import { db } from "./db";
 import {
   clients, deals, dynamicsAccounts, dynamicsOpportunities, dynamicsSyncLog,
-  dynamicsSettings, dynamicsOwners,
+  dynamicsSettings, dynamicsOwners, approvals, activityLog,
 } from "../shared/schema";
-import { eq, desc, sql } from "drizzle-orm";
+import { eq, desc, sql, inArray, and } from "drizzle-orm";
 
 const STAGES = ["Qualify", "Develop", "Propose", "Close", "Won", "Lost"] as const;
 const STAGE_PROBABILITY: Record<string, number> = {
@@ -382,7 +382,31 @@ export function registerDynamicsRoutes(app: Express) {
 
   app.get("/api/dynamics/opportunities", async (_req, res) => {
     const rows = await db.select().from(dynamicsOpportunities).orderBy(desc(dynamicsOpportunities.updatedAt));
-    res.json(rows.map(formatOpp));
+    const linkedDealIds = rows.map((r) => r.dealpadDealId).filter((id): id is number => id != null);
+    const dealMap = new Map<number, any>();
+    if (linkedDealIds.length > 0) {
+      const dealRows = await db.select().from(deals).where(inArray(deals.id, linkedDealIds));
+      for (const d of dealRows) dealMap.set(d.id, d);
+    }
+    res.json(rows.map((o) => {
+      const base = formatOpp(o);
+      const linkedDeal = o.dealpadDealId ? dealMap.get(o.dealpadDealId) : null;
+      if (!linkedDeal) return { ...base, dealpadDeal: null, readyForSales: false };
+      const isApproved = linkedDeal.status === "approved";
+      return {
+        ...base,
+        dealpadDeal: {
+          id: linkedDeal.id,
+          dealNumber: linkedDeal.dealNumber,
+          status: linkedDeal.status,
+          totalFee: parseFloat(linkedDeal.totalFee || "0"),
+          marginPercent: parseFloat(linkedDeal.marginPercent || "0"),
+          pdlName: linkedDeal.pdlName,
+          updatedAt: linkedDeal.updatedAt,
+        },
+        readyForSales: isApproved,
+      };
+    }));
   });
 
   // Opportunities eligible to be turned into a DealPad deal:
@@ -410,6 +434,68 @@ export function registerDynamicsRoutes(app: Express) {
     const result = await unlinkOpportunity(id, req.body?.userName);
     if (!result.ok) return res.status(400).json({ error: result.reason || "unlink-failed" });
     res.json(result);
+  });
+
+  // Sales sends an approved deal back to DealPad for revision (from CRM view).
+  // Reuses the existing `rejected` revision path — PDL can amend and re-submit
+  // through the standard approval workflow. Auto-push fans out the stage update.
+  app.post("/api/dynamics/opportunities/:id/send-back", async (req, res) => {
+    const id = parseInt(req.params.id);
+    if (Number.isNaN(id)) return res.status(400).json({ error: "Invalid id" });
+    const reason = (req.body?.reason || "").toString().trim();
+    const userName = (req.body?.userName || "Sales").toString();
+    if (reason.length < 5) {
+      return res.status(400).json({ error: "reason_required", message: "A short reason (at least 5 characters) is required to send a deal back." });
+    }
+
+    const [opp] = await db.select().from(dynamicsOpportunities).where(eq(dynamicsOpportunities.id, id));
+    if (!opp) return res.status(404).json({ error: "opportunity_not_found" });
+    if (!opp.dealpadDealId) return res.status(400).json({ error: "not_linked", message: "Opportunity is not linked to a DealPad deal." });
+
+    const [deal] = await db.select().from(deals).where(eq(deals.id, opp.dealpadDealId));
+    if (!deal) return res.status(404).json({ error: "deal_not_found" });
+    if (deal.status !== "approved") {
+      return res.status(409).json({ error: "deal_not_approved", message: `Deal is currently "${deal.status}", not approved.` });
+    }
+
+    // Atomically: move deal back into revision (rejected) state, annotate the
+    // latest approval with the send-back note, and write the activity log entry.
+    // Wrapping in a transaction prevents partial state on mid-operation failure.
+    try {
+      await db.transaction(async (tx) => {
+        await tx.update(deals).set({ status: "rejected", updatedAt: new Date() }).where(eq(deals.id, deal.id));
+
+        const [latestApproval] = await tx.select().from(approvals)
+          .where(eq(approvals.dealId, deal.id))
+          .orderBy(desc(approvals.submittedAt))
+          .limit(1);
+        if (latestApproval) {
+          const stamped = `\n\n[Sent back from CRM by ${userName} on ${new Date().toISOString().slice(0, 10)}]\nReason: ${reason}`;
+          await tx.update(approvals).set({
+            comments: (latestApproval.comments || "") + stamped,
+          }).where(eq(approvals.id, latestApproval.id));
+        }
+
+        await tx.insert(activityLog).values({
+          dealId: deal.id,
+          action: "sent_back_from_crm",
+          description: `Sales (${userName}) sent deal back from Dynamics CRM for revision: ${reason}`,
+          userName,
+          metadata: { reason, opportunityId: opp.id, opportunityNumber: opp.opportunityNumber, previousStatus: "approved" },
+        });
+      });
+    } catch (err) {
+      console.error("[dynamics] send-back transaction failed", { dealId: deal.id, opportunityId: opp.id, err });
+      return res.status(500).json({ error: "send_back_failed", message: "Failed to send deal back. Please try again." });
+    }
+
+    // Fan-out: push the stage change back to the linked Dynamics opportunity.
+    // Failures here don't block the user-visible state change but should be logged.
+    autoPushDeal(deal.id, ["status"], userName).catch((err) => {
+      console.warn("[dynamics] autoPushDeal after send-back failed", { dealId: deal.id, err });
+    });
+
+    res.json({ success: true, dealId: deal.id, dealStatus: "rejected" });
   });
 
   app.get("/api/dynamics/scope-templates", (_req, res) => {

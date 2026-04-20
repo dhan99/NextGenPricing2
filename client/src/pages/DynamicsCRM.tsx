@@ -3,6 +3,7 @@ import {
   RefreshCw, ArrowDownToLine, ArrowUpFromLine, Building2, Briefcase,
   TrendingUp, CheckCircle2, AlertTriangle, Database, Loader2,
   Download, Upload, Settings, Pencil, Save, X, Moon, Zap, Plus, Sparkles, Unlink,
+  Send, ArrowRight, ExternalLink,
 } from "lucide-react";
 import {
   useDynamicsAccounts, useDynamicsOpportunities, useDynamicsPipeline,
@@ -10,7 +11,7 @@ import {
   useDynamicsSettings, useUpdateDynamicsSettings,
   useUpdateDynamicsAccount, useUpdateDynamicsOpportunity,
   useNightlyBatch, usePushDealToDynamics, useUnlinkOpportunity,
-  useDynamicsScopeTemplates, useCreateOpportunity,
+  useDynamicsScopeTemplates, useCreateOpportunity, useSendBackOpportunity,
 } from "@/hooks/use-api";
 import { useAuth } from "@/context/AuthContext";
 import { cn } from "@/lib/utils";
@@ -336,9 +337,11 @@ function OpportunitiesTab() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [draft, setDraft] = useState<any>({});
   const [showNew, setShowNew] = useState(false);
+  const [sendBackOpp, setSendBackOpp] = useState<any | null>(null);
 
   const queued = opps.filter((o: any) => !o.dealpadDealId && o.syncStatus === "queued");
   const synced = opps.filter((o: any) => o.dealpadDealId);
+  const ready = synced.filter((o: any) => o.readyForSales);
 
   if (isLoading) return <div className="text-sm text-muted-foreground">Loading opportunities...</div>;
 
@@ -387,6 +390,59 @@ function OpportunitiesTab() {
       </div>
 
       {showNew && <NewOpportunityModal onClose={() => setShowNew(false)} />}
+      {sendBackOpp && (
+        <SendBackModal opp={sendBackOpp} onClose={() => setSendBackOpp(null)} />
+      )}
+
+      {ready.length > 0 && (
+        <div className="card p-5 border-emerald-300 bg-gradient-to-br from-emerald-50/80 to-emerald-50/30">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+              <h3 className="text-sm font-semibold text-foreground">Ready for Sales Next Step ({ready.length})</h3>
+              <span className="px-2 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wider bg-emerald-100 text-emerald-700">
+                Scoped &amp; Priced
+              </span>
+            </div>
+            <span className="text-xs text-emerald-700">DealPad has approved scope and price — go close it</span>
+          </div>
+          <div className="space-y-2">
+            {ready.map((o: any) => (
+              <div key={o.id} className="p-3 rounded-md bg-white border border-emerald-200 flex items-center gap-4">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-foreground truncate">{o.name}</span>
+                    <span className="text-[10px] font-mono text-muted-foreground">{o.opportunityNumber}</span>
+                  </div>
+                  <div className="text-xs text-muted-foreground mt-0.5 flex flex-wrap gap-x-4 gap-y-0.5">
+                    <span>{o.accountName}</span>
+                    <span>Fee <span className="font-medium text-foreground tabular-nums">{fmtMoneyFull(o.dealpadDeal?.totalFee || 0)}</span></span>
+                    <span>Margin <span className="font-medium text-foreground tabular-nums">{(o.dealpadDeal?.marginPercent || 0).toFixed(1)}%</span></span>
+                    <span>PDL <span className="font-medium text-foreground">{o.dealpadDeal?.pdlName || "—"}</span></span>
+                    <span className="font-mono">{o.dealpadDeal?.dealNumber}</span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <a
+                    href={`/deals/${o.dealpadDeal?.id}`}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-stone-300 bg-white text-xs font-medium hover:bg-stone-50"
+                    data-testid={`link-deal-${o.dealpadDeal?.id}`}
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" /> Open in DealPad
+                  </a>
+                  <button
+                    onClick={() => setSendBackOpp(o)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-amber-300 bg-amber-50 text-amber-800 text-xs font-medium hover:bg-amber-100"
+                    data-testid={`button-send-back-${o.id}`}
+                  >
+                    <Send className="w-3.5 h-3.5" /> Send back to DealPad
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {queued.length > 0 && (
         <div className="card p-5 border-amber-300">
@@ -530,10 +586,27 @@ function OpportunitiesTab() {
           <tbody>
             {synced.map((o: any) => {
               const isEditing = editingId === o.id;
+              const isReady = o.readyForSales;
               return (
-                <tr key={o.id} className="border-b border-stone-100 hover:bg-stone-50">
+                <tr
+                  key={o.id}
+                  className={cn(
+                    "border-b border-stone-100",
+                    isReady
+                      ? "bg-emerald-50/60 hover:bg-emerald-50 border-l-4 border-l-emerald-500"
+                      : "hover:bg-stone-50",
+                  )}
+                  data-testid={isReady ? `row-ready-${o.id}` : undefined}
+                >
                   <td className="px-4 py-3">
-                    <div className="font-medium text-foreground">{o.name}</div>
+                    <div className="flex items-center gap-2">
+                      <div className="font-medium text-foreground">{o.name}</div>
+                      {isReady && (
+                        <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold uppercase tracking-wider bg-emerald-100 text-emerald-700 whitespace-nowrap">
+                          Scoped &amp; Priced
+                        </span>
+                      )}
+                    </div>
                     <div className="text-[10px] font-mono text-muted-foreground">{o.opportunityNumber}</div>
                   </td>
                   <td className="px-4 py-3 text-xs text-muted-foreground">{o.accountName}</td>
@@ -607,6 +680,16 @@ function OpportunitiesTab() {
                             disabled={push.isPending} title="Push DealPad → D365"
                             className="text-muted-foreground hover:text-emerald-700 p-1 disabled:opacity-50">
                             <ArrowUpFromLine className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                        {isReady && (
+                          <button
+                            onClick={() => setSendBackOpp(o)}
+                            title="Send back to DealPad for revision"
+                            className="text-amber-700 hover:text-amber-900 p-1"
+                            data-testid={`button-send-back-row-${o.id}`}
+                          >
+                            <Send className="w-3.5 h-3.5" />
                           </button>
                         )}
                         {o.dealpadDealId && (
@@ -876,6 +959,86 @@ function Toggle({ checked, onChange, disabled }: { checked: boolean; onChange: (
       className={`relative inline-flex h-6 w-11 rounded-full transition-colors disabled:opacity-50 ${checked ? "bg-primary" : "bg-stone-300"}`}>
       <span className={`inline-block h-5 w-5 rounded-full bg-white shadow transform transition-transform mt-0.5 ${checked ? "translate-x-5" : "translate-x-0.5"}`} />
     </button>
+  );
+}
+
+function SendBackModal({ opp, onClose }: { opp: any; onClose: () => void }) {
+  const sendBack = useSendBackOpportunity();
+  const { persona } = useAuth();
+  const [reason, setReason] = useState("");
+  const [error, setError] = useState("");
+
+  const submit = async () => {
+    const trimmed = reason.trim();
+    if (trimmed.length < 5) {
+      setError("Please provide a brief reason (at least 5 characters).");
+      return;
+    }
+    setError("");
+    try {
+      await sendBack.mutateAsync({ id: opp.id, reason: trimmed, userName: persona?.name });
+      onClose();
+    } catch (e: any) {
+      setError(e?.message || "Failed to send back. Try again.");
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6" data-testid="modal-send-back">
+        <div className="flex items-start gap-3 mb-4">
+          <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0">
+            <Send className="w-5 h-5 text-amber-700" />
+          </div>
+          <div className="flex-1">
+            <h3 className="text-base font-semibold text-foreground">Send back to DealPad</h3>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {opp.name} · {opp.opportunityNumber}
+            </p>
+          </div>
+          <button onClick={onClose} className="text-muted-foreground hover:text-foreground text-xl leading-none">×</button>
+        </div>
+
+        <div className="space-y-3 mb-4">
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            This returns DealPad deal <span className="font-mono font-medium text-foreground">{opp.dealpadDeal?.dealNumber}</span> to a revision state so the PDL ({opp.dealpadDeal?.pdlName || "—"}) can amend scope or pricing and re-submit through the standard approval workflow. The opportunity stage in Dynamics will update accordingly.
+          </p>
+          <div>
+            <label className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">
+              Reason for sending back <span className="text-red-600">*</span>
+            </label>
+            <textarea
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              rows={3}
+              placeholder="e.g. Client requested a revised fee — please drop margin to 28% and shorten timeline."
+              className="mt-1 w-full text-sm px-3 py-2 border border-stone-300 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-300"
+              data-testid="textarea-send-back-reason"
+            />
+            {error && <p className="text-xs text-red-600 mt-1">{error}</p>}
+          </div>
+        </div>
+
+        <div className="flex justify-end gap-2">
+          <button
+            onClick={onClose}
+            disabled={sendBack.isPending}
+            className="px-3 py-1.5 rounded-md border border-stone-300 text-xs font-medium hover:bg-stone-50 disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={submit}
+            disabled={sendBack.isPending}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-amber-600 text-white text-xs font-medium hover:bg-amber-700 disabled:opacity-50"
+            data-testid="button-confirm-send-back"
+          >
+            {sendBack.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ArrowRight className="w-3.5 h-3.5" />}
+            Send back to DealPad
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 

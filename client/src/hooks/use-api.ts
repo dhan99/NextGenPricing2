@@ -445,6 +445,23 @@ export function useUnlinkOpportunity() {
     },
   });
 }
+export function useSendBackOpportunity() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, reason, userName }: { id: number; reason: string; userName?: string }) =>
+      fetchApi(`/api/dynamics/opportunities/${id}/send-back`, {
+        method: "POST",
+        body: JSON.stringify({ reason, userName }),
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["dyn-opps"] });
+      qc.invalidateQueries({ queryKey: ["dyn-pipeline"] });
+      qc.invalidateQueries({ queryKey: ["dyn-synclog"] });
+      qc.invalidateQueries({ queryKey: ["deals"] });
+      qc.invalidateQueries({ queryKey: ["activity"] });
+    },
+  });
+}
 export function useDynamicsScopeTemplates() {
   return useQuery({ queryKey: ["dyn-scope-templates"], queryFn: () => fetchApi("/api/dynamics/scope-templates") });
 }
