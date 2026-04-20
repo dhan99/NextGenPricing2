@@ -296,6 +296,172 @@ const ROLE_DISTRIBUTION: Record<string, number> = {
 
 const COMPLEXITY_MULTIPLIERS: Record<string, number> = { low: 0.8, medium: 1.0, high: 1.2, very_high: 1.5 };
 
+// Single source of truth for deal-level totals derived from pricing lines +
+// engagement inputs. Both the recalc path and the Ask AI handler call this so
+// the grid and the AI can never disagree about what a deal totals to.
+//
+// Per-line invariant: rate × hours = fee (we never apply rounding to the per-
+// line fee anymore — rounding is shown as an explicit footer line on the deal
+// total instead, so users can always reconcile the grid by hand).
+export type DealTotals = {
+  lineSubtotalFee: number;     // Σ line.fee (already rate×hours per row)
+  totalCost: number;           // Σ line.cost
+  totalHours: number;          // Σ line.hours
+  rateAdjustmentPct: number;   // T&M rate adjustment % (informational)
+  lineItemRounding: number;    // rounding step ($) applied to the subtotal
+  roundedSubtotal: number;     // subtotal after the rounding step
+  roundingAdjustment: number;  // roundedSubtotal - lineSubtotalFee (signed)
+  techAdminFeePct: number;     // Tech & Admin uplift %
+  techAdminFee: number;        // techAdminFeePct × roundedSubtotal
+  totalFee: number;            // roundedSubtotal + techAdminFee — what deals.totalFee stores
+  marginPercent: number;       // (totalFee - totalCost) / totalFee × 100
+  blendedRate: number;         // totalFee / totalHours
+};
+
+export function computeDealTotalsFromLines(lines: any[], ei: any): DealTotals {
+  const rateAdjustmentPct = parseFloat(ei?.tmRateAdjustmentPct ?? "0") || 0;
+  const techAdminFeePct = parseFloat(ei?.techAdminFeePct ?? "0") || 0;
+  const lineItemRounding = parseFloat(ei?.lineItemRounding ?? "0") || 0;
+
+  const lineSubtotalFee = lines.reduce((s, l) => s + parseFloat(l.fee || "0"), 0);
+  const totalCost = lines.reduce((s, l) => s + parseFloat(l.cost || "0"), 0);
+  const totalHours = lines.reduce((s, l) => s + parseFloat(l.hours || "0"), 0);
+
+  // Legacy economics: when lineItemRounding > 0, each line fee is rounded
+  // to the nearest rounding step BEFORE the subtotal is taken. This keeps
+  // per-row `rate × hours = fee` exact (line fees stay unrounded in the
+  // grid cells) and surfaces the aggregate rounding effect as a single
+  // visible footer row, instead of silently mutating each row's stored fee.
+  const roundedSubtotal = lineItemRounding > 0
+    ? lines.reduce((s, l) => {
+        const raw = parseFloat(l.fee || "0");
+        return s + Math.round(raw / lineItemRounding) * lineItemRounding;
+      }, 0)
+    : lineSubtotalFee;
+  const roundingAdjustment = roundedSubtotal - lineSubtotalFee;
+
+  const techAdminFee = roundedSubtotal * (techAdminFeePct / 100);
+  const totalFee = roundedSubtotal + techAdminFee;
+
+  const marginPercent = totalFee > 0 ? ((totalFee - totalCost) / totalFee) * 100 : 0;
+  const blendedRate = totalHours > 0 ? totalFee / totalHours : 0;
+
+  return {
+    lineSubtotalFee, totalCost, totalHours,
+    rateAdjustmentPct, lineItemRounding,
+    roundedSubtotal, roundingAdjustment,
+    techAdminFeePct, techAdminFee,
+    totalFee, marginPercent, blendedRate,
+  };
+}
+
+// Canonical per-line math. ALL pricing-line write paths must funnel through
+// this so the displayed `rate × hours = fee` invariant holds at the cent.
+// We round rate/costRate to 2dp first, then derive fee/cost/margin from
+// those rounded values, so what the user sees in the grid reconciles
+// exactly with what is stored. Without this, raw rate * hours can produce
+// 2dp fees that disagree with displayed rate * displayed hours.
+function reconcileLine(hours: number, rate: number, costRate: number) {
+  // Normalize hours/rate/costRate to 2dp FIRST, then derive fee/cost from
+  // those normalized values. If we used the raw inputs to compute fee while
+  // storing the rounded inputs, callers passing fractional inputs (e.g.
+  // 10.123 hours) would persist a row where storedRate × storedHours ≠
+  // storedFee — the exact invariant Task #45 must guarantee.
+  const h = Math.round(hours * 100) / 100;
+  const r = Math.round(rate * 100) / 100;
+  const cr = Math.round(costRate * 100) / 100;
+  const fee = Math.round(h * r * 100) / 100;
+  const cost = Math.round(h * cr * 100) / 100;
+  return {
+    hours: h.toFixed(2),
+    rate: r.toFixed(2),
+    costRate: cr.toFixed(2),
+    fee: fee.toFixed(2),
+    cost: cost.toFixed(2),
+    margin: (fee - cost).toFixed(2),
+  };
+}
+
+// One-time reconciliation. We have to migrate two flavors of legacy data
+// without changing the deal economics users were already shown:
+//   A) Legacy rows where rate == standardRate (unadjusted) but fee already
+//      had the T&M uplift baked in. Naively setting fee = hours × rate
+//      would silently strip the uplift. We instead lift rate up to
+//      standardRate × (1 + tmRateAdjustmentPct/100) — same formula as
+//      recalcPricingFromScope — so the adjusted economics are preserved
+//      AND the rate × hours = fee invariant holds.
+//   B) Rows that were always consistent: rate already equals the adjusted
+//      rate, so we only refresh fee/cost/margin if they drifted.
+// Lines flagged as rateOverridden are left alone (the override is intentional).
+// After per-line cleanup we re-roll the deal totals via the shared helper
+// so deals.totalFee matches what the Pricing Grid renders.
+export async function backfillDealTotals(): Promise<{ updated: number; linesFixed: number }> {
+  const all = await db.select().from(deals);
+  let updated = 0;
+  let linesFixed = 0;
+  for (const d of all) {
+    try {
+      const ei: any = (d as any).engagementInputs || {};
+      const adjPct = parseFloat(ei.tmRateAdjustmentPct ?? "0") || 0;
+      const factor = 1 + adjPct / 100;
+
+      const lines = await db.select().from(pricingLines)
+        .where(eq(pricingLines.dealId, d.id));
+      for (const l of lines) {
+        const hours = parseFloat(l.hours || "0");
+        const storedRate = parseFloat(l.rate || "0");
+        const standard = parseFloat(l.standardRate || l.rate || "0");
+        const costRate = parseFloat(l.costRate || "0");
+
+        // Decide the canonical adjusted rate. Honor manual overrides; for
+        // everything else, the rate must be standardRate × factor so the
+        // T&M uplift lives in `rate` (not silently in `fee`).
+        const rawTargetRate = l.rateOverridden ? storedRate : standard * factor;
+        const reconciled = reconcileLine(hours, rawTargetRate, costRate);
+
+        const storedFee = parseFloat(l.fee || "0");
+        const storedCost = parseFloat(l.cost || "0");
+        const rateDrift = Math.abs(parseFloat(reconciled.rate) - storedRate) > 0.01;
+        const feeDrift = Math.abs(parseFloat(reconciled.fee) - storedFee) > 0.01;
+        const costDrift = Math.abs(parseFloat(reconciled.cost) - storedCost) > 0.01;
+
+        if (rateDrift || feeDrift || costDrift) {
+          await db.update(pricingLines).set({
+            rate: reconciled.rate,
+            fee: reconciled.fee,
+            cost: reconciled.cost,
+            margin: reconciled.margin,
+          }).where(eq(pricingLines.id, l.id));
+          linesFixed++;
+        }
+      }
+      await persistDealTotals(d.id);
+      updated++;
+    } catch (e) {
+      console.error(`[backfillDealTotals] deal ${d.id} failed:`, e);
+    }
+  }
+  return { updated, linesFixed };
+}
+
+// Persist computed totals onto deals row from current pricing_lines. Use this
+// after any pricing-line write so deals.totalFee never drifts from the grid.
+export async function persistDealTotals(dealId: number) {
+  const deal = await db.query.deals.findFirst({ where: eq(deals.id, dealId) });
+  if (!deal) return null;
+  const lines = await db.select().from(pricingLines)
+    .where(eq(pricingLines.dealId, dealId));
+  const totals = computeDealTotalsFromLines(lines, (deal as any).engagementInputs || {});
+  await db.update(deals).set({
+    totalFee: totals.totalFee.toFixed(2),
+    totalCost: totals.totalCost.toFixed(2),
+    totalHours: String(totals.totalHours),
+    marginPercent: totals.totalFee > 0 ? totals.marginPercent.toFixed(1) : "0",
+    blendedRate: totals.totalHours > 0 ? totals.blendedRate.toFixed(2) : "0",
+  }).where(eq(deals.id, dealId));
+  return totals;
+}
+
 async function recalcPricingFromScope(dealId: number) {
   const deal = await db.query.deals.findFirst({
     where: eq(deals.id, dealId),
@@ -309,13 +475,13 @@ async function recalcPricingFromScope(dealId: number) {
   );
   const totalMultiplier = baseMultiplier * promptMultiplier;
 
-  // Engagement Inputs adjustments (Tax PHB Excel parity): T&M rate adjustment % and rounding
+  // Engagement Inputs adjustments (Tax PHB Excel parity): T&M rate adjustment %
+  // is folded into the per-row rate so rate × hours = fee is preserved on
+  // every row. Tech & Admin uplift and rounding are deal-level concerns and
+  // are applied in computeDealTotalsFromLines, never silently against rows.
   const ei: any = (deal as any).engagementInputs || {};
   const rateAdjustmentPct = parseFloat(ei.tmRateAdjustmentPct ?? "0") || 0;
   const rateAdjustmentFactor = 1 + rateAdjustmentPct / 100;
-  const techAdminFeePct = parseFloat(ei.techAdminFeePct ?? "0") || 0;
-  const lineRounding = parseFloat(ei.lineItemRounding ?? "0") || 0;
-  const roundLine = (v: number) => lineRounding > 0 ? Math.round(v / lineRounding) * lineRounding : v;
 
   // Use only billable items (assemblies are groupings, not billable lines)
   const billableScope = (deal.scopeItems || []).filter((si: any) => !si.scopeItem?.isAssembly);
@@ -341,33 +507,24 @@ async function recalcPricingFromScope(dealId: number) {
       const role = roleMap.get(line.roleId!);
       const pct = role ? (ROLE_DISTRIBUTION[role.name] || (1 / allRoles.length)) : (1 / existingLines.length);
       const hours = Math.max(Math.round(totalHours * pct), 1);
-      const rate = parseFloat(line.rate || "300") * rateAdjustmentFactor;
+      // The standard rate is the rate-card baseline; the displayed rate is
+      // that baseline times the T&M adjustment factor. We persist the
+      // adjusted rate so the UI's "rate × hours" math always lands on fee.
+      const baseRate = parseFloat(line.standardRate || line.rate || "300");
+      const rate = baseRate * rateAdjustmentFactor;
       const costRate = parseFloat(line.costRate || "150");
-      const lineFee = roundLine(hours * rate);
-      const lineCost = hours * costRate;
+      const reconciled = reconcileLine(hours, rate, costRate);
       await db.update(pricingLines).set({
-        hours: String(hours),
-        fee: String(lineFee),
-        cost: String(lineCost),
-        margin: String(lineFee - lineCost),
+        hours: reconciled.hours,
+        rate: reconciled.rate,
+        fee: reconciled.fee,
+        cost: reconciled.cost,
+        margin: reconciled.margin,
       }).where(eq(pricingLines.id, line.id));
     }
   }
 
-  const updatedLines = await db.select().from(pricingLines).where(eq(pricingLines.dealId, dealId));
-  let calcFee = updatedLines.reduce((s, l) => s + parseFloat(l.fee || "0"), 0);
-  const calcCost = updatedLines.reduce((s, l) => s + parseFloat(l.cost || "0"), 0);
-  const calcHours = updatedLines.reduce((s, l) => s + parseFloat(l.hours || "0"), 0);
-  // Tech & Admin fee is a % uplift on top of professional fees
-  if (techAdminFeePct > 0) calcFee = calcFee * (1 + techAdminFeePct / 100);
-  await db.update(deals).set({
-    totalFee: String(calcFee.toFixed(2)),
-    totalCost: String(calcCost.toFixed(2)),
-    totalHours: String(calcHours),
-    marginPercent: calcFee > 0 ? String(((calcFee - calcCost) / calcFee * 100).toFixed(1)) : "0",
-    blendedRate: calcHours > 0 ? String((calcFee / calcHours).toFixed(2)) : "0",
-  }).where(eq(deals.id, dealId));
-
+  await persistDealTotals(dealId);
   await db.delete(scenarios).where(eq(scenarios.dealId, dealId));
 }
 
@@ -689,26 +846,17 @@ export function registerRoutes(app: Express) {
   app.post("/api/deals/:id/recalc-totals", async (req: Request, res: Response) => {
     const dealId = parseInt(req.params.id);
     if (isNaN(dealId)) return res.status(400).json({ error: "Invalid deal id" });
-    const lines = await db.select().from(pricingLines).where(eq(pricingLines.dealId, dealId));
-    const sumFee = lines.reduce((s, l) => s + parseFloat(l.fee || "0"), 0);
-    const sumCost = lines.reduce((s, l) => s + parseFloat(l.cost || "0"), 0);
-    const sumHours = lines.reduce((s, l) => s + parseFloat(l.hours || "0"), 0);
-    const margin = sumFee > 0 ? ((sumFee - sumCost) / sumFee) * 100 : 0;
-    const blended = sumHours > 0 ? sumFee / sumHours : 0;
-    await db.update(deals).set({
-      totalFee: sumFee.toFixed(2),
-      totalCost: sumCost.toFixed(2),
-      totalHours: sumHours.toFixed(2),
-      marginPercent: margin.toFixed(2),
-      blendedRate: blended.toFixed(2),
-      updatedAt: new Date(),
-    }).where(eq(deals.id, dealId));
+    // Single source of truth: persistDealTotals applies T&M / Tech & Admin /
+    // line rounding via the shared helper, so this endpoint can no longer
+    // produce a deal total that disagrees with what the Pricing Grid shows.
+    const totals = await persistDealTotals(dealId);
+    const lineCount = (await db.select().from(pricingLines).where(eq(pricingLines.dealId, dealId))).length;
     await db.insert(activityLog).values({
       dealId, action: "totals_recalculated",
-      description: `Header totals refreshed from ${lines.length} pricing line${lines.length === 1 ? "" : "s"} (fee ${sumFee.toFixed(2)}, hrs ${sumHours.toFixed(2)})`,
+      description: `Header totals refreshed from ${lineCount} pricing line${lineCount === 1 ? "" : "s"} (fee ${totals?.totalFee?.toFixed?.(2) ?? "0.00"}, hrs ${totals?.totalHours?.toFixed?.(2) ?? "0.00"})`,
       userName: "System",
     });
-    res.json({ success: true, totalFee: sumFee, totalCost: sumCost, totalHours: sumHours, marginPercent: margin, blendedRate: blended });
+    res.json({ success: true, ...(totals || {}) });
   });
 
   app.post("/api/deals", async (req: Request, res: Response) => {
@@ -1584,24 +1732,36 @@ export function registerRoutes(app: Express) {
             "Manager": 0.20, "Senior Consultant": 0.26, "Consultant": 0.13, "Analyst": 0.07,
           };
 
+          // Apply T&M rate adjustment up-front so per-row rate × hours = fee
+          // holds even at first creation. Tech & Admin uplift / rounding are
+          // shown as explicit footer rows on the deal totals, not silently
+          // baked into per-line numbers.
+          const ei: any = (deal as any).engagementInputs || {};
+          const rateAdjustmentPct = parseFloat(ei.tmRateAdjustmentPct ?? "0") || 0;
+          const rateAdjustmentFactor = 1 + rateAdjustmentPct / 100;
+
           await db.insert(pricingLines).values(
             allRoles.map((r) => {
               const pct = roleDistribution[r.name] || (1 / allRoles.length);
               const hours = Math.max(Math.round(totalHours * pct), 1);
-              const rate = parseFloat(r.defaultRate || "300");
+              const standardRate = parseFloat(r.defaultRate || "300");
+              const rate = standardRate * rateAdjustmentFactor;
               const costRate = parseFloat(r.costRate || "150");
+              const reconciled = reconcileLine(hours, rate, costRate);
               return {
                 dealId,
                 roleId: r.id,
-                hours: String(hours),
-                rate: String(rate),
-                costRate: String(costRate),
-                fee: String(hours * rate),
-                cost: String(hours * costRate),
-                margin: String(hours * (rate - costRate)),
+                hours: reconciled.hours,
+                rate: reconciled.rate,
+                costRate: reconciled.costRate,
+                fee: reconciled.fee,
+                cost: reconciled.cost,
+                margin: reconciled.margin,
                 // Capture the role-card baseline so we can render variance
-                // and detect overrides on subsequent edits.
-                standardRate: String(rate),
+                // and detect overrides on subsequent edits. The baseline is
+                // ALWAYS the unadjusted card rate so override math doesn't
+                // get confused by the T&M factor.
+                standardRate: standardRate.toFixed(2),
                 rateOverridden: false,
               };
             })
@@ -1610,16 +1770,7 @@ export function registerRoutes(app: Express) {
             where: eq(pricingLines.dealId, dealId),
             with: { role: true },
           });
-          const calcTotalFee = result.reduce((s, l) => s + parseFloat(l.fee || "0"), 0);
-          const calcTotalCost = result.reduce((s, l) => s + parseFloat(l.cost || "0"), 0);
-          const calcTotalHours = result.reduce((s, l) => s + parseFloat(l.hours || "0"), 0);
-          await db.update(deals).set({
-            totalFee: String(calcTotalFee),
-            totalCost: String(calcTotalCost),
-            totalHours: String(calcTotalHours),
-            marginPercent: calcTotalFee > 0 ? String(((calcTotalFee - calcTotalCost) / calcTotalFee * 100).toFixed(1)) : "0",
-            blendedRate: calcTotalHours > 0 ? String((calcTotalFee / calcTotalHours).toFixed(2)) : "0",
-          }).where(eq(deals.id, dealId));
+          await persistDealTotals(dealId);
         }
       }
     }
@@ -1627,19 +1778,29 @@ export function registerRoutes(app: Express) {
   });
 
   app.post("/api/deals/:dealId/pricing", async (req: Request, res: Response) => {
+    const dealId = parseInt(req.params.dealId);
+    const hours = parseFloat(req.body.hours || "0");
+    const rate = parseFloat(req.body.rate || "0");
+    const costRate = parseFloat(req.body.costRate || "0");
+    const reconciled = reconcileLine(hours, rate, costRate);
     const [line] = await db.insert(pricingLines).values({
-      dealId: parseInt(req.params.dealId),
+      dealId,
       ...req.body,
-      fee: String(parseFloat(req.body.hours) * parseFloat(req.body.rate)),
-      cost: String(parseFloat(req.body.hours) * parseFloat(req.body.costRate)),
-      margin: String(parseFloat(req.body.hours) * (parseFloat(req.body.rate) - parseFloat(req.body.costRate))),
+      hours: reconciled.hours,
+      rate: reconciled.rate,
+      costRate: reconciled.costRate,
+      fee: reconciled.fee,
+      cost: reconciled.cost,
+      margin: reconciled.margin,
     }).returning();
+    await persistDealTotals(dealId);
     res.status(201).json(line);
   });
 
   app.delete("/api/deals/:dealId/pricing", async (req: Request, res: Response) => {
     const dealId = parseInt(req.params.dealId);
     await db.delete(pricingLines).where(eq(pricingLines.dealId, dealId));
+    await persistDealTotals(dealId);
     res.json({ success: true });
   });
 
@@ -1666,8 +1827,17 @@ export function registerRoutes(app: Express) {
     const rate = parseFloat(req.body.rate ?? existing.rate ?? "0");
     const costRate = parseFloat(req.body.costRate ?? existing.costRate ?? "0");
 
-    // Detect override: anything not within $0.01 of standard counts as override.
-    const isOverride = standardRate > 0 && Math.abs(rate - standardRate) > 0.01;
+    // Override is detected against the EFFECTIVE standard rate the user
+    // actually sees in the grid, which is the role-card baseline times the
+    // T&M adjustment factor. Comparing against the unadjusted standardRate
+    // would falsely flag every routine edit on a T&M-adjusted line as an
+    // override transition (and trip the "overrideReason required" guard).
+    const dealForFactor = await db.query.deals.findFirst({ where: eq(deals.id, dealId) });
+    const eiForFactor: any = (dealForFactor as any)?.engagementInputs || {};
+    const tmAdjPct = parseFloat(eiForFactor.tmRateAdjustmentPct ?? "0") || 0;
+    const tmFactor = 1 + tmAdjPct / 100;
+    const effectiveStandard = standardRate * tmFactor;
+    const isOverride = effectiveStandard > 0 && Math.abs(rate - effectiveStandard) > 0.01;
     const wasOverride = !!existing.rateOverridden;
 
     // Server-side enforcement of the same justification rule the UI applies,
@@ -1690,16 +1860,17 @@ export function registerRoutes(app: Express) {
     const { standardRate: _ignoreStdRate, rateOverridden: _ignoreFlag,
       overrideAt: _ignoreOverrideAt, ...sanitizedBody } = req.body || {};
 
+    const reconciled = reconcileLine(hours, rate, costRate);
     const updateValues: any = {
       ...sanitizedBody,
       dealId,
-      hours: String(hours),
-      rate: String(rate),
-      costRate: String(costRate),
-      fee: String(hours * rate),
-      cost: String(hours * costRate),
-      margin: String(hours * (rate - costRate)),
-      standardRate: String(standardRate),
+      hours: reconciled.hours,
+      rate: reconciled.rate,
+      costRate: reconciled.costRate,
+      fee: reconciled.fee,
+      cost: reconciled.cost,
+      margin: reconciled.margin,
+      standardRate: standardRate.toFixed(2),
       rateOverridden: isOverride,
       overrideReason,
       overrideBy,
@@ -1717,6 +1888,11 @@ export function registerRoutes(app: Express) {
       .set(updateValues)
       .where(eq(pricingLines.id, lineId))
       .returning();
+
+    // Keep deals.totalFee/marginPercent/blendedRate in lockstep with the
+    // grid the user is looking at. Without this, the deal-level totals
+    // surfaced to Ask AI / proposal / EL drift away on every cell edit.
+    await persistDealTotals(dealId);
 
     // Audit trail: only log on a meaningful override transition or change of
     // override rate, not on every hours edit. Keeps activity feed signal-rich.
@@ -3707,12 +3883,45 @@ export function registerRoutes(app: Express) {
         { keys: ["what is cost rate","cost rate","fully loaded","internal cost"], answer: () => "Cost rate is the fully-loaded internal cost per hour for that role — base salary + benefits + overhead allocation, sourced from Workday/Finance. It's not editable in DealPad because it's a fact about what the person costs, not a negotiation lever. Only the bill rate is overrideable." },
         { keys: ["rate card","standard rate","default rate","where do rates come from"], answer: () => "Rate cards live in the Rates admin (open from the topbar → Rates). Each role has a default bill rate and cost rate per practice/region. The Pricing Grid pulls the role's defaultRate as the standard, then applies any line-level override on top. Rate cards are versioned — historical deals stay anchored to the card that was active at submit." },
         { keys: ["override","justification","why amber"], answer: (c) => `Click any rate cell to override it. You'll need a justification of 5+ characters; the change writes to the activity log with before/after, variance %, and your name. ${c.extra?.overrideCount ? `This deal currently has ${c.extra.overrideCount} override${c.extra.overrideCount === 1 ? "" : "s"}.` : "Overrides surface to the SLL during approval and are reset by scenario selection."}` },
-        { keys: ["blended","blended rate"], answer: (c) => `Blended rate = total fee ÷ total hours across all roles on the deal. ${c.deal?.totalFee && c.deal?.totalHours ? `Current: $${(parseFloat(c.deal.totalFee) / parseFloat(c.deal.totalHours)).toFixed(0)}/hr ($${parseFloat(c.deal.totalFee).toLocaleString()} ÷ ${parseFloat(c.deal.totalHours).toLocaleString()} hrs).` : ""} It's a weighted average — heavier-weighted senior hours pull it up; mid/staff hours pull it down.` },
-        { keys: ["how is margin","margin calc","margin formula","calculate margin"], answer: (c) => `Margin % = (fee - cost) ÷ fee, calculated per line and rolled up to the deal. ${c.deal?.marginPercent ? `This deal is at ${parseFloat(c.deal.marginPercent).toFixed(1)}%.` : ""} Below 25% triggers an SLL approval gate; below 20% needs a second approver.` },
+        { keys: ["blended","blended rate"], answer: (c) => {
+          const t = c.totals;
+          if (t && t.totalHours > 0) {
+            return `Blended rate = total fee ÷ total hours across all roles on the deal. Current: $${t.blendedRate.toFixed(0)}/hr ($${t.totalFee.toLocaleString(undefined, {maximumFractionDigits: 2})} ÷ ${t.totalHours.toLocaleString()} hrs). It's a weighted average — heavier-weighted senior hours pull it up; mid/staff hours pull it down.`;
+          }
+          return `Blended rate = total fee ÷ total hours across all roles on the deal. It's a weighted average — heavier-weighted senior hours pull it up; mid/staff hours pull it down.`;
+        }},
+        { keys: ["how is margin","margin calc","margin formula","calculate margin"], answer: (c) => {
+          const t = c.totals;
+          const detail = t ? ` This deal is at ${t.marginPercent.toFixed(1)}% (fee $${t.totalFee.toLocaleString(undefined,{maximumFractionDigits:2})} − cost $${t.totalCost.toLocaleString(undefined,{maximumFractionDigits:2})}).` : "";
+          return `Margin % = (fee - cost) ÷ fee, calculated per line and rolled up to the deal.${detail} Below 25% triggers an SLL approval gate; below 20% needs a second approver.`;
+        }},
         { keys: ["margin advisor","improve margin","lift margin"], answer: () => "Run Margin Advisor (button on the Pricing step) to get AI suggestions: shift hours from senior to mid-tier, trim non-core scope, or apply rate uplifts on under-priced lines. The advisor cites comparable won deals." },
         { keys: ["role mix","staffing","staff ratio","seniority"], answer: () => "Role mix shifts hours between Partner / MD / SM / Manager / Senior / Consultant / Analyst tiers. More senior weight = higher quality + higher fee, lower margin. More mid/staff weight = leaner cost, higher margin, more delivery risk on complex work." },
-        { keys: ["fee","total fee","revenue"], answer: (c) => `Total fee = Σ (hours × rate) across every pricing line. ${c.deal?.totalFee ? `Current: $${parseFloat(c.deal.totalFee).toLocaleString()}.` : "It updates live as you edit hours or rates."}` },
-        { keys: ["hours","total hours"], answer: (c) => `Total hours = sum of hours across every role on the deal. ${c.totalHours ? `Current: ${c.totalHours.toLocaleString()} hrs.` : ""} Hours come from your Scope step (estimated effort × complexity multiplier × assumption multipliers).` },
+        { keys: ["fee","total fee","revenue"], answer: (c) => {
+          const t = c.totals;
+          if (!t) return "Total fee = Σ (hours × rate) across every pricing line, plus the Tech & Admin uplift if one is configured. It updates live as you edit hours or rates.";
+          let breakdown = `Subtotal of lines (Σ hours × rate): $${t.lineSubtotalFee.toLocaleString(undefined,{maximumFractionDigits:2})}.`;
+          if (Math.abs(t.roundingAdjustment) > 0.005) {
+            breakdown += ` Rounding adjustment (line-item rounding $${t.lineItemRounding}): ${t.roundingAdjustment >= 0 ? "+" : ""}$${t.roundingAdjustment.toLocaleString(undefined,{maximumFractionDigits:2})}.`;
+          }
+          if (t.techAdminFeePct > 0) {
+            breakdown += ` Tech & Admin (${t.techAdminFeePct}%): +$${t.techAdminFee.toLocaleString(undefined,{maximumFractionDigits:2})}.`;
+          }
+          breakdown += ` Total fee: $${t.totalFee.toLocaleString(undefined,{maximumFractionDigits:2})}.`;
+          return `Total fee = Σ (hours × rate) across every pricing line${t.techAdminFeePct > 0 ? ", plus the Tech & Admin uplift" : ""}. ${breakdown}`;
+        }},
+        { keys: ["hours","total hours"], answer: (c) => {
+          const t = c.totals;
+          const hrs = t ? t.totalHours : c.totalHours;
+          return `Total hours = sum of hours across every role on the deal. ${hrs ? `Current: ${Number(hrs).toLocaleString()} hrs.` : ""} Hours come from your Scope step (estimated effort × complexity multiplier × assumption multipliers).`;
+        }},
+        { keys: ["tech and admin","tech & admin","tech admin","admin fee","uplift"], answer: (c) => {
+          const t = c.totals;
+          if (t && t.techAdminFeePct > 0) {
+            return `Tech & Admin fee is a ${t.techAdminFeePct}% uplift on top of the line subtotal ($${t.roundedSubtotal.toLocaleString(undefined,{maximumFractionDigits:2})}), adding $${t.techAdminFee.toLocaleString(undefined,{maximumFractionDigits:2})} to the deal. It shows as an explicit footer line in the Pricing Grid so the displayed Total Fee always equals (Σ line fees + rounding) + Tech & Admin.`;
+          }
+          return "Tech & Admin fee is a % uplift on the line subtotal, configured under Pricing Options → Engagement Inputs. When non-zero it appears as an explicit footer line in the Pricing Grid so the Total Fee reconciles to the lines plus the uplift.";
+        }},
       ],
       "wizard-scenarios": [
         { keys: ["which","best","recommend"], answer: () => "Run AI Scenario Recommendation. Premium typically lifts margin +10pts vs Standard but reduces win probability by ~15%." },
@@ -3761,7 +3970,40 @@ export function registerRoutes(app: Express) {
       return best?.entry || null;
     };
 
-    const ctxObj = { deal: context?.deal, totalHours: context?.totalHours, extra: context?.extra };
+    // Always answer with the SAME numbers the Pricing Grid is showing right
+    // now: read pricing_lines for the deal and roll them up via the shared
+    // helper. We never trust the deal.totalFee snapshot the client sent —
+    // that can be stale if the user edited a cell since last fetch.
+    let liveDeal = context?.deal;
+    let liveTotalHours = context?.totalHours;
+    let liveTotals: DealTotals | null = null;
+    if (dealId && Number.isFinite(dealId)) {
+      const dealRow = await db.query.deals.findFirst({ where: eq(deals.id, dealId) });
+      if (dealRow) {
+        const lines = await db.select().from(pricingLines)
+          .where(eq(pricingLines.dealId, dealId));
+        liveTotals = computeDealTotalsFromLines(lines, (dealRow as any).engagementInputs || {});
+        // Synthesize a deal context that mirrors what the grid renders, so
+        // every wizard-pricing answer cites the same fee / hours / margin /
+        // blended rate the user is staring at.
+        liveDeal = {
+          ...(context?.deal || {}),
+          marginPercent: liveTotals.marginPercent.toFixed(1),
+          totalFee: liveTotals.totalFee.toFixed(2),
+          totalHours: String(liveTotals.totalHours),
+          serviceLine: dealRow.serviceLine,
+          complexity: dealRow.complexity,
+          status: dealRow.status,
+        };
+        liveTotalHours = liveTotals.totalHours;
+      }
+    }
+    const ctxObj = {
+      deal: liveDeal,
+      totalHours: liveTotalHours,
+      totals: liveTotals,
+      extra: context?.extra,
+    };
 
     if (isReadOnly) {
       restricted = true;

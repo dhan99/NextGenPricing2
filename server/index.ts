@@ -702,6 +702,28 @@ async function start() {
     process.exit(1);
   }
 
+  // Task #45 reconciliation: bring every existing deal's stored totalFee /
+  // marginPercent / blendedRate in line with the now-canonical computation
+  // from pricing_lines + engagement_inputs. Gated behind RUN_PRICING_BACKFILL
+  // so production hosts only execute it once (set the env, redeploy, unset)
+  // rather than paying the cost on every cold start. In dev (NODE_ENV !==
+  // "production") it runs by default so engineers' boxes self-heal after
+  // schema/seed changes.
+  const shouldBackfill =
+    process.env.RUN_PRICING_BACKFILL === "1" ||
+    process.env.NODE_ENV !== "production";
+  if (shouldBackfill) {
+    try {
+      const { backfillDealTotals } = await import("./routes");
+      const result = await backfillDealTotals();
+      console.log(`[backfillDealTotals] reconciled totals for ${result.updated} deal(s); rewrote ${result.linesFixed} pricing line(s) to restore rate × hours = fee`);
+    } catch (e) {
+      console.error("[backfillDealTotals] failed:", e);
+    }
+  } else {
+    console.log("[backfillDealTotals] skipped (set RUN_PRICING_BACKFILL=1 to run on next boot)");
+  }
+
   // Start nightly Intapp re-screen loop (no-op until enabled in settings)
   try {
     const { startNightlyRescreenLoop } = await import("./intapp");

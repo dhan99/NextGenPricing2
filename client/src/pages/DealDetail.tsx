@@ -1347,12 +1347,43 @@ function PricingStep({ deal }: { deal: any }) {
     }
   }, [pricingLines?.length, deal.id, targetMargin, targetSourceLabel]);
 
-  const totals = (pricingLines || []).reduce((acc: any, l: any) => ({
+  // Per-line subtotal: Σ (hours × rate). Per-line invariant on the server is
+  // rate × hours = fee, so this matches what the user sees in each row.
+  const lineSubtotal = (pricingLines || []).reduce((acc: any, l: any) => ({
     hours: acc.hours + parseFloat(l.hours || 0),
     fee: acc.fee + parseFloat(l.fee || 0),
     cost: acc.cost + parseFloat(l.cost || 0),
     margin: acc.margin + parseFloat(l.margin || 0),
   }), { hours: 0, fee: 0, cost: 0, margin: 0 });
+
+  // Engagement-input uplift / rounding are deal-level adjustments. Surfacing
+  // them in the grid footer (rather than silently inflating totalFee) is the
+  // whole point of Task #45 — the user must always be able to reconcile the
+  // displayed Total to the rows above.
+  const ei: any = (deal as any).engagementInputs || {};
+  const lineItemRounding = parseFloat(ei.lineItemRounding ?? "0") || 0;
+  const techAdminFeePct = parseFloat(ei.techAdminFeePct ?? "0") || 0;
+  // Per-line rounding (legacy economics): each line's raw fee is rounded
+  // to the nearest step BEFORE summing, matching the server's
+  // computeDealTotalsFromLines and the historical pricing engine.
+  const roundedSubtotal = lineItemRounding > 0
+    ? (pricingLines || []).reduce((s: number, l: any) => {
+        const raw = parseFloat(l.fee || 0);
+        return s + Math.round(raw / lineItemRounding) * lineItemRounding;
+      }, 0)
+    : lineSubtotal.fee;
+  const roundingAdjustment = roundedSubtotal - lineSubtotal.fee;
+  const techAdminFee = roundedSubtotal * (techAdminFeePct / 100);
+  const totalFeeWithUplift = roundedSubtotal + techAdminFee;
+
+  // Grid totals are now the deal-level totals (post-uplift / rounding) so they
+  // tie to deals.totalFee, the proposal, the engagement letter, and Ask AI.
+  const totals = {
+    hours: lineSubtotal.hours,
+    fee: totalFeeWithUplift,
+    cost: lineSubtotal.cost,
+    margin: totalFeeWithUplift - lineSubtotal.cost,
+  };
 
   const marginPct = totals.fee > 0 ? ((totals.fee - totals.cost) / totals.fee) * 100 : 0;
   const warnThreshold = Math.max(0, targetMargin - 10);
@@ -1562,8 +1593,40 @@ function PricingStep({ deal }: { deal: any }) {
                 ))}
               </tbody>
               <tfoot>
-                <tr className="bg-muted/50 font-semibold">
-                  <td className="px-6 py-3 text-sm text-foreground" colSpan={2}>Totals</td>
+                <tr className="bg-muted/30">
+                  <td className="px-6 py-2 text-xs uppercase tracking-wide text-muted-foreground" colSpan={2}>Subtotal (Σ rate × hours)</td>
+                  <td className="px-4 py-2 text-right text-sm text-foreground">{formatNumber(lineSubtotal.hours)}</td>
+                  <td className="px-4 py-2" colSpan={2}></td>
+                  <td className="px-4 py-2 text-right text-sm text-foreground">{formatCurrency(lineSubtotal.fee)}</td>
+                  <td className="px-4 py-2 text-right text-sm text-muted-foreground">{formatCurrency(lineSubtotal.cost)}</td>
+                  <td className="px-6 py-2 text-right text-sm text-muted-foreground">{formatCurrency(lineSubtotal.fee - lineSubtotal.cost)}</td>
+                </tr>
+                {Math.abs(roundingAdjustment) > 0.005 && (
+                  <tr className="bg-muted/30">
+                    <td className="px-6 py-2 text-xs text-muted-foreground" colSpan={5}>
+                      Line-item rounding (nearest ${formatNumber(lineItemRounding)})
+                    </td>
+                    <td className="px-4 py-2 text-right text-sm text-foreground">
+                      {roundingAdjustment >= 0 ? "+" : ""}{formatCurrency(roundingAdjustment)}
+                    </td>
+                    <td className="px-4 py-2"></td>
+                    <td className="px-6 py-2"></td>
+                  </tr>
+                )}
+                {techAdminFeePct > 0 && (
+                  <tr className="bg-muted/30">
+                    <td className="px-6 py-2 text-xs text-muted-foreground" colSpan={5}>
+                      Tech &amp; Admin ({techAdminFeePct}%)
+                    </td>
+                    <td className="px-4 py-2 text-right text-sm text-foreground">
+                      +{formatCurrency(techAdminFee)}
+                    </td>
+                    <td className="px-4 py-2"></td>
+                    <td className="px-6 py-2"></td>
+                  </tr>
+                )}
+                <tr className="bg-muted/50 font-semibold border-t border-border">
+                  <td className="px-6 py-3 text-sm text-foreground" colSpan={2}>Total</td>
                   <td className="px-4 py-3 text-right text-sm text-foreground">{formatNumber(totals.hours)}</td>
                   <td className="px-4 py-3" colSpan={2}></td>
                   <td className="px-4 py-3 text-right text-sm text-foreground">{formatCurrency(totals.fee)}</td>
