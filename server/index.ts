@@ -419,8 +419,12 @@ async function pushSchema() {
     );
   `);
 
-  // Backfill: add Intapp settings columns if table pre-existed without them
-  await db.execute(sql`
+  // Backfill: add Intapp settings columns if table pre-existed without them.
+  // NOTE: must use pool.query (simple-query protocol) for multi-statement DDL.
+  // db.execute(sql`...`) uses the extended protocol which silently bails after
+  // the first statement, leaving later ALTER/CREATE TABLE/INDEX statements
+  // un-applied (the cause of the missing margin_targets table bug).
+  await pool.query(`
     ALTER TABLE intapp_settings ADD COLUMN IF NOT EXISTS auto_screen_on_client_change BOOLEAN DEFAULT FALSE;
     ALTER TABLE intapp_settings ADD COLUMN IF NOT EXISTS nightly_rescreen BOOLEAN DEFAULT FALSE;
     ALTER TABLE intapp_settings ADD COLUMN IF NOT EXISTS live_tenant_url TEXT;
@@ -565,7 +569,8 @@ async function pushSchema() {
   // ============ CONGA ENGAGEMENT LETTER AUTOMATION ============
   // Mirrors the Intapp/Workday pattern: provider settings + registered
   // templates (field map + clauses) + per-deal generation history.
-  await db.execute(sql`
+  // Use pool.query for multi-statement DDL — see note above.
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS conga_settings (
       id SERIAL PRIMARY KEY,
       mode TEXT NOT NULL DEFAULT 'simulated',
@@ -610,12 +615,12 @@ async function pushSchema() {
 
   // Backfill: add document_base64 column on environments where the table
   // pre-dated the rename from document_html.
-  await db.execute(sql`
+  await pool.query(`
     ALTER TABLE engagement_letters ADD COLUMN IF NOT EXISTS document_base64 TEXT;
   `);
 
   // Backfill: ensure unique constraint on dealpad_deal_id even if table pre-existed
-  await db.execute(sql`
+  await pool.query(`
     DO $$ BEGIN
       IF NOT EXISTS (
         SELECT 1 FROM pg_constraint WHERE conname = 'dynamics_opportunities_dealpad_deal_id_unique'
@@ -628,8 +633,9 @@ async function pushSchema() {
     END $$;
   `);
 
-  // Backfill scope catalog: service lines + assembly parent links
-  await db.execute(sql`
+  // Backfill scope catalog: service lines + assembly parent links.
+  // Use pool.query for multi-statement DDL/DML — see note above.
+  await pool.query(`
     UPDATE scope_catalog SET service_lines = 'Digital Transformation,Cloud Services' WHERE code IN ('ARCH-001','ARCH-002','ARCH-003') AND service_lines IS NULL;
     UPDATE scope_catalog SET service_lines = 'Digital Transformation,Cloud Services,NetSuite,Sage Intacct' WHERE code IN ('IMPL-001','IMPL-002','IMPL-003','IMPL-004') AND service_lines IS NULL;
     UPDATE scope_catalog SET service_lines = NULL WHERE code IN ('TEST-001','TEST-002','TEST-003','PMO-001','PMO-002','TRN-001') AND service_lines IS NULL;
