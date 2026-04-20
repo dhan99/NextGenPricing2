@@ -293,7 +293,12 @@ function SetupStep({ deal }: { deal: any }) {
                 </div>
                 <div>
                   <label className="label">Service Line</label>
-                  <input className={inputClass} value={form.serviceLine} onChange={(e) => setForm({ ...form, serviceLine: e.target.value })} />
+                  <select className={inputClass} value={form.serviceLine} onChange={(e) => setForm({ ...form, serviceLine: e.target.value })}>
+                    <option value="">— Select service line —</option>
+                    {["Tax-PHB", "Tax-Corporate", "Audit", "Risk Assurance", "Cloud Services", "Digital Transformation", "Compliance Consulting"].map((sl) => (
+                      <option key={sl} value={sl}>{sl}</option>
+                    ))}
+                  </select>
                 </div>
                 <div>
                   <label className="label">Start Date</label>
