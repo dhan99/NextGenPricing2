@@ -66,6 +66,7 @@ export function DealDetail() {
       <DealBanner deal={deal} currentStep={currentStep} navigateToStep={navigateToStep} summaryUnlocked={summaryUnlocked} />
 
       <div className="flex-1 p-8 max-w-7xl mx-auto w-full">
+        <SendBackHistoryBanner deal={deal} />
         {currentStep === 1 && <SetupStep deal={deal} />}
         {currentStep === 2 && <ScopeStep deal={deal} />}
         {currentStep === 3 && <AssumptionsStep deal={deal} />}
@@ -2933,6 +2934,89 @@ function ReviewerEditsDiff({
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+function SendBackHistoryBanner({ deal }: { deal: any }) {
+  const [dismissed, setDismissed] = useState(false);
+  const activities = (deal.activities || []) as any[];
+  const sendBacks = activities
+    .filter((a) => a.action === "sent_back_from_crm")
+    .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+
+  if (dismissed || sendBacks.length === 0 || deal.status === "approved") return null;
+
+  const latest = sendBacks[0];
+  const earlier = sendBacks.slice(1);
+
+  return (
+    <div className="card p-0 overflow-hidden border-amber-300 mb-6" data-testid="send-back-history-banner">
+      <div className="bg-gradient-to-r from-amber-500 to-orange-500 px-5 py-3 text-white flex items-start gap-3">
+        <AlertTriangle className="w-5 h-5 mt-0.5 shrink-0" />
+        <div className="flex-1 min-w-0">
+          <h2 className="text-sm font-bold">Sales sent this deal back for revision</h2>
+          <p className="text-xs opacity-90 mt-0.5">
+            Address the feedback below before re-submitting for approval.
+          </p>
+        </div>
+        <button
+          onClick={() => setDismissed(true)}
+          className="text-white/80 hover:text-white p-1 rounded transition-colors"
+          title="Dismiss"
+          data-testid="button-dismiss-send-back"
+        >
+          <X className="w-4 h-4" />
+        </button>
+      </div>
+      <div className="p-5 space-y-4">
+        <div className="rounded-lg border border-amber-200 bg-amber-50/60 p-4">
+          <div className="flex items-center gap-2 text-xs text-amber-900 mb-1.5">
+            <span className="font-semibold">Latest feedback</span>
+            <span className="text-amber-700/70">·</span>
+            <span>{latest.userName || "Sales"}</span>
+            <span className="text-amber-700/70">·</span>
+            <span>{formatRelativeTime(latest.createdAt)}</span>
+            {latest.metadata?.opportunityNumber && (
+              <>
+                <span className="text-amber-700/70">·</span>
+                <span>{latest.metadata.opportunityNumber}</span>
+              </>
+            )}
+          </div>
+          <p className="text-sm text-foreground whitespace-pre-wrap">
+            {latest.metadata?.reason || latest.description}
+          </p>
+        </div>
+
+        {earlier.length > 0 && (
+          <details className="text-sm">
+            <summary className="cursor-pointer text-muted-foreground hover:text-foreground font-medium">
+              Earlier send-backs ({earlier.length})
+            </summary>
+            <ul className="mt-3 space-y-2">
+              {earlier.map((a) => (
+                <li key={a.id} className="rounded-md border border-border bg-muted/30 p-3">
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
+                    <span className="font-semibold text-foreground">{a.userName || "Sales"}</span>
+                    <span>·</span>
+                    <span>{formatRelativeTime(a.createdAt)}</span>
+                    {a.metadata?.opportunityNumber && (
+                      <>
+                        <span>·</span>
+                        <span>{a.metadata.opportunityNumber}</span>
+                      </>
+                    )}
+                  </div>
+                  <p className="text-sm text-foreground whitespace-pre-wrap">
+                    {a.metadata?.reason || a.description}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          </details>
+        )}
+      </div>
     </div>
   );
 }
