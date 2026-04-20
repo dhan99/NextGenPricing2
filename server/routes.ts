@@ -2645,9 +2645,20 @@ export function registerRoutes(app: Express) {
       }
     }
 
-    const totalFee = lines.reduce((sum: number, l: any) => sum + parseFloat(l.fee || "0"), 0);
-    const totalCost = lines.reduce((sum: number, l: any) => sum + parseFloat(l.cost || "0"), 0);
-    const currentMargin = totalFee > 0 ? ((totalFee - totalCost) / totalFee) * 100 : 0;
+    // Use the canonical totals helper so the advisor's currentMargin matches
+    // the Pricing grid footer, the Review & Submit card, and deals.totalFee
+    // (all of which apply per-line rounding + tech-admin uplift on top of
+    // the raw Σ line.fee). Without this the advisor reports the *raw*
+    // margin and disagrees with every other surface in the app.
+    let dealEi: any = {};
+    if (dealId) {
+      const [d] = await db.select().from(deals).where(eq(deals.id, parseInt(String(dealId))));
+      dealEi = (d as any)?.engagementInputs || {};
+    }
+    const ct = computeDealTotalsFromLines(lines, dealEi);
+    const totalFee = ct.totalFee;
+    const totalCost = ct.totalCost;
+    const currentMargin = ct.marginPercent;
 
     const suggestions: any[] = [];
 
