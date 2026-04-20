@@ -9,8 +9,9 @@ import {
   useEngagementInputSpec,
 } from "@/hooks/use-api";
 
-// Canonical service-line list — mirrors PromptSetsAdmin so admins see the same
-// names everywhere. Update both files together if the firm adds a new line.
+// Canonical service-line and business-unit lists — mirror PromptSetsAdmin so
+// admins see the same names everywhere. Update both files together when the
+// firm adds a new line or BU.
 const SERVICE_LINES = [
   "Tax-PHB",
   "Tax-Corporate",
@@ -18,6 +19,14 @@ const SERVICE_LINES = [
   "Risk Assurance",
   "Cloud Services",
   "Digital Transformation",
+  "Compliance Consulting",
+];
+const BUSINESS_UNITS = [
+  "Tax Advisory",
+  "Audit",
+  "Risk Advisory",
+  "Consulting",
+  "Technology Consulting",
   "Compliance Consulting",
 ];
 
@@ -185,26 +194,22 @@ export function MarginTargetsAdmin() {
           </div>
           <div className="flex-1 min-w-[200px]">
             <label className="block text-xs font-medium text-muted-foreground mb-1">Name</label>
-            {newScope === "serviceLine" ? (
-              <select
-                value={newKey}
-                onChange={(e) => setNewKey(e.target.value)}
-                className="w-full px-3 py-2 text-sm border border-border rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-primary/30"
-              >
-                <option value="">— Select service line —</option>
-                {SERVICE_LINES.filter((sl) => !slRows.some((r) => r.scopeKey === sl)).map((sl) => (
-                  <option key={sl} value={sl}>{sl}</option>
-                ))}
-              </select>
-            ) : (
-              <input
-                type="text"
-                value={newKey}
-                onChange={(e) => setNewKey(e.target.value)}
-                placeholder="e.g. Advisory"
-                className="w-full px-3 py-2 text-sm border border-border rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-primary/30"
-              />
-            )}
+            <select
+              value={newKey}
+              onChange={(e) => setNewKey(e.target.value)}
+              className="w-full px-3 py-2 text-sm border border-border rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-primary/30"
+            >
+              <option value="">
+                {newScope === "serviceLine" ? "— Select service line —" : "— Select business unit —"}
+              </option>
+              {newScope === "serviceLine"
+                ? SERVICE_LINES.filter((sl) => !slRows.some((r) => r.scopeKey === sl)).map((sl) => (
+                    <option key={sl} value={sl}>{sl}</option>
+                  ))
+                : BUSINESS_UNITS.filter((bu) => !buRows.some((r) => r.scopeKey === bu)).map((bu) => (
+                    <option key={bu} value={bu}>{bu}</option>
+                  ))}
+            </select>
           </div>
           <div>
             <label className="block text-xs font-medium text-muted-foreground mb-1">Target margin (%)</label>
