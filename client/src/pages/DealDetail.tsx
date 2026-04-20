@@ -309,7 +309,12 @@ function SetupStep({ deal }: { deal: any }) {
                 </div>
                 <div>
                   <label className="label">Region</label>
-                  <input className={inputClass} value={form.region} onChange={(e) => setForm({ ...form, region: e.target.value })} />
+                  <select className={inputClass} value={form.region} onChange={(e) => setForm({ ...form, region: e.target.value })}>
+                    <option value="">— Select region —</option>
+                    {["West", "Central", "East", "National"].map((r) => (
+                      <option key={r} value={r}>{r}</option>
+                    ))}
+                  </select>
                 </div>
               </>
             ) : (
