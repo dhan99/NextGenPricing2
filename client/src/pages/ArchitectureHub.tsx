@@ -1,11 +1,12 @@
 import { useState, useRef, useEffect } from "react";
-import { Layers, Network, MessageSquare, FileText, Send, Bot, User, ChevronRight, Sparkles, Database, Server, Brain, Shield, Cpu, Cloud, BarChart3, ArrowRight, ExternalLink, Plug, Boxes } from "lucide-react";
+import { Layers, Network, MessageSquare, FileText, Send, Bot, User, ChevronRight, Sparkles, Database, Server, Brain, Shield, Cpu, Cloud, BarChart3, ArrowRight, ExternalLink, Plug, Boxes, Scale } from "lucide-react";
 import { Architecture } from "./Architecture";
 import { ArchitectureInteractive } from "./ArchitectureInteractive";
 import { ArchitectureIntegrations } from "./ArchitectureIntegrations";
 import { ArchitectureDDD } from "./ArchitectureDDD";
+import { ArchitectureCotsVsBuild } from "./ArchitectureCotsVsBuild";
 
-type ViewMode = "overview" | "interactive" | "ddd" | "integrations" | "chat" | "document";
+type ViewMode = "overview" | "interactive" | "ddd" | "integrations" | "cots" | "chat" | "document";
 
 interface ChatMessage {
   role: "user" | "assistant";
@@ -331,6 +332,7 @@ export function ArchitectureHub() {
     { id: "interactive", label: "Interactive Explorer", icon: Network, description: "Click-to-explore component map with detail panels" },
     { id: "ddd", label: "DDD Context", icon: Boxes, description: "Bounded contexts, endpoints, and how DDD shapes our AI agent strategy" },
     { id: "integrations", label: "Integrations", icon: Plug, description: "Dynamics 365 + Workday — endpoints, auth, mapping, samples" },
+    { id: "cots", label: "COTS vs Build", icon: Scale, description: "Strategy one-pager: why DealPad is built (not bought) for scope-to-fee" },
     { id: "chat", label: "Architecture AI", icon: MessageSquare, description: "Ask questions about the architecture in natural language" },
     { id: "document", label: "Full Document", icon: FileText, description: "1,900-line architecture document with 17 Mermaid diagrams" },
   ];
@@ -386,6 +388,11 @@ export function ArchitectureHub() {
         {view === "integrations" && (
           <div className="overflow-y-auto">
             <ArchitectureIntegrations />
+          </div>
+        )}
+        {view === "cots" && (
+          <div className="overflow-y-auto max-w-7xl mx-auto">
+            <ArchitectureCotsVsBuild />
           </div>
         )}
         {view === "chat" && (
