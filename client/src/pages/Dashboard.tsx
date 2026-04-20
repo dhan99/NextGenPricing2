@@ -117,20 +117,51 @@ export function Dashboard() {
   ]);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
-  const chat = useMutation({
-    mutationFn: async (message: string) => {
-      const r = await fetch("/api/ai/dashboard-chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message, role }),
-      });
-      return r.json();
+  const chat = useMutation<{ response: string; restricted?: boolean }, Error, string>({
+    retry: false,
+    mutationFn: async (message) => {
+      const controller = new AbortController();
+      const timeoutMs = 15000;
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
+      let res: Response;
+      try {
+        res = await fetch("/api/ai/dashboard-chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message, role }),
+          signal: controller.signal,
+        });
+      } catch (e: unknown) {
+        if (e instanceof DOMException && e.name === "AbortError") {
+          throw new Error(`The AI service did not respond within ${Math.round(timeoutMs / 1000)} seconds. Please try again.`);
+        }
+        const detail = e instanceof Error ? e.message : "could not reach the AI service";
+        throw new Error(`Network error: ${detail}.`);
+      } finally {
+        clearTimeout(timer);
+      }
+      const raw = await res.text();
+      let parsed: unknown = null;
+      if (raw) {
+        try { parsed = JSON.parse(raw); } catch { /* non-JSON body */ }
+      }
+      const isObj = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null;
+      const serverMessage = isObj(parsed) && typeof parsed.response === "string" ? parsed.response : null;
+      if (!res.ok) {
+        throw new Error(serverMessage ?? `The AI service returned an error (HTTP ${res.status}). Please try again.`);
+      }
+      if (!isObj(parsed) || typeof parsed.response !== "string") {
+        throw new Error("The AI service returned an unexpected response.");
+      }
+      const restricted = typeof parsed.restricted === "boolean" ? parsed.restricted : false;
+      return { response: parsed.response, restricted };
     },
     onSuccess: (data) => {
       setChatLog((prev) => [...prev, { role: "ai", content: data.response, restricted: data.restricted }]);
     },
-    onError: () => {
-      setChatLog((prev) => [...prev, { role: "ai", content: "Sorry, something went wrong reaching the AI service." }]);
+    onError: (err) => {
+      const message = err instanceof Error && err.message ? err.message : "Something went wrong reaching the AI service. Please try again.";
+      setChatLog((prev) => [...prev, { role: "ai", content: `Sorry — ${message}` }]);
     },
   });
 

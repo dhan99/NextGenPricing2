@@ -3525,8 +3525,16 @@ export function registerRoutes(app: Express) {
   });
 
   app.post("/api/ai/dashboard-chat", async (req: Request, res: Response) => {
+    try {
     const { message, role } = req.body || {};
-    if (!message) return res.status(400).json({ error: "message is required" });
+    if (!message || typeof message !== "string" || !message.trim()) {
+      return res.status(400).json({
+        error: "message is required",
+        response: "Please type a question before sending.",
+        restricted: false,
+        timestamp: new Date().toISOString(),
+      });
+    }
     const r = String(role || "pdl").toLowerCase();
     const caps = ROLE_CAPABILITIES[r] || ROLE_CAPABILITIES.pdl;
     const msg = String(message).toLowerCase();
@@ -3616,6 +3624,15 @@ export function registerRoutes(app: Express) {
       restricted,
       timestamp: new Date().toISOString(),
     });
+    } catch (err) {
+      console.error("[dashboard-chat] handler error:", err);
+      res.status(500).json({
+        error: "internal_error",
+        response: "Sorry, the AI service hit an unexpected error. Please try again in a moment.",
+        restricted: false,
+        timestamp: new Date().toISOString(),
+      });
+    }
   });
 
   // ========== ASK DEALPAD AI (contextual) ==========
