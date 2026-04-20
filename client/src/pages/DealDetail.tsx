@@ -2039,10 +2039,26 @@ function ReviewStep({ deal, navigateToStep, onReadiness, override, setOverride }
   const lines = pricingLines || [];
   const items = scopeItems || [];
 
-  // Totals (single source of truth: pricing lines)
-  const sumFee = lines.reduce((s: number, l: any) => s + parseFloat(l.fee || 0), 0);
+  // Totals must mirror the Pricing grid AND the server's
+  // computeDealTotalsFromLines (server/routes.ts) so the Review card,
+  // the grid footer, deal.totalFee, the proposal, and the engagement
+  // letter all show the same number. That means applying the engagement-
+  // input deal-level adjustments (per-line rounding + tech-admin uplift)
+  // on top of the raw Σ line.fee — not just the raw sum.
+  const lineSubtotalFee = lines.reduce((s: number, l: any) => s + parseFloat(l.fee || 0), 0);
   const sumCost = lines.reduce((s: number, l: any) => s + parseFloat(l.cost || 0), 0);
   const sumHours = lines.reduce((s: number, l: any) => s + parseFloat(l.hours || 0), 0);
+  const ei: any = (deal as any).engagementInputs || {};
+  const lineItemRounding = parseFloat(ei.lineItemRounding ?? "0") || 0;
+  const techAdminFeePct = parseFloat(ei.techAdminFeePct ?? "0") || 0;
+  const roundedSubtotal = lineItemRounding > 0
+    ? lines.reduce((s: number, l: any) => {
+        const raw = parseFloat(l.fee || 0);
+        return s + Math.round(raw / lineItemRounding) * lineItemRounding;
+      }, 0)
+    : lineSubtotalFee;
+  const techAdminFee = roundedSubtotal * (techAdminFeePct / 100);
+  const sumFee = roundedSubtotal + techAdminFee;
   const marginPct = sumFee > 0 ? ((sumFee - sumCost) / sumFee) * 100 : 0;
   const effRate = sumHours > 0 ? sumFee / sumHours : 0;
   const { data: marginTarget } = useDealMarginTarget(deal.id);
