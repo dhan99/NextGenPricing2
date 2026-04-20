@@ -2146,7 +2146,13 @@ export function registerRoutes(app: Express) {
 
     const [approval] = await db.insert(approvals).values(approvalPayload).returning();
 
-    await db.update(deals).set({ status: "submitted" }).where(eq(deals.id, dealId));
+    // Advance the persisted wizard step to "Approvals" (6) so when the user
+    // navigates back to the deal detail (e.g. from the Renewal Leadsheet)
+    // they land on the approvals tab instead of being bounced back to
+    // whatever step they last edited (Scope/Pricing/etc.).
+    await db.update(deals)
+      .set({ status: "submitted", currentStep: 6 })
+      .where(eq(deals.id, dealId));
     autoPushDeal(dealId, ["status"], actor).catch(() => {});
     onDealSubmittedTrigger(dealId, actor).catch(() => {});
 
