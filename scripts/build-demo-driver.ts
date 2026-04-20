@@ -762,6 +762,129 @@ table(
 );
 
 // ============================================================
+// ISO 42001 READINESS MAP
+// ============================================================
+startPage();
+H1("Appendix F · ISO/IEC 42001 readiness map");
+muted("ISO/IEC 42001:2023 is the international management-system standard for Artificial Intelligence — the 'ISO 27001 of AI'. It is becoming the de-facto compliance answer for the EU AI Act, NIST AI RMF, and enterprise AI procurement. This map shows where DealPad already lines up with the standard and where additional work would be needed for certification.");
+doc.moveDown(0.4);
+
+H2("Status legend");
+bullet([
+  "MET — implemented today and demonstrable in the live app.",
+  "PARTIAL — foundation is there; needs documentation, formal sign-off, or minor extension.",
+  "GAP — not in scope for the PoC; would be added during a certification programme.",
+]);
+
+H2("Mapping by ISO 42001 clause / Annex A control");
+table(
+  ["Clause / Control", "DealPad evidence", "Status"],
+  [
+    [
+      "4 · Context of the organization",
+      "AI scope explicitly bounded to deal pricing and scoping. Stakeholders identified across 6 personas.",
+      "MET",
+    ],
+    [
+      "5 · Leadership · AI policy",
+      "Architecture Hub captures 4 AI strategy principles. No formal board-approved AI policy document yet.",
+      "PARTIAL",
+    ],
+    [
+      "6.1 · Risk & opportunity (AI-specific)",
+      "Per-prompt 'needsReview' flags + confidence scores capture AI uncertainty at runtime. Formal AI risk register is not yet maintained.",
+      "PARTIAL",
+    ],
+    [
+      "A.5 · AI system impact assessment",
+      "UC-5 Risk Summary produces a deal-level narrative + risk score. Org-wide AI Impact Assessment template not yet authored.",
+      "PARTIAL",
+    ],
+    [
+      "A.6.2 · AI system life cycle (objectives, design, V&V)",
+      "5 documented use cases (UC-1..UC-5) with intended use, inputs, outputs. Each AI call is logged in activity_log with model + prompt context.",
+      "MET",
+    ],
+    [
+      "A.6.2.6 · Verification & validation",
+      "Manual wizard exists as the ground-truth comparator for the Autonomous Agent. Confidence + needsReview surface low-quality outputs to a human.",
+      "MET",
+    ],
+    [
+      "A.6.2.8 · AI system deployment",
+      "Versioned releases via Replit deployments. Rollback supported via checkpoints. Production smoke tests run on publish.",
+      "MET",
+    ],
+    [
+      "A.7 · Data for AI systems",
+      "Training data: none — DealPad uses retrieval-augmented prompting on the customer's own catalog/config, not a fine-tuned model. Data lineage is captured by activity_log per action.",
+      "MET",
+    ],
+    [
+      "A.8 · Information for interested parties",
+      "Every agent-generated field carries a 'rationale' string visible to the reviewer. Status banner makes clear when output is AI-drafted vs human-edited.",
+      "MET",
+    ],
+    [
+      "A.9 · Use of AI systems",
+      "Reviewer always has 3 outcomes (Approve · Open in Wizard · Discard). Approval gates (Intapp, Workday, margin floor) are non-bypassable and apply equally to AI and manual flows.",
+      "MET",
+    ],
+    [
+      "A.9.3 · Human oversight",
+      "PDL approves every agent draft before submission. FIN approves every deal above auto-approval thresholds. Approval queue is the official record.",
+      "MET",
+    ],
+    [
+      "A.10 · Third-party relationships",
+      "External integrations (D365, Workday, Intapp, Conga) are explicitly bounded contexts. AI model provider (LLM API) usage is logged. Vendor due-diligence package not yet formalised.",
+      "PARTIAL",
+    ],
+    [
+      "9 · Performance evaluation",
+      "Analytics dashboard tracks pipeline, margin, cycle time. AI-specific metrics (acceptance rate, override rate, confidence distribution) not yet surfaced.",
+      "PARTIAL",
+    ],
+    [
+      "10 · Improvement · incident management",
+      "activity_log captures every AI run + override. Formal AI incident triage process and post-mortem template not yet defined.",
+      "GAP",
+    ],
+    [
+      "7.2 · Competence (AI literacy)",
+      "Training material for PDLs on interpreting confidence scores and override patterns not yet authored.",
+      "GAP",
+    ],
+  ],
+  [150, W - 230, 80]
+);
+
+H2("Summary");
+table(
+  ["Status", "Count", "Implication"],
+  [
+    ["MET", "7 controls", "Defensible today in a buyer due-diligence questionnaire."],
+    ["PARTIAL", "5 controls", "Documentation + governance artefacts close the gap in 4–6 weeks."],
+    ["GAP", "2 controls", "Process work (incident mgmt, training) — not a code change."],
+  ],
+  [80, 80, W - 160]
+);
+
+callout("Talking point", AMBER, [
+  "DealPad was not designed against ISO 42001 — but the bounded-context architecture, per-action audit",
+  "trail, and human-in-the-loop reviewer model align with most of the standard's controls by default.",
+  "A 6-week governance workstream alongside the production pilot would put Armanino in a strong",
+  "position to be one of the first professional-services firms with an ISO 42001-certified AI platform.",
+]);
+
+callout("What changes in the product if Armanino pursues certification", BLUE, [
+  "Add an 'AI Governance' tab to the Architecture Hub: policy, risk register, impact assessments.",
+  "Add AI-specific KPIs to Analytics: agent acceptance rate, override rate by step, confidence drift.",
+  "Add an 'AI incident' record type linked to deals, with a triage workflow.",
+  "Publish a vendor security & AI fact-sheet for the underlying LLM provider.",
+]);
+
+// ============================================================
 // PAGE NUMBERS — write into the bottom margin without triggering auto-pagination
 // ============================================================
 const range = doc.bufferedPageRange();
