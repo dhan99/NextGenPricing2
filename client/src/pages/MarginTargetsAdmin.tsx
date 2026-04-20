@@ -8,6 +8,18 @@ import {
   useDeleteMarginTargetOverride,
 } from "@/hooks/use-api";
 
+// Canonical service-line list — mirrors PromptSetsAdmin so admins see the same
+// names everywhere. Update both files together if the firm adds a new line.
+const SERVICE_LINES = [
+  "Tax-PHB",
+  "Tax-Corporate",
+  "Audit",
+  "Risk Assurance",
+  "Cloud Services",
+  "Digital Transformation",
+  "Compliance Consulting",
+];
+
 type Override = {
   id: number;
   scope: "bu" | "serviceLine";
@@ -43,8 +55,12 @@ export function MarginTargetsAdmin() {
   const [firmInput, setFirmInput] = useState<string>("");
   const firmDisplay = firmInput !== "" ? firmInput : firmDefault != null ? String(firmDefault) : "35";
 
-  const [newScope, setNewScope] = useState<"bu" | "serviceLine">("serviceLine");
+  const [newScope, setNewScopeState] = useState<"bu" | "serviceLine">("serviceLine");
   const [newKey, setNewKey] = useState("");
+  const setNewScope = (s: "bu" | "serviceLine") => {
+    setNewScopeState(s);
+    setNewKey(""); // reset name when scope changes (dropdown vs text input)
+  };
   const [newPct, setNewPct] = useState("");
   const [newTechFee, setNewTechFee] = useState("");
   const [newLineRound, setNewLineRound] = useState("");
@@ -148,15 +164,28 @@ export function MarginTargetsAdmin() {
               <option value="bu">Business Unit</option>
             </select>
           </div>
-          <div className="flex-1 min-w-[180px]">
+          <div className="flex-1 min-w-[200px]">
             <label className="block text-xs font-medium text-muted-foreground mb-1">Name</label>
-            <input
-              type="text"
-              value={newKey}
-              onChange={(e) => setNewKey(e.target.value)}
-              placeholder={newScope === "bu" ? "e.g. Advisory" : "e.g. Tax-PHB"}
-              className="w-full px-3 py-2 text-sm border border-border rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-primary/30"
-            />
+            {newScope === "serviceLine" ? (
+              <select
+                value={newKey}
+                onChange={(e) => setNewKey(e.target.value)}
+                className="w-full px-3 py-2 text-sm border border-border rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-primary/30"
+              >
+                <option value="">— Select service line —</option>
+                {SERVICE_LINES.filter((sl) => !slRows.some((r) => r.scopeKey === sl)).map((sl) => (
+                  <option key={sl} value={sl}>{sl}</option>
+                ))}
+              </select>
+            ) : (
+              <input
+                type="text"
+                value={newKey}
+                onChange={(e) => setNewKey(e.target.value)}
+                placeholder="e.g. Advisory"
+                className="w-full px-3 py-2 text-sm border border-border rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-primary/30"
+              />
+            )}
           </div>
           <div>
             <label className="block text-xs font-medium text-muted-foreground mb-1">Target margin (%)</label>
