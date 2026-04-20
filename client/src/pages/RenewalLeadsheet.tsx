@@ -59,6 +59,7 @@ export function RenewalLeadsheet() {
   const [customPct, setCustomPct] = useState("");
   const [appliedPct, setAppliedPct] = useState<number | null>(null);
   const [cumulativeFactor, setCumulativeFactor] = useState(1);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   // Aggregate pricing totals from pricing-lines (more accurate than deal cache)
   const cyTotals = useMemo(() => {
@@ -168,33 +169,44 @@ export function RenewalLeadsheet() {
     setCustomPct("");
   };
 
-  const handleSubmitApproval = async () => {
-    await submitApproval.mutateAsync({
-      dealId,
-      data: {
-        approverName: "Practice Leader",
-        approverRole: "Service Line Lead",
-        status: "pending",
-        notes: `Renewal leadsheet submitted. Fee ${feeDeltaPct >= 0 ? "+" : ""}${feeDeltaPct.toFixed(1)}% vs prior year, margin ${cyMargin.toFixed(1)}%.`,
-        submittedBy: persona?.name,
-      },
-    });
-    navigate(`/deals/${dealId}`);
+  // Shared submit helper. Without try/catch around mutateAsync the renewal
+  // page silently swallowed Intapp/Workday gating errors (HTTP 409) and the
+  // navigate() never fired — making the buttons appear broken. Surfacing the
+  // server message lets the user see exactly what's blocking submission.
+  const submitWithNotes = async (notes: string) => {
+    setSubmitError(null);
+    try {
+      await submitApproval.mutateAsync({
+        dealId,
+        data: {
+          approverName: "Practice Leader",
+          approverRole: "Service Line Lead",
+          status: "pending",
+          notes,
+          submittedBy: persona?.name,
+        },
+      });
+      navigate(`/deals/${dealId}`);
+    } catch (e: any) {
+      // fetchApi throws Error(JSON.stringify(body)) for non-2xx responses.
+      let msg = e?.message || "Submission failed.";
+      try {
+        const parsed = JSON.parse(msg);
+        msg = parsed.message || parsed.error || msg;
+      } catch {}
+      setSubmitError(msg);
+    }
   };
 
-  const handleSubmitFastTrack = async () => {
-    await submitApproval.mutateAsync({
-      dealId,
-      data: {
-        approverName: "Practice Leader",
-        approverRole: "Service Line Lead",
-        status: "pending",
-        notes: `Fast-track renewal. Meets criteria: margin ${cyMargin.toFixed(1)}% (>= 42%), fee delta ${feeDeltaPct >= 0 ? "+" : ""}${feeDeltaPct.toFixed(1)}% (within ±15%), no scope changes.`,
-        submittedBy: persona?.name,
-      },
-    });
-    navigate(`/deals/${dealId}`);
-  };
+  const handleSubmitApproval = () =>
+    submitWithNotes(
+      `Renewal leadsheet submitted. Fee ${feeDeltaPct >= 0 ? "+" : ""}${feeDeltaPct.toFixed(1)}% vs prior year, margin ${cyMargin.toFixed(1)}%.`
+    );
+
+  const handleSubmitFastTrack = () =>
+    submitWithNotes(
+      `Fast-track renewal. Meets criteria: margin ${cyMargin.toFixed(1)}% (>= ${buTarget}%), fee delta ${feeDeltaPct >= 0 ? "+" : ""}${feeDeltaPct.toFixed(1)}% (within ±15%), no scope changes.`
+    );
 
   if (!currentDeal) {
     return (
@@ -479,6 +491,15 @@ export function RenewalLeadsheet() {
           </button>
         </div>
       </div>
+      {submitError && (
+        <div className="mt-4 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+          <div className="font-semibold mb-1">Submission blocked</div>
+          <div className="leading-relaxed">{submitError}</div>
+          <div className="mt-2 text-xs text-red-700">
+            Open the deal wizard to resolve the gating issue (Intapp screening, Workday validation, or other policy block), then return here to retry.
+          </div>
+        </div>
+      )}
       <AskDealPadAI context={{
         screen: "renewal-leadsheet",
         screenLabel: `Renewal Leadsheet · ${currentDeal?.dealNumber || ""}`,
