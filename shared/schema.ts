@@ -219,16 +219,24 @@ export const promptSetItems = pgTable("prompt_set_items", {
   enabled: boolean("enabled").default(true),
 });
 
-// Single source of truth for the firm's margin target (Task #33). One row per
-// scope: a single "firm" row holds the firm-wide default; additional rows
-// hold per-business-unit or per-service-line overrides. The resolver picks
-// the most specific applicable row for a given deal (deal override → BU
-// override → service-line override → firm default).
+// Single source of truth for the firm's margin target AND per-scope pricing
+// policy knobs (Task #33, extended). One row per scope: a single "firm" row
+// holds the firm-wide default margin; additional rows hold per-business-unit
+// or per-service-line overrides. The resolver picks the most specific
+// applicable row for a given deal (deal override → BU → service line → firm).
+//
+// `percent` is the gross-margin target (always required).
+// The remaining columns are *optional* per-service-line policy overrides
+// applied on top of ENGAGEMENT_INPUT_PRESETS when generating the engagement
+// inputs spec for a deal. NULL means "use the preset default".
 export const marginTargets = pgTable("margin_targets", {
   id: serial("id").primaryKey(),
   scope: text("scope").notNull(), // "firm" | "bu" | "serviceLine"
   scopeKey: text("scope_key"), // null for firm; BU name or service-line name otherwise
   percent: decimal("percent", { precision: 5, scale: 2 }).notNull(),
+  techAdminFeePct: decimal("tech_admin_fee_pct", { precision: 5, scale: 2 }),
+  lineItemRounding: decimal("line_item_rounding", { precision: 10, scale: 2 }),
+  fixedFeeRounding: decimal("fixed_fee_rounding", { precision: 10, scale: 2 }),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 }, (t) => ({
   uniqScope: uniqueIndex("margin_targets_scope_key_uniq").on(t.scope, t.scopeKey),

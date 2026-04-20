@@ -423,6 +423,14 @@ export function registerRoutes(app: Express) {
 
   // ========== MARGIN TARGETS (single source of truth, Task #33) ==========
   // Returns the firm default plus any per-BU / per-service-line overrides.
+  // Service-line overrides may also carry per-SL policy knobs (tech-admin fee,
+  // line-item rounding, fixed-fee rounding) that overlay the engagement-input
+  // preset defaults when a deal is created/edited.
+  function policyNum(v: string | null | undefined): number | null {
+    if (v === null || v === undefined) return null;
+    const n = parseFloat(v);
+    return Number.isFinite(n) ? n : null;
+  }
   app.get("/api/margin-targets", async (_req: Request, res: Response) => {
     const rows = await db.select().from(marginTargets);
     const firm = rows.find((r) => r.scope === "firm");
@@ -433,6 +441,9 @@ export function registerRoutes(app: Express) {
         scope: r.scope as "bu" | "serviceLine",
         scopeKey: r.scopeKey,
         percent: parseFloat(r.percent),
+        techAdminFeePct: policyNum(r.techAdminFeePct),
+        lineItemRounding: policyNum(r.lineItemRounding),
+        fixedFeeRounding: policyNum(r.fixedFeeRounding),
         updatedAt: r.updatedAt,
       }));
     res.json({
@@ -459,6 +470,32 @@ export function registerRoutes(app: Express) {
     return { value: Math.round(n * 100) / 100 };
   }
 
+  // Validate the optional per-service-line policy fields.
+  // Each field accepts: missing/undefined (don't touch), null/empty (clear),
+  // or a numeric value within bounds. Returns the patch to merge into the row.
+  function validatePolicyFields(body: any): {
+    patch?: Record<string, string | null>;
+    error?: string;
+  } {
+    const patch: Record<string, string | null> = {};
+    const fields: Array<{ key: string; column: string; min: number; max: number; label: string }> = [
+      { key: "techAdminFeePct", column: "techAdminFeePct", min: 0, max: 100, label: "tech-admin fee %" },
+      { key: "lineItemRounding", column: "lineItemRounding", min: 0, max: 10000, label: "line-item rounding" },
+      { key: "fixedFeeRounding", column: "fixedFeeRounding", min: 0, max: 100000, label: "fixed-fee rounding" },
+    ];
+    for (const f of fields) {
+      if (!(f.key in body)) continue; // not provided — leave alone
+      const raw = body[f.key];
+      if (raw === null || raw === "") { patch[f.column] = null; continue; }
+      const n = typeof raw === "string" ? parseFloat(raw) : raw;
+      if (typeof n !== "number" || !Number.isFinite(n) || n < f.min || n > f.max) {
+        return { error: `${f.label} must be a number between ${f.min} and ${f.max}` };
+      }
+      patch[f.column] = String(Math.round(n * 100) / 100);
+    }
+    return { patch };
+  }
+
   // Set/update the firm-wide default. Idempotent upsert on the singleton row.
   app.put("/api/margin-targets/firm", async (req: Request, res: Response) => {
     const v = validatePercent(req.body?.percent);
@@ -477,7 +514,22 @@ export function registerRoutes(app: Express) {
     res.status(201).json({ id: created.id, percent: parseFloat(created.percent) });
   });
 
-  // Create a per-BU or per-serviceLine override.
+  // Shape an override row for the API response.
+  function shapeOverride(r: typeof marginTargets.$inferSelect) {
+    return {
+      id: r.id,
+      scope: r.scope,
+      scopeKey: r.scopeKey,
+      percent: parseFloat(r.percent),
+      techAdminFeePct: policyNum(r.techAdminFeePct),
+      lineItemRounding: policyNum(r.lineItemRounding),
+      fixedFeeRounding: policyNum(r.fixedFeeRounding),
+    };
+  }
+
+  // Create a per-BU or per-serviceLine override. The optional policy fields
+  // (techAdminFeePct, lineItemRounding, fixedFeeRounding) are only meaningful
+  // for service-line scope but accepted on either for forward compatibility.
   app.post("/api/margin-targets/overrides", async (req: Request, res: Response) => {
     const { scope, scopeKey } = req.body || {};
     if (scope !== "bu" && scope !== "serviceLine") return res.status(400).json({ error: "scope must be 'bu' or 'serviceLine'" });
@@ -485,11 +537,13 @@ export function registerRoutes(app: Express) {
     if (!key) return res.status(400).json({ error: "scopeKey is required" });
     const v = validatePercent(req.body?.percent);
     if (v.error) return res.status(400).json({ error: v.error });
+    const policy = validatePolicyFields(req.body || {});
+    if (policy.error) return res.status(400).json({ error: policy.error });
     try {
       const [created] = await db.insert(marginTargets)
-        .values({ scope, scopeKey: key, percent: String(v.value) })
+        .values({ scope, scopeKey: key, percent: String(v.value), ...(policy.patch || {}) })
         .returning();
-      res.status(201).json({ id: created.id, scope: created.scope, scopeKey: created.scopeKey, percent: parseFloat(created.percent) });
+      res.status(201).json(shapeOverride(created));
     } catch (e: any) {
       if (String(e?.message || "").includes("uniq")) {
         return res.status(409).json({ error: `An override for ${scope} '${key}' already exists.` });
@@ -500,14 +554,24 @@ export function registerRoutes(app: Express) {
 
   app.patch("/api/margin-targets/overrides/:id", async (req: Request, res: Response) => {
     const id = parseInt(req.params.id);
-    const v = validatePercent(req.body?.percent);
-    if (v.error) return res.status(400).json({ error: v.error });
+    const patch: Record<string, any> = { updatedAt: new Date() };
+    if ("percent" in (req.body || {})) {
+      const v = validatePercent(req.body.percent);
+      if (v.error) return res.status(400).json({ error: v.error });
+      patch.percent = String(v.value);
+    }
+    const policy = validatePolicyFields(req.body || {});
+    if (policy.error) return res.status(400).json({ error: policy.error });
+    Object.assign(patch, policy.patch || {});
+    if (Object.keys(patch).length === 1) {
+      return res.status(400).json({ error: "No updatable fields supplied" });
+    }
     const [updated] = await db.update(marginTargets)
-      .set({ percent: String(v.value), updatedAt: new Date() })
+      .set(patch)
       .where(and(eq(marginTargets.id, id), isNotNull(marginTargets.scopeKey)))
       .returning();
     if (!updated) return res.status(404).json({ error: "Override not found" });
-    res.json({ id: updated.id, scope: updated.scope, scopeKey: updated.scopeKey, percent: parseFloat(updated.percent) });
+    res.json(shapeOverride(updated));
   });
 
   app.delete("/api/margin-targets/overrides/:id", async (req: Request, res: Response) => {
@@ -1114,7 +1178,29 @@ export function registerRoutes(app: Express) {
   app.get("/api/engagement-input-spec/:serviceLine", async (req: Request, res: Response) => {
     const sl = req.params.serviceLine;
     const preset = ENGAGEMENT_INPUT_PRESETS[sl] || ENGAGEMENT_INPUT_PRESETS["_generic"];
-    res.json({ serviceLine: sl, ...preset });
+
+    // Overlay any per-service-line policy overrides set in Margin Targets admin
+    // on top of the preset defaults. Pricing Operations can govern these
+    // without a code change.
+    const [slRow] = await db.select().from(marginTargets)
+      .where(and(eq(marginTargets.scope, "serviceLine"), eq(marginTargets.scopeKey, sl)));
+    const defaults = { ...(preset.defaults || {}) };
+    const overrideSources: Record<string, "service-line override"> = {};
+    if (slRow) {
+      if (slRow.techAdminFeePct != null) {
+        defaults.techAdminFeePct = String(parseFloat(slRow.techAdminFeePct));
+        overrideSources.techAdminFeePct = "service-line override";
+      }
+      if (slRow.lineItemRounding != null) {
+        defaults.lineItemRounding = String(parseFloat(slRow.lineItemRounding));
+        overrideSources.lineItemRounding = "service-line override";
+      }
+      if (slRow.fixedFeeRounding != null) {
+        defaults.fixedFeeRounding = String(parseFloat(slRow.fixedFeeRounding));
+        overrideSources.fixedFeeRounding = "service-line override";
+      }
+    }
+    res.json({ serviceLine: sl, ...preset, defaults, overrideSources });
   });
 
   app.get("/api/scope-catalog", async (req: Request, res: Response) => {

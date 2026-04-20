@@ -544,10 +544,16 @@ export function useUpdateFirmMarginTarget() {
   });
 }
 
+export type MarginTargetPolicyFields = {
+  techAdminFeePct?: number | null;
+  lineItemRounding?: number | null;
+  fixedFeeRounding?: number | null;
+};
+
 export function useCreateMarginTargetOverride() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (data: { scope: "bu" | "serviceLine"; scopeKey: string; percent: number }) =>
+    mutationFn: (data: { scope: "bu" | "serviceLine"; scopeKey: string; percent: number } & MarginTargetPolicyFields) =>
       fetchApi("/api/margin-targets/overrides", { method: "POST", body: JSON.stringify(data) }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["margin-targets"] });
@@ -559,8 +565,10 @@ export function useCreateMarginTargetOverride() {
 export function useUpdateMarginTargetOverride() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (data: { id: number; percent: number }) =>
-      fetchApi(`/api/margin-targets/overrides/${data.id}`, { method: "PATCH", body: JSON.stringify({ percent: data.percent }) }),
+    mutationFn: (data: { id: number; percent?: number } & MarginTargetPolicyFields) => {
+      const { id, ...body } = data;
+      return fetchApi(`/api/margin-targets/overrides/${id}`, { method: "PATCH", body: JSON.stringify(body) });
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["margin-targets"] });
       qc.invalidateQueries({ queryKey: ["deal-margin-target"] });

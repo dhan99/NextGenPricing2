@@ -451,6 +451,11 @@ async function pushSchema() {
     );
     CREATE UNIQUE INDEX IF NOT EXISTS margin_targets_scope_key_uniq
       ON margin_targets (scope, COALESCE(scope_key, ''));
+    -- Per-scope policy knobs (Task #33, extended). All nullable: NULL means
+    -- "fall back to the engagement-input preset default for the service line".
+    ALTER TABLE margin_targets ADD COLUMN IF NOT EXISTS tech_admin_fee_pct DECIMAL(5,2);
+    ALTER TABLE margin_targets ADD COLUMN IF NOT EXISTS line_item_rounding DECIMAL(10,2);
+    ALTER TABLE margin_targets ADD COLUMN IF NOT EXISTS fixed_fee_rounding DECIMAL(10,2);
     ALTER TABLE prompt_responses ADD COLUMN IF NOT EXISTS prompt_set_id INTEGER;
     ALTER TABLE prompt_responses ADD COLUMN IF NOT EXISTS prompt_set_version INTEGER;
 
