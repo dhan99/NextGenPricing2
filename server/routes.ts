@@ -3417,9 +3417,16 @@ export function registerRoutes(app: Express) {
         { keys: ["integration"], answer: () => "Each integration above 2 adds ~5–10% effort. Document them now to avoid scope creep later." },
       ],
       "wizard-pricing": [
-        { keys: ["rate","blended"], answer: (c) => `Blended rate is computed from role hours × role rate cards. ${c.deal?.totalFee ? `Current total fee: $${parseFloat(c.deal.totalFee).toLocaleString()}.` : ""}` },
-        { keys: ["margin","advisor"], answer: () => "Run Margin Advisor to see recommended adjustments. Below 25% margin triggers an SLL approval gate." },
-        { keys: ["role","mix","staff"], answer: () => "Adjust the role mix to shift hours from senior to mid-level for margin lift, or the reverse for delivery confidence." },
+        { keys: ["difference between rate","rate vs cost","cost rate vs rate","rate and cost rate","rate & cost"], answer: () => "Two different sides of the engagement:\n\n• Rate = bill rate. What the client pays per hour for that role. Multiplied by hours, it produces fee (revenue).\n• Cost rate = internal fully-loaded cost per hour (salary + benefits + overhead). Multiplied by hours, it produces cost.\n\nThe gap is your margin. Example: Senior Manager at $475 bill / $185 cost throws off ~$290 of margin per hour. Margin % = (fee - cost) / fee." },
+        { keys: ["what is cost rate","cost rate","fully loaded","internal cost"], answer: () => "Cost rate is the fully-loaded internal cost per hour for that role — base salary + benefits + overhead allocation, sourced from Workday/Finance. It's not editable in DealPad because it's a fact about what the person costs, not a negotiation lever. Only the bill rate is overrideable." },
+        { keys: ["rate card","standard rate","default rate","where do rates come from"], answer: () => "Rate cards live in the Rates admin (open from the topbar → Rates). Each role has a default bill rate and cost rate per practice/region. The Pricing Grid pulls the role's defaultRate as the standard, then applies any line-level override on top. Rate cards are versioned — historical deals stay anchored to the card that was active at submit." },
+        { keys: ["override","justification","why amber"], answer: (c) => `Click any rate cell to override it. You'll need a justification of 5+ characters; the change writes to the activity log with before/after, variance %, and your name. ${c.extra?.overrideCount ? `This deal currently has ${c.extra.overrideCount} override${c.extra.overrideCount === 1 ? "" : "s"}.` : "Overrides surface to the SLL during approval and are reset by scenario selection."}` },
+        { keys: ["blended","blended rate"], answer: (c) => `Blended rate = total fee ÷ total hours across all roles on the deal. ${c.deal?.totalFee && c.deal?.totalHours ? `Current: $${(parseFloat(c.deal.totalFee) / parseFloat(c.deal.totalHours)).toFixed(0)}/hr ($${parseFloat(c.deal.totalFee).toLocaleString()} ÷ ${parseFloat(c.deal.totalHours).toLocaleString()} hrs).` : ""} It's a weighted average — heavier-weighted senior hours pull it up; mid/staff hours pull it down.` },
+        { keys: ["how is margin","margin calc","margin formula","calculate margin"], answer: (c) => `Margin % = (fee - cost) ÷ fee, calculated per line and rolled up to the deal. ${c.deal?.marginPercent ? `This deal is at ${parseFloat(c.deal.marginPercent).toFixed(1)}%.` : ""} Below 25% triggers an SLL approval gate; below 20% needs a second approver.` },
+        { keys: ["margin advisor","improve margin","lift margin"], answer: () => "Run Margin Advisor (button on the Pricing step) to get AI suggestions: shift hours from senior to mid-tier, trim non-core scope, or apply rate uplifts on under-priced lines. The advisor cites comparable won deals." },
+        { keys: ["role mix","staffing","staff ratio","seniority"], answer: () => "Role mix shifts hours between Partner / MD / SM / Manager / Senior / Consultant / Analyst tiers. More senior weight = higher quality + higher fee, lower margin. More mid/staff weight = leaner cost, higher margin, more delivery risk on complex work." },
+        { keys: ["fee","total fee","revenue"], answer: (c) => `Total fee = Σ (hours × rate) across every pricing line. ${c.deal?.totalFee ? `Current: $${parseFloat(c.deal.totalFee).toLocaleString()}.` : "It updates live as you edit hours or rates."}` },
+        { keys: ["hours","total hours"], answer: (c) => `Total hours = sum of hours across every role on the deal. ${c.totalHours ? `Current: ${c.totalHours.toLocaleString()} hrs.` : ""} Hours come from your Scope step (estimated effort × complexity multiplier × assumption multipliers).` },
       ],
       "wizard-scenarios": [
         { keys: ["which","best","recommend"], answer: () => "Run AI Scenario Recommendation. Premium typically lifts margin +10pts vs Standard but reduces win probability by ~15%." },
@@ -3452,26 +3459,45 @@ export function registerRoutes(app: Express) {
     let answer: string;
     let restricted = false;
 
+    // Pick the BEST KB entry, not the first one. Score = length of the
+    // longest matching key (more specific phrases beat single-word keys).
+    // This is what fixes "what's the difference between rate & cost rate?"
+    // grabbing the generic "rate" answer instead of the targeted one.
+    const findBestMatch = (kb: { keys: string[]; answer: (ctx: any) => string }[]) => {
+      let best: { entry: typeof kb[0]; score: number } | null = null;
+      for (const entry of kb) {
+        for (const key of entry.keys) {
+          if (q.includes(key) && (!best || key.length > best.score)) {
+            best = { entry, score: key.length };
+          }
+        }
+      }
+      return best?.entry || null;
+    };
+
+    const ctxObj = { deal: context?.deal, totalHours: context?.totalHours, extra: context?.extra };
+
     if (isReadOnly) {
       restricted = true;
       const altLines = (roleAlternatives[r] || []).map(a => `• ${a}`).join("\n");
       answer = `As ${caps.label}, you can view this screen but not make changes here. What you CAN do:\n${altLines}`;
 
       // Still try to answer informational questions
-      const kb = screenKB[screen] || [];
-      const matched = kb.find(t => t.keys.some(k => q.includes(k)));
+      const matched = findBestMatch(screenKB[screen] || []);
       if (matched) {
-        const info = matched.answer({ deal: context?.deal, totalHours: context?.totalHours });
+        const info = matched.answer(ctxObj);
         answer = `${info}\n\n(Read-only context for ${caps.label}.) What you CAN do here:\n${altLines}`;
       }
     } else if (isEditor) {
       const kb = screenKB[screen] || [];
-      const matched = kb.find(t => t.keys.some(k => q.includes(k)));
+      const matched = findBestMatch(kb);
       if (matched) {
-        answer = matched.answer({ deal: context?.deal, totalHours: context?.totalHours });
+        answer = matched.answer(ctxObj);
       } else {
-        const suggestions = (kb.slice(0, 3).map(t => `"${t.keys[0]}"`).join(", ")) || "the screen above";
-        answer = `I'm not sure how to answer that for this screen. Try asking about: ${suggestions}, or use the suggested prompts below.`;
+        // Surface up to 4 representative topics so the user knows what this
+        // screen actually answers, instead of a frustrating dead-end.
+        const topics = kb.slice(0, 4).map(t => `"${t.keys[0]}"`).join(", ") || "the screen above";
+        answer = `I don't have a prepared answer for that on this screen. I can speak to: ${topics}. Try rephrasing, or pick one of the suggested prompts below.`;
       }
     } else {
       answer = `Your role (${caps.label}) is not configured for this screen. What you CAN do:\n${(roleAlternatives[r] || []).map(a => `• ${a}`).join("\n")}`;
