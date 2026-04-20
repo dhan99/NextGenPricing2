@@ -22,6 +22,7 @@ const LOAD_ORDER = [
   "prompt_responses",
   "activity_log",
   "change_orders",
+  "margin_targets",
   "dynamics_owners",
   "dynamics_accounts",
   "dynamics_opportunities",
