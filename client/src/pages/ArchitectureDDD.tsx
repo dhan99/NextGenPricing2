@@ -323,7 +323,7 @@ const contexts: BoundedContext[] = [
       { method: "GET", path: "/api/analytics/overview", purpose: "Trends, win rates, margin breakdown" },
       { method: "GET", path: "/api/dashboard/summary", purpose: "KPI tiles" },
       { method: "GET", path: "/api/ai/dashboard-insights", purpose: "AI commentary on pipeline" },
-      { method: "POST", path: "/api/ai/dashboard-chat", purpose: "Chat with the dashboard" },
+      { method: "POST", path: "/api/ai/ask", purpose: "Chat with the dashboard (shared Ask DealPad AI)" },
     ],
     agents: [],
     color: "bg-orange-50 border-orange-200",

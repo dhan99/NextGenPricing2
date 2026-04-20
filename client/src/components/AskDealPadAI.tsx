@@ -60,6 +60,11 @@ const SUGGESTED_PROMPTS: Record<string, string[]> = {
     "What's a typical uplift?",
     "Why is the PY column read-only?",
   ],
+  "dashboard": [
+    "What's our pipeline?",
+    "Which deals have low margin?",
+    "How many approvals are pending?",
+  ],
 };
 
 interface Message {
@@ -69,18 +74,27 @@ interface Message {
   alternatives?: string[];
 }
 
-export function AskDealPadAI({ context }: { context: AskAIContext }) {
+export function AskDealPadAI({
+  context,
+  inline = false,
+  intro,
+}: {
+  context: AskAIContext;
+  inline?: boolean;
+  intro?: string;
+}) {
   const { persona } = useAuth();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(inline);
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
   const ask = useAskDealPadAI();
 
   useEffect(() => {
+    if (inline) return;
     const handler = () => setOpen(true);
     window.addEventListener("dealpad:open-ask-ai", handler);
     return () => window.removeEventListener("dealpad:open-ask-ai", handler);
-  }, []);
+  }, [inline]);
 
   const suggestions = SUGGESTED_PROMPTS[context.screen] || [];
 
@@ -123,9 +137,20 @@ export function AskDealPadAI({ context }: { context: AskAIContext }) {
 
   if (!open) return null;
 
+  const introText =
+    intro ||
+    `Ask anything about ${context.screenLabel}. Answers are tailored to your role.`;
+
+  const containerClass = inline
+    ? "card flex flex-col h-full min-h-[420px]"
+    : "fixed top-1/2 -translate-y-1/2 right-6 z-40 w-[380px] max-h-[70vh] flex flex-col rounded-2xl border border-border bg-card shadow-2xl";
+  const headerClass = inline
+    ? "flex items-center justify-between px-4 py-3 border-b border-border bg-amber-50/50 rounded-t-xl"
+    : "flex items-center justify-between px-4 py-3 border-b border-border bg-amber-50/50 rounded-t-2xl";
+
   return (
-    <div className="fixed top-1/2 -translate-y-1/2 right-6 z-40 w-[380px] max-h-[70vh] flex flex-col rounded-2xl border border-border bg-card shadow-2xl">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-amber-50/50 rounded-t-2xl">
+    <div className={containerClass}>
+      <div className={headerClass}>
         <div className="flex items-center gap-2 min-w-0">
           <Sparkles className="w-4 h-4 text-primary flex-shrink-0" />
           <div className="min-w-0">
@@ -136,9 +161,11 @@ export function AskDealPadAI({ context }: { context: AskAIContext }) {
             </p>
           </div>
         </div>
-        <button onClick={() => setOpen(false)} className="p-1 text-muted-foreground hover:text-foreground rounded">
-          <X className="w-4 h-4" />
-        </button>
+        {!inline && (
+          <button onClick={() => setOpen(false)} className="p-1 text-muted-foreground hover:text-foreground rounded">
+            <X className="w-4 h-4" />
+          </button>
+        )}
       </div>
 
       <div className="flex-1 overflow-y-auto p-3 space-y-3 min-h-[200px]">
@@ -146,9 +173,7 @@ export function AskDealPadAI({ context }: { context: AskAIContext }) {
           <div className="space-y-3">
             <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-50/40 border border-amber-100">
               <MessageSquare className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
-              <p className="text-xs text-foreground leading-relaxed">
-                Ask anything about <strong>{context.screenLabel}</strong>. Answers are tailored to your role.
-              </p>
+              <p className="text-xs text-foreground leading-relaxed">{introText}</p>
             </div>
             {suggestions.length > 0 && (
               <div>

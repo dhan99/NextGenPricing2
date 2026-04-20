@@ -1,10 +1,11 @@
-import { useState, useMemo, useRef, useEffect } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useDashboardSummary, useDeals, useWorkdayDashboard } from "@/hooks/use-api";
 import { formatCurrency, formatPercent, getStatusColor, getStatusLabel } from "@/lib/utils";
 import { Link } from "wouter";
-import { TrendingUp, DollarSign, AlertCircle, ArrowRight, FileText, ShieldCheck, Layers, Network, BarChart3, Shield, CheckCircle, Search, Sparkles, Send, Bot, Lightbulb, RefreshCw, Lock, Briefcase, Settings2 } from "lucide-react";
+import { TrendingUp, DollarSign, AlertCircle, ArrowRight, FileText, ShieldCheck, Layers, Network, BarChart3, Shield, CheckCircle, Search, Sparkles, Lightbulb, RefreshCw, Briefcase, Settings2 } from "lucide-react";
 import { useAuth, type PersonaRole } from "@/context/AuthContext";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
+import { AskDealPadAI } from "@/components/AskDealPadAI";
 
 const ROLE_ACCENT: Record<PersonaRole, { bg: string; border: string; text: string; badge: string }> = {
   pdl: { bg: "bg-orange-50", border: "border-orange-200", text: "text-orange-700", badge: "bg-orange-100 text-orange-700" },
@@ -33,7 +34,6 @@ const STATUS_OPTIONS = [
 ];
 
 interface Insight { type: string; title: string; body: string; cta?: string; href?: string }
-interface ChatMsg { role: "user" | "ai"; content: string; restricted?: boolean }
 
 function InsightCard({ insight }: { insight: Insight }) {
   const styles: Record<string, { icon: any; bg: string; border: string; iconColor: string; pill: string }> = {
@@ -110,72 +110,7 @@ export function Dashboard() {
     },
   });
 
-  // Chat
-  const [chatInput, setChatInput] = useState("");
-  const [chatLog, setChatLog] = useState<ChatMsg[]>([
-    { role: "ai", content: `Hi ${persona?.name.split(" ")[0] || "there"}! I can answer questions within your ${persona?.fullTitle || "role"} capability. Try asking about pipeline, margins, or approvals.` },
-  ]);
-  const chatEndRef = useRef<HTMLDivElement>(null);
-
-  const chat = useMutation<{ response: string; restricted?: boolean }, Error, string>({
-    retry: false,
-    mutationFn: async (message) => {
-      const controller = new AbortController();
-      const timeoutMs = 15000;
-      const timer = setTimeout(() => controller.abort(), timeoutMs);
-      let res: Response;
-      try {
-        res = await fetch("/api/ai/dashboard-chat", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ message, role }),
-          signal: controller.signal,
-        });
-      } catch (e: unknown) {
-        if (e instanceof DOMException && e.name === "AbortError") {
-          throw new Error(`The AI service did not respond within ${Math.round(timeoutMs / 1000)} seconds. Please try again.`);
-        }
-        const detail = e instanceof Error ? e.message : "could not reach the AI service";
-        throw new Error(`Network error: ${detail}.`);
-      } finally {
-        clearTimeout(timer);
-      }
-      const raw = await res.text();
-      let parsed: unknown = null;
-      if (raw) {
-        try { parsed = JSON.parse(raw); } catch { /* non-JSON body */ }
-      }
-      const isObj = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null;
-      const serverMessage = isObj(parsed) && typeof parsed.response === "string" ? parsed.response : null;
-      if (!res.ok) {
-        throw new Error(serverMessage ?? `The AI service returned an error (HTTP ${res.status}). Please try again.`);
-      }
-      if (!isObj(parsed) || typeof parsed.response !== "string") {
-        throw new Error("The AI service returned an unexpected response.");
-      }
-      const restricted = typeof parsed.restricted === "boolean" ? parsed.restricted : false;
-      return { response: parsed.response, restricted };
-    },
-    onSuccess: (data) => {
-      setChatLog((prev) => [...prev, { role: "ai", content: data.response, restricted: data.restricted }]);
-    },
-    onError: (err) => {
-      const message = err instanceof Error && err.message ? err.message : "Something went wrong reaching the AI service. Please try again.";
-      setChatLog((prev) => [...prev, { role: "ai", content: `Sorry — ${message}` }]);
-    },
-  });
-
-  useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [chatLog]);
-
-  const sendChat = () => {
-    const q = chatInput.trim();
-    if (!q) return;
-    setChatLog((prev) => [...prev, { role: "user", content: q }]);
-    chat.mutate(q);
-    setChatInput("");
-  };
+  const askIntro = `Hi ${persona?.name.split(" ")[0] || "there"}! I can answer questions within your ${persona?.fullTitle || "role"} capability. Try asking about pipeline, margins, or approvals.`;
 
   const kpiSets: Record<PersonaRole, { label: string; value: string; icon: any; href?: string; valueClass?: string }[]> = {
     pdl: [
@@ -482,61 +417,11 @@ export function Dashboard() {
             </div>
           </div>
 
-          <div className="card flex flex-col">
-            <div className="px-5 py-3 border-b border-border bg-stone-900 rounded-t-xl">
-              <h2 className="font-semibold text-white flex items-center gap-2 text-sm">
-                <Bot className="w-4 h-4 text-primary" />
-                Ask DealPad AI
-              </h2>
-              <p className="text-[11px] text-stone-400 mt-0.5">Answers scoped to {persona?.fullTitle} permissions</p>
-            </div>
-            <div className="flex-1 overflow-y-auto p-4 space-y-3 max-h-80 min-h-[220px]">
-              {chatLog.map((m, i) => (
-                <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
-                  <div className={`rounded-2xl px-3 py-2 text-xs max-w-[85%] ${
-                    m.role === "user"
-                      ? "bg-primary text-white"
-                      : m.restricted
-                        ? "bg-red-50 border border-red-200 text-red-900"
-                        : "bg-muted text-foreground"
-                  }`}>
-                    {m.restricted && (
-                      <div className="flex items-center gap-1 mb-1 text-red-600">
-                        <Lock className="w-3 h-3" />
-                        <span className="text-[10px] font-semibold uppercase tracking-wide">Access Restricted</span>
-                      </div>
-                    )}
-                    <p className="whitespace-pre-wrap leading-relaxed">{m.content}</p>
-                  </div>
-                </div>
-              ))}
-              {chat.isPending && (
-                <div className="flex justify-start">
-                  <div className="bg-muted rounded-2xl px-3 py-2 text-xs text-muted-foreground">Thinking...</div>
-                </div>
-              )}
-              <div ref={chatEndRef} />
-            </div>
-            <div className="p-3 border-t border-border flex items-center gap-2">
-              <input
-                type="text"
-                value={chatInput}
-                onChange={(e) => setChatInput(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && sendChat()}
-                placeholder="Ask a question..."
-                disabled={chat.isPending}
-                className="flex-1 px-3 py-2 text-sm rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary disabled:opacity-50"
-              />
-              <button
-                onClick={sendChat}
-                disabled={chat.isPending || !chatInput.trim()}
-                className="w-9 h-9 rounded-lg bg-primary hover:bg-primary/90 text-white flex items-center justify-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
-                aria-label="Send"
-              >
-                <Send className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
+          <AskDealPadAI
+            inline
+            intro={askIntro}
+            context={{ screen: "dashboard", screenLabel: greeting.title }}
+          />
         </div>
       )}
 

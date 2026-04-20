@@ -3700,117 +3700,6 @@ export function registerRoutes(app: Express) {
     });
   });
 
-  app.post("/api/ai/dashboard-chat", async (req: Request, res: Response) => {
-    try {
-    const { message, role } = req.body || {};
-    if (!message || typeof message !== "string" || !message.trim()) {
-      return res.status(400).json({
-        error: "message is required",
-        response: "Please type a question before sending.",
-        restricted: false,
-        timestamp: new Date().toISOString(),
-      });
-    }
-    const r = String(role || "pdl").toLowerCase();
-    const caps = ROLE_CAPABILITIES[r] || ROLE_CAPABILITIES.pdl;
-    const msg = String(message).toLowerCase();
-
-    const allDeals = await db.select().from(deals);
-    const allClients = await db.select().from(clients);
-    const clientMap = new Map(allClients.map(c => [c.id, c]));
-    const pendingApprovals = allDeals.filter(d => d.status === "submitted").length;
-    const margins = allDeals.map(d => parseFloat(d.marginPercent || "0")).filter(m => m > 0);
-    const avgMargin = margins.length ? margins.reduce((a, b) => a + b, 0) / margins.length : 0;
-    const totalFee = allDeals.reduce((s, d) => s + parseFloat(d.totalFee || "0"), 0);
-
-    const denies = (topic: string) => !caps.can.includes(topic);
-
-    const topics: { keys: string[]; need: string; answer: () => string }[] = [
-      {
-        keys: ["pipeline", "total value", "total deals"],
-        need: "deals",
-        answer: () => `Current pipeline: $${(totalFee/1000).toFixed(0)}K across ${allDeals.length} deals. ${pendingApprovals} awaiting approval.`,
-      },
-      {
-        keys: ["margin", "low margin", "profit", "profitability"],
-        need: "margins",
-        answer: () => {
-          const low = allDeals.filter(d => parseFloat(d.marginPercent || "0") < 25 && parseFloat(d.marginPercent || "0") > 0);
-          const names = low.slice(0, 3).map(d => {
-            const c = clientMap.get(d.clientId);
-            return `${c?.name || d.title} (${parseFloat(d.marginPercent || "0").toFixed(1)}%)`;
-          }).join(", ");
-          return `Portfolio average margin is ${avgMargin.toFixed(1)}%. ${low.length} deal(s) below 25%${names ? ": " + names : ""}. Standard BU target is 31%.`;
-        },
-      },
-      {
-        keys: ["approval", "pending", "review", "awaiting"],
-        need: "deals",
-        answer: () => `${pendingApprovals} deal(s) pending approval. ${r === "sll" ? "You are the approver — open the review queue from the sidebar." : "Only Service Line Leaders can approve deals."}`,
-      },
-      {
-        keys: ["risk", "compliance", "flag"],
-        need: "risk",
-        answer: () => {
-          const risky = allDeals.filter(d => parseFloat(d.marginPercent || "0") < 20);
-          return `Risk scan: ${risky.length} deal(s) show compressed margins indicating scope or rate risk. Review AI Risk Summaries on each deal.`;
-        },
-      },
-      {
-        keys: ["rate card", "rates", "billing rate"],
-        need: "rate_cards",
-        answer: () => "Rate cards are managed under Configuration. Current recommended uplift is 4.2% based on market averages.",
-      },
-      {
-        keys: ["scope", "catalog", "template"],
-        need: "scope_catalog",
-        answer: () => "The scope catalog defines standardized engagement templates with default hours and complexity multipliers.",
-      },
-      {
-        keys: ["scenario", "premium", "value option"],
-        need: "scenarios",
-        answer: () => "Each deal generates Standard, Premium, and Value scenarios. Premium averages +10pts margin vs Standard.",
-      },
-      {
-        keys: ["architecture", "integration", "stack", "tech"],
-        need: "architecture",
-        answer: () => "DealPad is built on React 19, Express 5, Drizzle ORM, PostgreSQL. Explore the Architecture Hub for diagrams and integration points.",
-      },
-    ];
-
-    let matched = topics.find(t => t.keys.some(k => msg.includes(k)));
-    let response: string;
-    let restricted = false;
-
-    if (matched) {
-      if (denies(matched.need)) {
-        restricted = true;
-        response = `As a ${caps.label}, you do not have access to ${matched.need.replace("_", " ")} data. This query is outside your capability scope. Contact your administrator if you believe this is incorrect.`;
-      } else {
-        response = matched.answer();
-      }
-    } else {
-      response = `I can help with topics within your role (${caps.label}): ${caps.can.join(", ").replace(/_/g, " ")}. Try asking about one of those areas.`;
-    }
-
-    res.json({
-      response,
-      role: r,
-      capability: caps.label,
-      restricted,
-      timestamp: new Date().toISOString(),
-    });
-    } catch (err) {
-      console.error("[dashboard-chat] handler error:", err);
-      res.status(500).json({
-        error: "internal_error",
-        response: "Sorry, the AI service hit an unexpected error. Please try again in a moment.",
-        restricted: false,
-        timestamp: new Date().toISOString(),
-      });
-    }
-  });
-
   // ========== ASK DEALPAD AI (contextual) ==========
   app.post("/api/ai/ask", async (req: Request, res: Response) => {
     const { question, context, role } = req.body || {};
@@ -3829,6 +3718,108 @@ export function registerRoutes(app: Express) {
     const screen = String(context?.screen || "unknown").toLowerCase();
     const dealId = context?.dealId ? Number(context.dealId) : null;
     const q = question.toLowerCase();
+
+    // Dashboard chat: portfolio-wide topics gated by ROLE_CAPABILITIES.
+    if (screen === "dashboard") {
+      try {
+        const allDeals = await db.select().from(deals);
+        const allClients = await db.select().from(clients);
+        const clientMap = new Map(allClients.map(c => [c.id, c]));
+        const pendingApprovals = allDeals.filter(d => d.status === "submitted").length;
+        const margins = allDeals.map(d => parseFloat(d.marginPercent || "0")).filter(m => m > 0);
+        const avgMargin = margins.length ? margins.reduce((a, b) => a + b, 0) / margins.length : 0;
+        const totalFee = allDeals.reduce((s, d) => s + parseFloat(d.totalFee || "0"), 0);
+
+        const denies = (topic: string) => !caps.can.includes(topic);
+
+        const topics: { keys: string[]; need: string; answer: () => string }[] = [
+          {
+            keys: ["pipeline", "total value", "total deals"],
+            need: "deals",
+            answer: () => `Current pipeline: $${(totalFee/1000).toFixed(0)}K across ${allDeals.length} deals. ${pendingApprovals} awaiting approval.`,
+          },
+          {
+            keys: ["margin", "low margin", "profit", "profitability"],
+            need: "margins",
+            answer: () => {
+              const low = allDeals.filter(d => parseFloat(d.marginPercent || "0") < 25 && parseFloat(d.marginPercent || "0") > 0);
+              const names = low.slice(0, 3).map(d => {
+                const c = clientMap.get(d.clientId);
+                return `${c?.name || d.title} (${parseFloat(d.marginPercent || "0").toFixed(1)}%)`;
+              }).join(", ");
+              return `Portfolio average margin is ${avgMargin.toFixed(1)}%. ${low.length} deal(s) below 25%${names ? ": " + names : ""}. Standard BU target is 31%.`;
+            },
+          },
+          {
+            keys: ["approval", "pending", "review", "awaiting"],
+            need: "deals",
+            answer: () => `${pendingApprovals} deal(s) pending approval. ${r === "sll" ? "You are the approver — open the review queue from the sidebar." : "Only Service Line Leaders can approve deals."}`,
+          },
+          {
+            keys: ["risk", "compliance", "flag"],
+            need: "risk",
+            answer: () => {
+              const risky = allDeals.filter(d => parseFloat(d.marginPercent || "0") < 20);
+              return `Risk scan: ${risky.length} deal(s) show compressed margins indicating scope or rate risk. Review AI Risk Summaries on each deal.`;
+            },
+          },
+          {
+            keys: ["rate card", "rates", "billing rate"],
+            need: "rate_cards",
+            answer: () => "Rate cards are managed under Configuration. Current recommended uplift is 4.2% based on market averages.",
+          },
+          {
+            keys: ["scope", "catalog", "template"],
+            need: "scope_catalog",
+            answer: () => "The scope catalog defines standardized engagement templates with default hours and complexity multipliers.",
+          },
+          {
+            keys: ["scenario", "premium", "value option"],
+            need: "scenarios",
+            answer: () => "Each deal generates Standard, Premium, and Value scenarios. Premium averages +10pts margin vs Standard.",
+          },
+          {
+            keys: ["architecture", "integration", "stack", "tech"],
+            need: "architecture",
+            answer: () => "DealPad is built on React 19, Express 5, Drizzle ORM, PostgreSQL. Explore the Architecture Hub for diagrams and integration points.",
+          },
+        ];
+
+        const matched = topics.find(t => t.keys.some(k => q.includes(k)));
+        let answer: string;
+        let restricted = false;
+
+        if (matched) {
+          if (denies(matched.need)) {
+            restricted = true;
+            answer = `As a ${caps.label}, you do not have access to ${matched.need.replace("_", " ")} data. This query is outside your capability scope. Contact your administrator if you believe this is incorrect.`;
+          } else {
+            answer = matched.answer();
+          }
+        } else {
+          answer = `I can help with topics within your role (${caps.label}): ${caps.can.join(", ").replace(/_/g, " ")}. Try asking about one of those areas.`;
+        }
+
+        return res.json({
+          answer,
+          role: r,
+          capability: caps.label,
+          screen,
+          restricted,
+          canPerform: !restricted,
+          alternatives: [],
+          timestamp: new Date().toISOString(),
+        });
+      } catch (err) {
+        console.error("[ask:dashboard] handler error:", err);
+        return res.status(500).json({
+          error: "internal_error",
+          answer: "Sorry, the AI service hit an unexpected error. Please try again in a moment.",
+          restricted: false,
+          timestamp: new Date().toISOString(),
+        });
+      }
+    }
 
     // What can each role DO on each screen
     const screenPermissions: Record<string, { allowed: string[]; readOnly: string[] }> = {
