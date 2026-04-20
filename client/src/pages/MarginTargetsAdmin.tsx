@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Target, Plus, Trash2, Save, Building2, Layers } from "lucide-react";
 import {
   useMarginTargets,
@@ -6,6 +6,7 @@ import {
   useCreateMarginTargetOverride,
   useUpdateMarginTargetOverride,
   useDeleteMarginTargetOverride,
+  useEngagementInputSpec,
 } from "@/hooks/use-api";
 
 // Canonical service-line list — mirrors PromptSetsAdmin so admins see the same
@@ -60,12 +61,30 @@ export function MarginTargetsAdmin() {
   const setNewScope = (s: "bu" | "serviceLine") => {
     setNewScopeState(s);
     setNewKey(""); // reset name when scope changes (dropdown vs text input)
+    setNewPct(""); setNewTechFee(""); setNewLineRound(""); setNewFixedRound("");
   };
   const [newPct, setNewPct] = useState("");
   const [newTechFee, setNewTechFee] = useState("");
   const [newLineRound, setNewLineRound] = useState("");
   const [newFixedRound, setNewFixedRound] = useState("");
   const [addError, setAddError] = useState<string | null>(null);
+
+  // When the user picks a service line, pre-fill all four fields with the
+  // engagement-input preset defaults for that line (margin → firm default since
+  // presets don't carry margin). The user can then tweak before saving.
+  const prefillSL = newScope === "serviceLine" && newKey ? newKey : null;
+  const { data: prefillSpec } = useEngagementInputSpec(prefillSL);
+  useEffect(() => {
+    if (!prefillSL || !prefillSpec) return;
+    const d = prefillSpec.defaults || {};
+    setNewPct(firmDefault != null ? String(firmDefault) : "35");
+    setNewTechFee(d.techAdminFeePct != null ? String(d.techAdminFeePct) : "");
+    setNewLineRound(d.lineItemRounding != null ? String(d.lineItemRounding) : "");
+    setNewFixedRound(d.fixedFeeRounding != null ? String(d.fixedFeeRounding) : "");
+    setAddError(null);
+    // Only re-run when the picked SL or its spec changes — not on every keystroke
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prefillSL, prefillSpec?.serviceLine, JSON.stringify(prefillSpec?.defaults || {})]);
 
   const handleSaveFirm = () => {
     const v = parseFloat(firmDisplay);
