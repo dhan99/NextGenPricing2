@@ -25,6 +25,7 @@ const STANDARD_PROMPTS: Array<{
   { question: "Is there an existing system being replaced?", category: "Migration", sortOrder: 5, options: [{ label: "No (greenfield)", multiplier: "0.95" }, { label: "Yes - modern system", multiplier: "1.05" }, { label: "Yes - legacy system", multiplier: "1.10" }, { label: "Yes - multiple systems", multiplier: "1.20" }] },
   { question: "What is the client's technical maturity?", category: "Client", sortOrder: 6, options: [{ label: "High maturity", multiplier: "0.90" }, { label: "Moderate maturity", multiplier: "1.00" }, { label: "Low maturity", multiplier: "1.10" }, { label: "Very low maturity", multiplier: "1.20" }] },
   { question: "Is there a hard deadline or external dependency?", category: "Timeline", sortOrder: 7, options: [{ label: "Flexible timeline", multiplier: "0.95" }, { label: "Preferred deadline", multiplier: "1.00" }, { label: "Hard deadline", multiplier: "1.10" }, { label: "Regulatory deadline", multiplier: "1.20" }] },
+  { question: "Where will the project be executed?", category: "Delivery", sortOrder: 8, options: [{ label: "Fully onsite", multiplier: "1.10" }, { label: "Mostly onsite / some offshore", multiplier: "1.05" }, { label: "Hybrid (50/50)", multiplier: "1.00" }, { label: "Mostly offshore / some onsite", multiplier: "0.90" }, { label: "Fully offshore", multiplier: "0.80" }] },
 ];
 
 type PromptOption = { label: string; multiplier: string };
@@ -182,6 +183,24 @@ function pickContextualAnswer(
       return { answer: opt.label, multiplier: opt.multiplier, confidence: 0.7, needsReview: false, rationale: `Close date ~${days} days out — flexible timeline.` };
     }
     return { answer: neutral.label, multiplier: neutral.multiplier, confidence: 0.45, needsReview: true, rationale: "No close date on opportunity — timeline pressure unknown." };
+  }
+
+  // Offshore vs onsite execution
+  if (q.includes("execut") || q.includes("offshore") || q.includes("onsite") || q.includes("delivery model") || q.includes("delivery location")) {
+    const regulated = /financial|bank|insurance|healthcare|pharma|hospital|life sciences|government|public sector|defense|federal|state|municipal/.test(industry)
+      || /sox|hipaa|pci|gdpr|classified|fedramp|cjis|itar/.test(oppName);
+    const costSensitive = /value|low.?cost|budget|cost-?sensitive|economy|smb|small business|mid-?market/.test(oppName)
+      || /value|smb/.test(industry);
+    if (regulated) {
+      const opt = findOption(options, ["mostly onsite"]) || findOption(options, ["fully onsite", "onsite"]) || options[0];
+      return { answer: opt.label, multiplier: opt.multiplier, confidence: 0.75, needsReview: false, rationale: `Regulated industry/opportunity framing — leaning onsite for control & data residency.` };
+    }
+    if (costSensitive) {
+      const opt = findOption(options, ["mostly offshore"]) || findOption(options, ["fully offshore", "offshore"]) || options[options.length - 1];
+      return { answer: opt.label, multiplier: opt.multiplier, confidence: 0.7, needsReview: false, rationale: "Cost-sensitive / value-tier framing in opportunity name — leaning offshore-heavy delivery." };
+    }
+    const opt = findOption(options, ["hybrid", "50/50"]) || neutral;
+    return { answer: opt.label, multiplier: opt.multiplier, confidence: 0.6, needsReview: false, rationale: "No strong regulatory or cost-sensitive signal — defaulting to a hybrid delivery mix." };
   }
 
   // Unknown question: pick neutral middle option, low confidence.
