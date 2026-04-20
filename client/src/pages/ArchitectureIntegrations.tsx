@@ -1,7 +1,7 @@
 import { useState } from "react";
 import {
   Building2, Briefcase, KeyRound, ArrowLeftRight, Code2, Map as MapIcon,
-  Download, FileText, ExternalLink, Workflow, ShieldCheck,
+  Download, FileText, ExternalLink, Workflow, ShieldCheck, Scale,
 } from "lucide-react";
 
 type ProviderId = "dynamics" | "workday";
@@ -633,6 +633,53 @@ export function ArchitectureIntegrations() {
             <ExternalLink className="w-4 h-4" />
             Dataverse API
           </a>
+        </div>
+      </div>
+
+      {/* Strategy callout — COTS vs Build one-pager */}
+      <div className="border border-stone-200 rounded-2xl bg-gradient-to-br from-orange-50 via-white to-stone-50 p-5">
+        <div className="flex flex-col lg:flex-row lg:items-start gap-4">
+          <div className="w-11 h-11 rounded-xl bg-white shadow-sm border border-stone-200 flex items-center justify-center flex-shrink-0">
+            <Scale className="w-5 h-5 text-primary" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-primary">Strategy · One-pager</span>
+              <span className="text-[10px] uppercase tracking-wider text-muted-foreground">Internal / Confidential</span>
+            </div>
+            <h3 className="text-base font-bold text-foreground">COTS vs Build — Scoping &amp; Pricing Engine</h3>
+            <p className="text-sm text-muted-foreground mt-1 max-w-3xl">
+              The integrated systems on this page (Dynamics 365, Workday, Intapp, Conga, Power BI) are <strong>Buy + Integrate</strong>. The one-pager explains why DealPad is the <strong>Build</strong> for the scope-to-fee engine, comparing six COTS replacement candidates (Salesforce Revenue Cloud, Conga CPQ, Deltek Vantagepoint, Kantata, Certinia PSA, PROS Smart CPQ) against an ISO 42001 moat.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2 lg:flex-col lg:flex-nowrap lg:w-44 lg:flex-shrink-0">
+            <a
+              href="/strategy/cots-vs-build/view"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center justify-center gap-2 px-3.5 py-2 rounded-lg bg-primary text-white text-sm font-medium hover:bg-primary/90 transition-all"
+              data-testid="link-view-cots-onepager"
+            >
+              <ExternalLink className="w-4 h-4" />
+              View one-pager
+            </a>
+            <a
+              href="/strategy/cots-vs-build/download-pdf"
+              className="inline-flex items-center justify-center gap-2 px-3.5 py-2 rounded-lg border border-stone-200 bg-white text-foreground text-sm font-medium hover:bg-stone-50 transition-all"
+              data-testid="link-download-cots-pdf"
+            >
+              <Download className="w-4 h-4" />
+              Download PDF
+            </a>
+            <a
+              href="/strategy/cots-vs-build/download-md"
+              className="inline-flex items-center justify-center gap-2 px-3.5 py-2 rounded-lg border border-stone-200 bg-white text-foreground text-sm font-medium hover:bg-stone-50 transition-all"
+              data-testid="link-download-cots-md"
+            >
+              <FileText className="w-4 h-4" />
+              Markdown source
+            </a>
+          </div>
         </div>
       </div>
 

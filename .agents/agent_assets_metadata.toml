@@ -30,3 +30,15 @@ id = "zdCKstmRYlMrNEIK3Ez9f"
 uri = "file://DealPad_Demo_Driver.pdf"
 type = "pdf"
 title = "DealPad Demo Driver — with ISO 42001 readiness map"
+
+[[outputs]]
+id = "iItH8CHO9XJN2iUhiD29y"
+uri = "file://docs/strategy/cots-vs-build-one-pager.pdf"
+type = "pdf"
+title = "COTS vs Build — Scoping & Pricing Engine (PDF)"
+
+[[outputs]]
+id = "sixmTBVrTbFp_Uzd6AUl-"
+uri = "file://docs/strategy/cots-vs-build-one-pager.md"
+type = "text"
+title = "COTS vs Build — Scoping & Pricing Engine (Markdown source)"

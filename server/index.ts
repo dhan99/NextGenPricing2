@@ -731,6 +731,24 @@ async function start() {
     );
   });
 
+  app.get("/strategy/cots-vs-build/view", (_req, res) => {
+    res.sendFile(path.join(process.cwd(), "docs", "strategy", "cots-vs-build-one-pager.pdf"));
+  });
+
+  app.get("/strategy/cots-vs-build/download-pdf", (_req, res) => {
+    res.download(
+      path.join(process.cwd(), "docs", "strategy", "cots-vs-build-one-pager.pdf"),
+      "DealPad-COTS-vs-Build-One-Pager.pdf",
+    );
+  });
+
+  app.get("/strategy/cots-vs-build/download-md", (_req, res) => {
+    res.download(
+      path.join(process.cwd(), "docs", "strategy", "cots-vs-build-one-pager.md"),
+      "DealPad-COTS-vs-Build-One-Pager.md",
+    );
+  });
+
   const clientDistPath = path.join(process.cwd(), "dist", "public");
   app.use(express.static(clientDistPath));
   app.get("/{*path}", (_req, res) => {
