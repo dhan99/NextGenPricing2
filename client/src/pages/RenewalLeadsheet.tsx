@@ -5,7 +5,7 @@ import {
   Sparkles, Loader2, ArrowRight, Zap,
 } from "lucide-react";
 import {
-  useDeal, useDealScopeItems, useDealPricing, useRateAdjust, useResetPricing, useSubmitApproval,
+  useDeal, useDealScopeItems, useDealPricing, useRateAdjust, useResetPricing, useSubmitApproval, useDealMarginTarget,
 } from "@/hooks/use-api";
 import { useAuth } from "@/context/AuthContext";
 import { AskDealPadAI } from "@/components/AskDealPadAI";
@@ -146,11 +146,13 @@ export function RenewalLeadsheet() {
     cyFee: scopeRows.reduce((s, r) => s + r.cyFee, 0),
   }), [scopeRows]);
 
-  // Fast-track eligibility: margin >= 42%, fee delta within ±15%, no scope additions/removals
+  // Fast-track eligibility: margin >= resolved target, fee delta within ±15%, no scope additions/removals
+  const { data: marginTarget } = useDealMarginTarget(dealId);
+  const buTarget = marginTarget?.percent ?? 35;
+  const buTargetSource = marginTarget?.sourceLabel ?? "Firm default";
+  const buMedian = Math.max(0, buTarget - 0.5);
   const scopeCountChange = ((cyScope as any[])?.length || 0) - ((pyScope as any[])?.length || 0);
-  const fastTrackEligible = cyMargin >= 42 && Math.abs(feeDeltaPct) <= 15 && scopeCountChange === 0;
-  const buTarget = 42.0;
-  const buMedian = 41.5;
+  const fastTrackEligible = cyMargin >= buTarget && Math.abs(feeDeltaPct) <= 15 && scopeCountChange === 0;
 
   const applyAdjustment = async (pct: number) => {
     const factor = 1 + pct / 100;
@@ -414,7 +416,7 @@ export function RenewalLeadsheet() {
             {cyMargin >= buTarget ? "Above Target" : "Below Target"}
           </span>
           <div className="mt-4 space-y-2 text-xs">
-            <div className="flex justify-between"><span className="text-muted-foreground">BU Target:</span><span className="font-medium text-foreground">{fmtPct(buTarget)}</span></div>
+            <div className="flex justify-between"><span className="text-muted-foreground">Target ({buTargetSource}):</span><span className="font-medium text-foreground">{fmtPct(buTarget)}</span></div>
             <div className="flex justify-between"><span className="text-muted-foreground">BU Median:</span><span className="font-medium text-foreground">{fmtPct(buMedian)}</span></div>
             <div className="mt-2 h-1.5 bg-stone-200 rounded-full overflow-hidden">
               <div className="h-full bg-emerald-500" style={{ width: `${Math.min(100, (cyMargin / 60) * 100)}%` }} />
@@ -430,8 +432,8 @@ export function RenewalLeadsheet() {
           </div>
           <p className="text-xs text-muted-foreground mb-4 leading-relaxed">
             {fastTrackEligible
-              ? "This renewal meets all fast-track criteria: margin above 42%, existing client, no scope expansion, standard rate increase."
-              : `Fast-track requires margin ≥ 42%, fee delta within ±15%, and no scope changes. Current: margin ${cyMargin.toFixed(1)}%, fee delta ${feeDeltaPct >= 0 ? "+" : ""}${feeDeltaPct.toFixed(1)}%, scope ${scopeCountChange === 0 ? "unchanged" : `${scopeCountChange > 0 ? "+" : ""}${scopeCountChange} items`}.`}
+              ? `This renewal meets all fast-track criteria: margin above ${buTarget}% (${buTargetSource}), existing client, no scope expansion, standard rate increase.`
+              : `Fast-track requires margin ≥ ${buTarget}% (${buTargetSource}), fee delta within ±15%, and no scope changes. Current: margin ${cyMargin.toFixed(1)}%, fee delta ${feeDeltaPct >= 0 ? "+" : ""}${feeDeltaPct.toFixed(1)}%, scope ${scopeCountChange === 0 ? "unchanged" : `${scopeCountChange > 0 ? "+" : ""}${scopeCountChange} items`}.`}
           </p>
           <button
             onClick={handleSubmitFastTrack}

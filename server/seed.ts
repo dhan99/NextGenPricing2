@@ -1,10 +1,24 @@
 import { db } from "./db";
-import { clients, deals, scopeCatalog, roles, rateCards, rateCardEntries, dealScopeItems, pricingLines, scenarios, approvals, promptResponses, activityLog, promptSets, promptSetItems } from "../shared/schema";
+import { clients, deals, scopeCatalog, roles, rateCards, rateCardEntries, dealScopeItems, pricingLines, scenarios, approvals, promptResponses, activityLog, promptSets, promptSetItems, marginTargets } from "../shared/schema";
 import { sql, eq, and, isNull, desc } from "drizzle-orm";
 import { seedDynamics } from "./dynamics";
 import { seedIntapp } from "./intapp";
 import { seedWorkday } from "./workday";
 import { loadSeedSnapshot } from "./snapshot-loader";
+
+// Idempotent: ensures the firm-wide margin target row exists. Seeds 35% so
+// every surface that previously hardcoded the BU target keeps showing the
+// same number on first deploy. Runs every startup; existing rows untouched.
+export async function seedDefaultMarginTargets() {
+  const existing = await db.select().from(marginTargets)
+    .where(and(eq(marginTargets.scope, "firm"), isNull(marginTargets.scopeKey)));
+  if (existing.length > 0) return;
+  await db.insert(marginTargets).values({
+    scope: "firm",
+    scopeKey: null,
+    percent: "35",
+  });
+}
 
 // Idempotent: ensures at least one published cross-service prompt set exists so
 // the prompt-resolution code has a default to fall back on. Runs every startup.
@@ -326,6 +340,7 @@ export async function seedAll(): Promise<SeedStepResult[]> {
 
     // Core (fatal): without these the app cannot serve sensible data.
     results.push(await runStep("core:database", () => seedDatabase(), { fatal: true }));
+    results.push(await runStep("core:marginTargets", () => seedDefaultMarginTargets(), { fatal: true }));
     results.push(await runStep("core:promptSet", () => seedDefaultPromptSet(), { fatal: true }));
     results.push(await runStep("core:snapshot", () => loadSeedSnapshot(), { fatal: false }));
 

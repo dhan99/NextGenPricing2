@@ -2,11 +2,20 @@ import { useQuery } from "@tanstack/react-query";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, CartesianGrid, Legend } from "recharts";
 import { TrendingUp, DollarSign, Clock, Target, Award, BarChart3, Activity, Layers } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
+import { useMarginTargets } from "@/hooks/use-api";
+
+function firmTargetFromResponse(resp: any): number {
+  if (resp && typeof resp.firmDefault === "number") return resp.firmDefault;
+  if (resp && resp.firmDefault != null) return parseFloat(resp.firmDefault);
+  return 35;
+}
 
 const COLORS = ["#DA720F", "#78716c", "#d97706", "#a8a29e", "#92400e"];
 const STATUS_COLORS: Record<string, string> = { draft: "#a8a29e", submitted: "#d97706", approved: "#16a34a", rejected: "#dc2626" };
 
 export function Analytics() {
+  const { data: targetData } = useMarginTargets();
+  const firmTarget = firmTargetFromResponse(targetData);
   const { data, isLoading } = useQuery({
     queryKey: ["analytics"],
     queryFn: async () => {
@@ -60,7 +69,7 @@ export function Analytics() {
         {[
           { label: "Total Pipeline", value: formatCurrency(summary.totalPipeline), icon: DollarSign, sub: `${summary.totalDeals} deals` },
           { label: "Win Rate", value: `${summary.winRate}%`, icon: Target, sub: `${summary.approvedCount} won / ${summary.rejectedCount} lost` },
-          { label: "Avg Margin", value: `${summary.avgMargin}%`, icon: TrendingUp, sub: `Target: 25%` },
+          { label: "Avg Margin", value: `${summary.avgMargin}%`, icon: TrendingUp, sub: `Firm target: ${firmTarget}%` },
           { label: "Avg Cycle Time", value: `${summary.avgCycleTime}d`, icon: Clock, sub: "Draft to decision" },
         ].map((kpi) => (
           <div key={kpi.label} className="card p-5">
@@ -178,11 +187,11 @@ export function Analytics() {
             </div>
             <div>
               <div className="flex items-center justify-between mb-1">
-                <span className="text-sm text-muted-foreground">Margin vs Target (25%)</span>
+                <span className="text-sm text-muted-foreground">Margin vs Firm Target ({firmTarget}%)</span>
                 <span className="text-sm font-semibold text-foreground">{summary.avgMargin}%</span>
               </div>
               <div className="h-2 bg-stone-100 rounded-full overflow-hidden">
-                <div className="h-full bg-amber-500 rounded-full" style={{ width: `${Math.min((parseFloat(summary.avgMargin) / 25) * 100, 100)}%` }} />
+                <div className="h-full bg-amber-500 rounded-full" style={{ width: `${Math.min((parseFloat(summary.avgMargin) / firmTarget) * 100, 100)}%` }} />
               </div>
             </div>
             <div>

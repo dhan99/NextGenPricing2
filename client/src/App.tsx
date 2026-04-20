@@ -10,6 +10,7 @@ import { RateCards } from "./pages/RateCards";
 import { ScopeCatalogAdmin } from "./pages/ScopeCatalogAdmin";
 import { PromptSetsAdmin } from "./pages/PromptSetsAdmin";
 import { CongaTemplatesAdmin } from "./pages/CongaTemplatesAdmin";
+import { MarginTargetsAdmin } from "./pages/MarginTargetsAdmin";
 import { Architecture } from "./pages/Architecture";
 import { ArchitectureInteractive } from "./pages/ArchitectureInteractive";
 import { ArchitectureHub } from "./pages/ArchitectureHub";
@@ -67,6 +68,9 @@ function AuthenticatedApp() {
         </Route>
         <Route path="/admin/engagement-letters">
           {hasPermission("manageScopeCatalog") ? <CongaTemplatesAdmin /> : <NoAccess feature="engagement letter templates" />}
+        </Route>
+        <Route path="/admin/margin-targets">
+          {hasPermission("manageRateCards") ? <MarginTargetsAdmin /> : <NoAccess feature="margin target governance" />}
         </Route>
         <Route path="/analytics">
           {hasPermission("viewDeals") ? <Analytics /> : <NoAccess feature="analytics" />}

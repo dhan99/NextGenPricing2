@@ -43,6 +43,10 @@ export const deals = pgTable("deals", {
   archivedBy: text("archived_by"),
   workdayCostCenterId: integer("workday_cost_center_id"),
   engagementInputs: jsonb("engagement_inputs"),
+  // Per-deal margin target override. When set, takes precedence over the
+  // firm/BU/serviceLine defaults from the margin_targets table. Captured by
+  // the pricing lead during the wizard's Pricing step (Task #33).
+  targetMarginPercent: decimal("target_margin_percent", { precision: 5, scale: 2 }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -214,6 +218,21 @@ export const promptSetItems = pgTable("prompt_set_items", {
   sortOrder: integer("sort_order").default(0),
   enabled: boolean("enabled").default(true),
 });
+
+// Single source of truth for the firm's margin target (Task #33). One row per
+// scope: a single "firm" row holds the firm-wide default; additional rows
+// hold per-business-unit or per-service-line overrides. The resolver picks
+// the most specific applicable row for a given deal (deal override → BU
+// override → service-line override → firm default).
+export const marginTargets = pgTable("margin_targets", {
+  id: serial("id").primaryKey(),
+  scope: text("scope").notNull(), // "firm" | "bu" | "serviceLine"
+  scopeKey: text("scope_key"), // null for firm; BU name or service-line name otherwise
+  percent: decimal("percent", { precision: 5, scale: 2 }).notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (t) => ({
+  uniqScope: uniqueIndex("margin_targets_scope_key_uniq").on(t.scope, t.scopeKey),
+}));
 
 export const activityLog = pgTable("activity_log", {
   id: serial("id").primaryKey(),

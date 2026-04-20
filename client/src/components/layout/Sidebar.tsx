@@ -1,5 +1,5 @@
 import { useLocation, Link } from "wouter";
-import { LayoutDashboard, FileText, Settings, ChevronDown, BookOpen, DollarSign, Layers, BarChart3, Database, ShieldAlert, Briefcase, MessageSquare } from "lucide-react";
+import { LayoutDashboard, FileText, Settings, ChevronDown, BookOpen, DollarSign, Layers, BarChart3, Database, ShieldAlert, Briefcase, MessageSquare, Target } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
 import { useAuth } from "@/context/AuthContext";
@@ -27,6 +27,7 @@ export function Sidebar() {
     { name: "Scope Catalog", href: "/admin/scope-catalog", icon: BookOpen, show: true },
     { name: "Prompt Sets", href: "/admin/prompt-sets", icon: MessageSquare, show: true },
     { name: "Engagement Letters", href: "/admin/engagement-letters", icon: FileText, show: true },
+    { name: "Margin Targets", href: "/admin/margin-targets", icon: Target, show: true },
   ];
 
   return (

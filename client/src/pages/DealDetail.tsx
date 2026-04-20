@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useRoute } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
-import { useDeal, useUpdateDeal, useScopeCatalog, useScopeTemplates, useApplyScopeTemplate, useDealScopeItems, useAddScopeItem, useRemoveScopeItem, useRoles, useDealPricing, useUpdatePricingLine, useDealScenarios, useSelectScenario, useDealApprovals, useSubmitApproval, useUpdateApproval, useDealPrompts, useUpdatePrompt, useEngagementInputSpec, useAIDealSimilarity, useAIEffortEstimation, useAIMarginAdvisor, useAIScenarioRecommendation, useAIRiskSummary, useDealIntappScreening, useRunIntappScreening, useIntappOverride, useAddIntappMitigation, useUpdateIntappMitigation, useWorkdayLatestValidation, useWorkdayCostCenters, useRunWorkdayValidation, useLinkWorkdayCostCenter, useOverrideWorkdayValidation, usePromptSets, useCongaTemplates, useDealEngagementLetters, useGenerateEngagementLetter, useAgentApproveDeal, useAgentDiscardDeal, useAgentOpenWizard, useAgentResubmit } from "@/hooks/use-api";
+import { useDeal, useUpdateDeal, useScopeCatalog, useScopeTemplates, useApplyScopeTemplate, useDealScopeItems, useAddScopeItem, useRemoveScopeItem, useRoles, useDealPricing, useUpdatePricingLine, useDealScenarios, useSelectScenario, useDealApprovals, useSubmitApproval, useUpdateApproval, useDealPrompts, useUpdatePrompt, useEngagementInputSpec, useAIDealSimilarity, useAIEffortEstimation, useAIMarginAdvisor, useAIScenarioRecommendation, useAIRiskSummary, useDealIntappScreening, useRunIntappScreening, useIntappOverride, useAddIntappMitigation, useUpdateIntappMitigation, useWorkdayLatestValidation, useWorkdayCostCenters, useRunWorkdayValidation, useLinkWorkdayCostCenter, useOverrideWorkdayValidation, usePromptSets, useCongaTemplates, useDealEngagementLetters, useGenerateEngagementLetter, useAgentApproveDeal, useAgentDiscardDeal, useAgentOpenWizard, useAgentResubmit, useDealMarginTarget } from "@/hooks/use-api";
 import { ResultBadge as IntappResultBadge, RiskBadge as IntappRiskBadge, SourceBadge as IntappSourceBadge } from "./Intapp";
 import { ShieldAlert, ShieldCheck, Unlock } from "lucide-react";
 import { formatCurrency, formatPercent, formatNumber, formatRelativeTime, getStatusColor, getStatusLabel, cn } from "@/lib/utils";
@@ -1320,7 +1320,15 @@ function PricingStep({ deal }: { deal: any }) {
   const { data: pricingLines } = useDealPricing(deal.id);
   const updateLine = useUpdatePricingLine();
   const marginAdvisor = useAIMarginAdvisor();
+  const updateDeal = useUpdateDeal();
+  const { data: marginTarget } = useDealMarginTarget(deal.id);
+  const targetMargin = marginTarget?.percent ?? 35;
+  const targetSourceLabel = marginTarget?.sourceLabel ?? "Firm default";
   const [optionsOpen, setOptionsOpen] = useState(false);
+  const [overrideInput, setOverrideInput] = useState<string>("");
+  useEffect(() => {
+    setOverrideInput(deal.targetMarginPercent != null ? String(deal.targetMarginPercent) : "");
+  }, [deal.targetMarginPercent]);
   const { data: scenariosForBadge } = useDealScenarios(deal.id);
   const selectedScenario = (scenariosForBadge || []).find((s: any) => s.isRecommended);
   const overrideLines = (pricingLines || []).filter((l: any) => l.rateOverridden);
@@ -1334,9 +1342,9 @@ function PricingStep({ deal }: { deal: any }) {
 
   useEffect(() => {
     if (pricingLines && pricingLines.length > 0) {
-      marginAdvisor.mutate({ pricingLines, targetMargin: 25 });
+      marginAdvisor.mutate({ pricingLines, dealId: deal.id });
     }
-  }, [pricingLines?.length]);
+  }, [pricingLines?.length, deal.id, targetMargin, targetSourceLabel]);
 
   const totals = (pricingLines || []).reduce((acc: any, l: any) => ({
     hours: acc.hours + parseFloat(l.hours || 0),
@@ -1346,7 +1354,7 @@ function PricingStep({ deal }: { deal: any }) {
   }), { hours: 0, fee: 0, cost: 0, margin: 0 });
 
   const marginPct = totals.fee > 0 ? ((totals.fee - totals.cost) / totals.fee) * 100 : 0;
-  const targetMargin = 35;
+  const warnThreshold = Math.max(0, targetMargin - 10);
   const vsTarget = marginPct - targetMargin;
   const blendedRate = totals.hours > 0 ? totals.fee / totals.hours : 0;
 
@@ -1381,11 +1389,23 @@ function PricingStep({ deal }: { deal: any }) {
     { label: "Total Proposed Fees", value: formatCurrency(totals.fee), tone: "default" as const },
     { label: "Standard Cost", value: formatCurrency(totals.cost), tone: "muted" as const },
     { label: "Gross Margin $", value: formatCurrency(totals.margin), tone: "default" as const },
-    { label: "Margin %", value: `${marginPct.toFixed(1)}%`, tone: marginPct >= targetMargin ? "success" as const : marginPct >= 25 ? "warning" as const : "danger" as const },
+    { label: "Margin %", value: `${marginPct.toFixed(1)}%`, tone: marginPct >= targetMargin ? "success" as const : marginPct >= warnThreshold ? "warning" as const : "danger" as const },
     { label: "Total Hours", value: formatNumber(totals.hours), tone: "default" as const },
     { label: "Effective Rate", value: blendedRate > 0 ? `${formatCurrency(blendedRate)}/hr` : "—", tone: "default" as const },
-    { label: `vs Target (${targetMargin}%)`, value: `${vsTarget >= 0 ? "+" : ""}${vsTarget.toFixed(1)}%`, tone: vsTarget >= 0 ? "success" as const : "danger" as const, accent: true },
+    { label: `vs Target (${targetMargin}% — ${targetSourceLabel})`, value: `${vsTarget >= 0 ? "+" : ""}${vsTarget.toFixed(1)}%`, tone: vsTarget >= 0 ? "success" as const : "danger" as const, accent: true },
   ];
+
+  const handleSaveOverride = () => {
+    const trimmed = overrideInput.trim();
+    if (trimmed === "") {
+      updateDeal.mutate({ id: deal.id, data: { targetMarginPercent: null } });
+      return;
+    }
+    const parsed = parseFloat(trimmed);
+    if (Number.isFinite(parsed) && parsed >= 1 && parsed <= 100) {
+      updateDeal.mutate({ id: deal.id, data: { targetMarginPercent: parsed } });
+    }
+  };
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
@@ -1410,6 +1430,36 @@ function PricingStep({ deal }: { deal: any }) {
         </button>
       </div>
       <div className="lg:col-span-3 space-y-6">
+        <div className="rounded-xl border border-border bg-card px-4 py-3 flex items-center justify-between gap-4 flex-wrap">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Margin Target</p>
+            <p className="text-sm font-semibold text-foreground mt-0.5">
+              {targetMargin}% <span className="text-xs font-normal text-muted-foreground">· {targetSourceLabel}</span>
+            </p>
+          </div>
+          <div className="flex items-end gap-2">
+            <div>
+              <label className="block text-[11px] font-medium text-muted-foreground mb-1">Deal Override (%)</label>
+              <input
+                type="number"
+                min={1}
+                max={100}
+                step="0.1"
+                value={overrideInput}
+                onChange={(e) => setOverrideInput(e.target.value)}
+                placeholder="—"
+                className="w-24 px-2 py-1.5 text-sm border border-border rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-primary/30"
+              />
+            </div>
+            <button
+              onClick={handleSaveOverride}
+              disabled={updateDeal.isPending}
+              className="px-3 py-1.5 text-xs font-medium rounded-md border border-border bg-background hover:bg-muted/40 disabled:opacity-50"
+            >
+              {overrideInput.trim() === "" ? "Clear" : "Save"}
+            </button>
+          </div>
+        </div>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3">
           {kpiCards.map((c) => (
             <div
@@ -1523,8 +1573,8 @@ function PricingStep({ deal }: { deal: any }) {
             </table>
           </div>
           <div className="px-6 py-3 border-t border-border bg-muted/30 flex items-center justify-between">
-            <span className="text-sm text-muted-foreground">Overall Margin</span>
-            <span className={cn("text-lg font-bold", marginPct >= 25 ? "text-success" : marginPct >= 20 ? "text-warning" : "text-destructive")}>{marginPct.toFixed(1)}%</span>
+            <span className="text-sm text-muted-foreground">Overall Margin <span className="text-xs">(target {targetMargin}% — {targetSourceLabel})</span></span>
+            <span className={cn("text-lg font-bold", marginPct >= targetMargin ? "text-success" : marginPct >= warnThreshold ? "text-warning" : "text-destructive")}>{marginPct.toFixed(1)}%</span>
           </div>
         </div>
       </div>
@@ -1574,7 +1624,7 @@ function PricingStep({ deal }: { deal: any }) {
               <div className="bg-card rounded-lg p-3">
                 <p className="text-xs text-muted-foreground">Current Margin</p>
                 <p className={cn("text-2xl font-bold", marginAdvisor.data.isOnTarget ? "text-success" : "text-warning")}>{marginAdvisor.data.currentMargin}%</p>
-                <p className="text-xs text-muted-foreground mt-1">Target: {marginAdvisor.data.targetMargin}%</p>
+                <p className="text-xs text-muted-foreground mt-1">Target: {marginAdvisor.data.targetMargin}%{marginAdvisor.data.targetSource ? ` (${marginAdvisor.data.targetSource})` : ""}</p>
               </div>
               {marginAdvisor.data.suggestions?.map((s: any, i: number) => (
                 <div key={i} className={cn("bg-card rounded-lg p-3 border-l-3", s.priority === "high" ? "border-l-primary" : s.priority === "info" ? "border-l-success" : "border-l-warning")}>
@@ -1599,6 +1649,8 @@ function PricingOptionsDrawer({ deal, open, onClose }: { deal: any; open: boolea
   const selectScenario = useSelectScenario();
   const recommendation = useAIScenarioRecommendation();
   const { persona } = useAuth();
+  const { data: marginTarget } = useDealMarginTarget(deal.id);
+  const targetMargin = marginTarget?.percent ?? 35;
 
   useEffect(() => {
     if (open && deal.id) recommendation.mutate({ dealId: deal.id });
@@ -1683,7 +1735,7 @@ function PricingOptionsDrawer({ deal, open, onClose }: { deal: any; open: boolea
                   </div>
                   <div className="flex items-center justify-between py-2 border-b border-border">
                     <span className="text-sm text-muted-foreground">Margin</span>
-                    <span className={cn("text-sm font-bold", parseFloat(scenario.marginPercent) >= 25 ? "text-success" : "text-warning")}>{formatPercent(scenario.marginPercent || 0)}</span>
+                    <span className={cn("text-sm font-bold", parseFloat(scenario.marginPercent) >= targetMargin ? "text-success" : "text-warning")}>{formatPercent(scenario.marginPercent || 0)}</span>
                   </div>
                   <div className="flex items-center justify-between py-2">
                     <span className="text-sm text-muted-foreground">Blended Rate</span>
@@ -1733,7 +1785,9 @@ function DealBanner({ deal, currentStep, navigateToStep, summaryUnlocked }: { de
   const [moreOpen, setMoreOpen] = useState(false);
 
   const pendingApprovals = (approvals || []).filter((a: any) => a.status === "pending" || a.status === "pending_lead_review" || a.status === "pending_bu_approval").length;
-  const targetMargin = 35;
+  const { data: marginTarget } = useDealMarginTarget(deal.id);
+  const targetMargin = marginTarget?.percent ?? 35;
+  const targetSourceLabel = marginTarget?.sourceLabel ?? "Firm default";
   const marginVal = parseFloat(deal.marginPercent || 0);
   const marginDelta = marginVal - targetMargin;
   const marginGood = marginDelta >= 0;
@@ -1771,7 +1825,7 @@ function DealBanner({ deal, currentStep, navigateToStep, summaryUnlocked }: { de
                   marginGood ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-rose-50 text-rose-700 border border-rose-200"
                 )}>
                   {marginGood ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
-                  {marginVal.toFixed(1)}% · {marginGood ? "+" : ""}{marginDelta.toFixed(1)} vs {targetMargin}%
+                  {marginVal.toFixed(1)}% · {marginGood ? "+" : ""}{marginDelta.toFixed(1)} vs {targetMargin}% ({targetSourceLabel})
                 </span>
               )}
             </div>
@@ -1922,7 +1976,9 @@ function ReviewStep({ deal, navigateToStep, onReadiness, override, setOverride }
   const sumHours = lines.reduce((s: number, l: any) => s + parseFloat(l.hours || 0), 0);
   const marginPct = sumFee > 0 ? ((sumFee - sumCost) / sumFee) * 100 : 0;
   const effRate = sumHours > 0 ? sumFee / sumHours : 0;
-  const targetMargin = 35;
+  const { data: marginTarget } = useDealMarginTarget(deal.id);
+  const targetMargin = marginTarget?.percent ?? 35;
+  const targetSourceLabel = marginTarget?.sourceLabel ?? "Firm default";
   const vsTarget = marginPct - targetMargin;
 
   // Calc parity: Σ line fees vs deal.totalFee
@@ -1964,7 +2020,7 @@ function ReviewStep({ deal, navigateToStep, onReadiness, override, setOverride }
   const ratesAssigned = lines.length > 0 && lines.every((l: any) => parseFloat(l.rate || 0) > 0);
   const crmLinked = !!deal.dynamicsLink?.opportunityNumber;
   const marginOk = marginPct >= targetMargin;
-  const plTrigger = evaluatePracticeLeadTrigger({ totalFee: sumFee, marginPercent: marginPct, scopeItemCount: billable.length });
+  const plTrigger = evaluatePracticeLeadTrigger({ totalFee: sumFee, marginPercent: marginPct, scopeItemCount: billable.length, targetMarginPercent: targetMargin });
   const isNewClient = (deal.dealType || "").toLowerCase() === "new";
 
   // Build a list of missing required fields so we can name them in the fix UI.
@@ -2011,7 +2067,7 @@ function ReviewStep({ deal, navigateToStep, onReadiness, override, setOverride }
     },
     {
       ok: marginOk,
-      label: marginOk ? `Margin above BU target (${targetMargin}%)` : `Margin ${marginPct.toFixed(1)}% is below BU target (${targetMargin}%)`,
+      label: marginOk ? `Margin above target (${targetMargin}% — ${targetSourceLabel})` : `Margin ${marginPct.toFixed(1)}% is below target (${targetMargin}% — ${targetSourceLabel})`,
       hint: marginOk ? undefined : "Adjust hours, role mix, or fees to lift margin, or compare alternative pricing options.",
       action: marginOk ? undefined : { label: "Open Pricing", onClick: () => navigateToStep(4) },
     },
@@ -2120,7 +2176,7 @@ function ReviewStep({ deal, navigateToStep, onReadiness, override, setOverride }
         <ReviewKpiCard label="Hours" value={formatNumber(sumHours)} />
         <ReviewKpiCard label="Eff. Rate" value={effRate > 0 ? `${formatCurrency(effRate)}/hr` : "—"} />
         <ReviewKpiCard
-          label={`vs Target (${targetMargin}%)`}
+          label={`vs Target (${targetMargin}% — ${targetSourceLabel})`}
           value={`${vsTarget >= 0 ? "+" : ""}${vsTarget.toFixed(1)}%`}
           tone={vsTarget >= 0 ? "success" : "danger"}
           accent
@@ -2503,6 +2559,8 @@ function ApprovalStep({ deal }: { deal: any }) {
 
 function SummaryStep({ deal }: { deal: any }) {
   const [letterModalOpen, setLetterModalOpen] = useState(false);
+  const { data: marginTarget } = useDealMarginTarget(deal.id);
+  const summaryTarget = marginTarget?.percent ?? 35;
   return (
     <div className="max-w-4xl mx-auto space-y-6">
       <div className="flex gap-3 justify-end flex-wrap">
@@ -2552,7 +2610,7 @@ function SummaryStep({ deal }: { deal: any }) {
             </div>
             <div className="text-center p-4 bg-muted/50 rounded-xl">
               <p className="text-xs text-muted-foreground mb-1">Margin</p>
-              <p className={cn("text-lg font-bold", parseFloat(deal.marginPercent) >= 25 ? "text-success" : "text-warning")}>{formatPercent(deal.marginPercent || 0)}</p>
+              <p className={cn("text-lg font-bold", parseFloat(deal.marginPercent) >= summaryTarget ? "text-success" : "text-warning")}>{formatPercent(deal.marginPercent || 0)}</p>
             </div>
             <div className="text-center p-4 bg-muted/50 rounded-xl">
               <p className="text-xs text-muted-foreground mb-1">Total Hours</p>

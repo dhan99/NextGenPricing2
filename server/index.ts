@@ -433,6 +433,20 @@ async function pushSchema() {
     ALTER TABLE intapp_settings ADD COLUMN IF NOT EXISTS app_base_url TEXT;
     ALTER TABLE deals ADD COLUMN IF NOT EXISTS workday_cost_center_id INTEGER;
     ALTER TABLE deals ADD COLUMN IF NOT EXISTS engagement_inputs JSONB;
+    ALTER TABLE deals ADD COLUMN IF NOT EXISTS target_margin_percent DECIMAL(5,2);
+
+    -- Margin Targets: single source of truth (Task #33). Firm default is the
+    -- single row with scope='firm' and scope_key NULL; per-BU and
+    -- per-service-line overrides have scope_key set.
+    CREATE TABLE IF NOT EXISTS margin_targets (
+      id SERIAL PRIMARY KEY,
+      scope TEXT NOT NULL,
+      scope_key TEXT,
+      percent DECIMAL(5,2) NOT NULL,
+      updated_at TIMESTAMP DEFAULT NOW() NOT NULL
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS margin_targets_scope_key_uniq
+      ON margin_targets (scope, COALESCE(scope_key, ''));
     ALTER TABLE prompt_responses ADD COLUMN IF NOT EXISTS prompt_set_id INTEGER;
     ALTER TABLE prompt_responses ADD COLUMN IF NOT EXISTS prompt_set_version INTEGER;
 

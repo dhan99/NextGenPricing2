@@ -86,7 +86,7 @@ export function useUpdateDeal() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id, data }: { id: number; data: any }) => fetchApi(`/api/deals/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
-    onSuccess: (_, { id }) => { qc.invalidateQueries({ queryKey: ["deal", id] }); qc.invalidateQueries({ queryKey: ["deals"] }); qc.invalidateQueries({ queryKey: ["deal-pricing", id] }); },
+    onSuccess: (_, { id }) => { qc.invalidateQueries({ queryKey: ["deal", id] }); qc.invalidateQueries({ queryKey: ["deals"] }); qc.invalidateQueries({ queryKey: ["deal-pricing", id] }); qc.invalidateQueries({ queryKey: ["deal-margin-target", id] }); },
   });
 }
 
@@ -509,6 +509,65 @@ export function useAIEffortEstimation() {
 
 export function useAIMarginAdvisor() {
   return useMutation({ mutationFn: (data: any) => fetchApi("/api/ai/margin-advisor", { method: "POST", body: JSON.stringify(data) }) });
+}
+
+// ============ MARGIN TARGETS (single source of truth — Task #33) ============
+export function useMarginTargets() {
+  return useQuery({ queryKey: ["margin-targets"], queryFn: () => fetchApi("/api/margin-targets") });
+}
+
+export function useUpdateFirmMarginTarget() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (percent: number) => fetchApi("/api/margin-targets/firm", { method: "PUT", body: JSON.stringify({ percent }) }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["margin-targets"] });
+      qc.invalidateQueries({ queryKey: ["deal-margin-target"] });
+    },
+  });
+}
+
+export function useCreateMarginTargetOverride() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { scope: "bu" | "serviceLine"; scopeKey: string; percent: number }) =>
+      fetchApi("/api/margin-targets/overrides", { method: "POST", body: JSON.stringify(data) }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["margin-targets"] });
+      qc.invalidateQueries({ queryKey: ["deal-margin-target"] });
+    },
+  });
+}
+
+export function useUpdateMarginTargetOverride() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { id: number; percent: number }) =>
+      fetchApi(`/api/margin-targets/overrides/${data.id}`, { method: "PATCH", body: JSON.stringify({ percent: data.percent }) }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["margin-targets"] });
+      qc.invalidateQueries({ queryKey: ["deal-margin-target"] });
+    },
+  });
+}
+
+export function useDeleteMarginTargetOverride() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => fetchApi(`/api/margin-targets/overrides/${id}`, { method: "DELETE" }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["margin-targets"] });
+      qc.invalidateQueries({ queryKey: ["deal-margin-target"] });
+    },
+  });
+}
+
+export function useDealMarginTarget(dealId: number | null | undefined) {
+  return useQuery<{ percent: number; sourceLabel: string; source: { kind: string; key?: string } }>({
+    queryKey: ["deal-margin-target", dealId],
+    queryFn: () => fetchApi(`/api/deals/${dealId}/margin-target`),
+    enabled: !!dealId,
+  });
 }
 
 export function useAIScenarioRecommendation() {

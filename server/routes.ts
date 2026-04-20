@@ -1,8 +1,25 @@
 import { Express, Request, Response } from "express";
 import { db } from "./db";
-import { clients, deals, scopeCatalog, dealScopeItems, scopeTemplates, scopeTemplateItems, roles, rateCards, rateCardEntries, pricingLines, scenarios, approvals, promptResponses, activityLog, changeOrders, dynamicsOpportunities, promptSets, promptSetItems } from "../shared/schema";
-import { evaluatePracticeLeadTrigger } from "../shared/policy";
+import { clients, deals, scopeCatalog, dealScopeItems, scopeTemplates, scopeTemplateItems, roles, rateCards, rateCardEntries, pricingLines, scenarios, approvals, promptResponses, activityLog, changeOrders, dynamicsOpportunities, promptSets, promptSetItems, marginTargets } from "../shared/schema";
+import { evaluatePracticeLeadTrigger, resolveMarginTarget, type MarginTargetRow, type DealLike } from "../shared/policy";
 import { eq, desc, sql, and, count, isNull, isNotNull, asc, inArray } from "drizzle-orm";
+
+// Load all margin-target rows once and resolve the effective target for a
+// given deal. Used everywhere the server needs a target margin (Practice
+// Lead routing, agent run risk summary, etc.) so all surfaces agree.
+async function loadMarginTargets(): Promise<MarginTargetRow[]> {
+  const rows = await db.select().from(marginTargets);
+  return rows.map((r) => ({
+    scope: r.scope as "firm" | "bu" | "serviceLine",
+    scopeKey: r.scopeKey,
+    percent: parseFloat(r.percent),
+  }));
+}
+
+async function resolveTargetForDeal(deal: DealLike) {
+  const rows = await loadMarginTargets();
+  return resolveMarginTarget(deal, rows);
+}
 
 function escapeHtml(str: string | null | undefined): string {
   if (!str) return "";
@@ -404,6 +421,104 @@ export function registerRoutes(app: Express) {
     }
   });
 
+  // ========== MARGIN TARGETS (single source of truth, Task #33) ==========
+  // Returns the firm default plus any per-BU / per-service-line overrides.
+  app.get("/api/margin-targets", async (_req: Request, res: Response) => {
+    const rows = await db.select().from(marginTargets);
+    const firm = rows.find((r) => r.scope === "firm");
+    const overrides = rows
+      .filter((r) => r.scope !== "firm")
+      .map((r) => ({
+        id: r.id,
+        scope: r.scope as "bu" | "serviceLine",
+        scopeKey: r.scopeKey,
+        percent: parseFloat(r.percent),
+        updatedAt: r.updatedAt,
+      }));
+    res.json({
+      firmDefault: firm ? parseFloat(firm.percent) : null,
+      firmUpdatedAt: firm?.updatedAt || null,
+      overrides,
+    });
+  });
+
+  // Returns the resolved target for a given deal — used by the client so
+  // every surface lines up with what the server enforces.
+  app.get("/api/deals/:id/margin-target", async (req: Request, res: Response) => {
+    const dealId = parseInt(req.params.id);
+    const [d] = await db.select().from(deals).where(eq(deals.id, dealId));
+    if (!d) return res.status(404).json({ error: "Deal not found" });
+    const resolved = await resolveTargetForDeal(d);
+    res.json(resolved);
+  });
+
+  function validatePercent(input: any): { value?: number; error?: string } {
+    const n = typeof input === "string" ? parseFloat(input) : input;
+    if (typeof n !== "number" || !Number.isFinite(n)) return { error: "percent must be a number" };
+    if (n < 1 || n > 100) return { error: "percent must be between 1 and 100" };
+    return { value: Math.round(n * 100) / 100 };
+  }
+
+  // Set/update the firm-wide default. Idempotent upsert on the singleton row.
+  app.put("/api/margin-targets/firm", async (req: Request, res: Response) => {
+    const v = validatePercent(req.body?.percent);
+    if (v.error) return res.status(400).json({ error: v.error });
+    const existing = await db.select().from(marginTargets).where(and(eq(marginTargets.scope, "firm"), isNull(marginTargets.scopeKey)));
+    if (existing.length > 0) {
+      const [updated] = await db.update(marginTargets)
+        .set({ percent: String(v.value), updatedAt: new Date() })
+        .where(eq(marginTargets.id, existing[0].id))
+        .returning();
+      return res.json({ id: updated.id, percent: parseFloat(updated.percent) });
+    }
+    const [created] = await db.insert(marginTargets)
+      .values({ scope: "firm", scopeKey: null, percent: String(v.value) })
+      .returning();
+    res.status(201).json({ id: created.id, percent: parseFloat(created.percent) });
+  });
+
+  // Create a per-BU or per-serviceLine override.
+  app.post("/api/margin-targets/overrides", async (req: Request, res: Response) => {
+    const { scope, scopeKey } = req.body || {};
+    if (scope !== "bu" && scope !== "serviceLine") return res.status(400).json({ error: "scope must be 'bu' or 'serviceLine'" });
+    const key = typeof scopeKey === "string" ? scopeKey.trim() : "";
+    if (!key) return res.status(400).json({ error: "scopeKey is required" });
+    const v = validatePercent(req.body?.percent);
+    if (v.error) return res.status(400).json({ error: v.error });
+    try {
+      const [created] = await db.insert(marginTargets)
+        .values({ scope, scopeKey: key, percent: String(v.value) })
+        .returning();
+      res.status(201).json({ id: created.id, scope: created.scope, scopeKey: created.scopeKey, percent: parseFloat(created.percent) });
+    } catch (e: any) {
+      if (String(e?.message || "").includes("uniq")) {
+        return res.status(409).json({ error: `An override for ${scope} '${key}' already exists.` });
+      }
+      throw e;
+    }
+  });
+
+  app.patch("/api/margin-targets/overrides/:id", async (req: Request, res: Response) => {
+    const id = parseInt(req.params.id);
+    const v = validatePercent(req.body?.percent);
+    if (v.error) return res.status(400).json({ error: v.error });
+    const [updated] = await db.update(marginTargets)
+      .set({ percent: String(v.value), updatedAt: new Date() })
+      .where(and(eq(marginTargets.id, id), isNotNull(marginTargets.scopeKey)))
+      .returning();
+    if (!updated) return res.status(404).json({ error: "Override not found" });
+    res.json({ id: updated.id, scope: updated.scope, scopeKey: updated.scopeKey, percent: parseFloat(updated.percent) });
+  });
+
+  app.delete("/api/margin-targets/overrides/:id", async (req: Request, res: Response) => {
+    const id = parseInt(req.params.id);
+    const result = await db.delete(marginTargets)
+      .where(and(eq(marginTargets.id, id), isNotNull(marginTargets.scopeKey)))
+      .returning();
+    if (result.length === 0) return res.status(404).json({ error: "Override not found" });
+    res.json({ ok: true });
+  });
+
   // ========== DASHBOARD ==========
   app.get("/api/dashboard/summary", async (_req: Request, res: Response) => {
     const [dealStats] = await db.select({
@@ -574,6 +689,20 @@ export function registerRoutes(app: Express) {
     // Engagement Inputs: validate against the service-line preset, clamp ranges,
     // and merge with the existing row to avoid last-write-wins races on per-field edits.
     const patch: any = { ...req.body, updatedAt: new Date() };
+    // Per-deal margin target override (Task #33). Accept null/empty to clear,
+    // or a sensible percent in [1,100]. Stored as decimal string in PG.
+    if ("targetMarginPercent" in req.body) {
+      const raw = req.body.targetMarginPercent;
+      if (raw === null || raw === "" || raw === undefined) {
+        patch.targetMarginPercent = null;
+      } else {
+        const n = typeof raw === "string" ? parseFloat(raw) : raw;
+        if (!Number.isFinite(n) || n < 1 || n > 100) {
+          return res.status(400).json({ error: "targetMarginPercent must be a number between 1 and 100" });
+        }
+        patch.targetMarginPercent = String(Math.round(n * 100) / 100);
+      }
+    }
     if (req.body?.engagementInputs !== undefined) {
       const sl = req.body.serviceLine || prior.serviceLine || "_generic";
       const preset = ENGAGEMENT_INPUT_PRESETS[sl] || ENGAGEMENT_INPUT_PRESETS["_generic"];
@@ -1738,10 +1867,13 @@ export function registerRoutes(app: Express) {
     const polFee = dealLines.reduce((s, l) => s + parseFloat(l.fee || "0"), 0);
     const polCost = dealLines.reduce((s, l) => s + parseFloat(l.cost || "0"), 0);
     const polMargin = polFee > 0 ? ((polFee - polCost) / polFee) * 100 : 0;
+    const [dealRow] = await db.select().from(deals).where(eq(deals.id, dealId));
+    const resolvedTargetA = await resolveTargetForDeal(dealRow || {});
     const trigger = evaluatePracticeLeadTrigger({
       totalFee: polFee,
       marginPercent: polMargin,
       scopeItemCount: dealItems.length,
+      targetMarginPercent: resolvedTargetA.percent,
     });
 
     const approvalPayload: any = { dealId, ...req.body };
@@ -2231,9 +2363,24 @@ export function registerRoutes(app: Express) {
   });
 
   app.post("/api/ai/margin-advisor", async (req: Request, res: Response) => {
-    const { pricingLines: lines, targetMargin = 25 } = req.body;
+    const { pricingLines: lines, dealId, targetMargin: explicitTarget } = req.body;
     if (!lines || !Array.isArray(lines)) {
       return res.json({ suggestions: [], currentMargin: 0 });
+    }
+    // Resolve target: explicit override (legacy) > deal-resolved > firm fallback.
+    let targetMargin: number = typeof explicitTarget === "number" ? explicitTarget : NaN;
+    let targetSource = "explicit";
+    if (!Number.isFinite(targetMargin)) {
+      if (dealId) {
+        const [d] = await db.select().from(deals).where(eq(deals.id, parseInt(String(dealId))));
+        const resolved = await resolveTargetForDeal(d || {});
+        targetMargin = resolved.percent;
+        targetSource = resolved.sourceLabel;
+      } else {
+        const resolved = await resolveTargetForDeal({});
+        targetMargin = resolved.percent;
+        targetSource = resolved.sourceLabel;
+      }
     }
 
     const totalFee = lines.reduce((sum: number, l: any) => sum + parseFloat(l.fee || "0"), 0);
@@ -2289,6 +2436,7 @@ export function registerRoutes(app: Express) {
     res.json({
       currentMargin: currentMargin.toFixed(1),
       targetMargin,
+      targetSource,
       totalFee,
       totalCost,
       isOnTarget: currentMargin >= targetMargin,
@@ -2338,14 +2486,17 @@ export function registerRoutes(app: Express) {
     if (!deal) return res.status(404).json({ error: "Deal not found" });
 
     const margin = parseFloat(deal.marginPercent || "0");
-    const riskLevel = margin < 20 ? "High" : margin < 25 ? "Medium" : "Low";
+    const resolvedTarget = await resolveTargetForDeal(deal as any);
+    const target = resolvedTarget.percent;
+    const warnThreshold = Math.max(0, target - 10);
+    const riskLevel = margin < warnThreshold ? "High" : margin < target ? "Medium" : "Low";
 
     const riskFactors = [];
     if (deal.complexity === "high" || deal.complexity === "very_high") {
       riskFactors.push({ factor: "High Complexity", severity: "medium", detail: "Project complexity increases delivery risk" });
     }
-    if (margin < 25) {
-      riskFactors.push({ factor: "Below Target Margin", severity: margin < 20 ? "high" : "medium", detail: `Current margin of ${margin.toFixed(1)}% is below the 25% target` });
+    if (margin < target) {
+      riskFactors.push({ factor: "Below Target Margin", severity: margin < warnThreshold ? "high" : "medium", detail: `Current margin of ${margin.toFixed(1)}% is below the ${target}% target (${resolvedTarget.sourceLabel})` });
     }
     if (parseFloat(deal.totalHours || "0") > 1000) {
       riskFactors.push({ factor: "Large Engagement", severity: "low", detail: "Engagements over 1,000 hours require additional project governance" });
@@ -2763,14 +2914,17 @@ export function registerRoutes(app: Express) {
     );
 
     // 10. UC-5: risk narrative
-    const riskLevel = margin < 20 ? "High" : margin < 25 ? "Medium" : "Low";
+    const agentResolvedTarget = await resolveTargetForDeal(refreshedDeal as any);
+    const agentTarget = agentResolvedTarget.percent;
+    const agentWarnThreshold = Math.max(0, agentTarget - 10);
+    const riskLevel = margin < agentWarnThreshold ? "High" : margin < agentTarget ? "Medium" : "Low";
     const riskScore = riskLevel === "Low" ? 2.5 : riskLevel === "Medium" ? 5.5 : 8.0;
     const riskFactors: any[] = [];
     if (complexity === "high" || complexity === "very_high") {
       riskFactors.push({ factor: "High Complexity", severity: "medium" });
     }
-    if (margin < 25) {
-      riskFactors.push({ factor: "Below Target Margin", severity: margin < 20 ? "high" : "medium" });
+    if (margin < agentTarget) {
+      riskFactors.push({ factor: "Below Target Margin", severity: margin < agentWarnThreshold ? "high" : "medium", detail: `Margin ${margin.toFixed(1)}% is below the ${agentTarget}% target (${agentResolvedTarget.sourceLabel})` });
     }
     if (hours > 1000) {
       riskFactors.push({ factor: "Large Engagement", severity: "low" });
@@ -2835,14 +2989,18 @@ export function registerRoutes(app: Express) {
       checklistConfidence = Math.min(checklistConfidence, 0.4);
     }
 
+    const resolvedTargetAgent = await resolveTargetForDeal({ businessUnit, serviceLine, targetMarginPercent: null });
     const marginTrigger = evaluatePracticeLeadTrigger({
       totalFee: fee, marginPercent: margin, scopeItemCount: insertedScope.length,
+      targetMarginPercent: resolvedTargetAgent.percent,
     });
     checklist.margin = {
       marginPercent: margin,
+      targetMarginPercent: resolvedTargetAgent.percent,
+      targetSource: resolvedTargetAgent.sourceLabel,
       practiceLeadRequired: marginTrigger.required,
       reason: marginTrigger.reason,
-      below25: margin < 25,
+      belowTarget: margin < resolvedTargetAgent.percent,
     };
     if (marginTrigger.required) { checklistNeedsReview = true; checklistConfidence = Math.min(checklistConfidence, 0.6); }
 
@@ -2911,7 +3069,13 @@ export function registerRoutes(app: Express) {
     const polFee = dealLines.reduce((s, l) => s + parseFloat(l.fee || "0"), 0);
     const polCost = dealLines.reduce((s, l) => s + parseFloat(l.cost || "0"), 0);
     const polMargin = polFee > 0 ? ((polFee - polCost) / polFee) * 100 : 0;
-    const trigger = evaluatePracticeLeadTrigger({ totalFee: polFee, marginPercent: polMargin, scopeItemCount: dealItems.length });
+    const resolvedTargetB = await resolveTargetForDeal(deal);
+    const trigger = evaluatePracticeLeadTrigger({
+      totalFee: polFee,
+      marginPercent: polMargin,
+      scopeItemCount: dealItems.length,
+      targetMarginPercent: resolvedTargetB.percent,
+    });
 
     const approverRole = trigger.required ? "Practice Lead" : "Pricing Director";
     const [approval] = await db.insert(approvals).values({
