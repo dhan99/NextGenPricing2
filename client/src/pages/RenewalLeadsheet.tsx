@@ -481,9 +481,9 @@ export function RenewalLeadsheet() {
       </div>
       <AskDealPadAI context={{
         screen: "renewal-leadsheet",
-        screenLabel: `Renewal Leadsheet · ${deal?.dealNumber || ""}`,
-        dealId: deal?.id,
-        deal,
+        screenLabel: `Renewal Leadsheet · ${currentDeal?.dealNumber || ""}`,
+        dealId: currentDeal?.id,
+        deal: currentDeal,
       }} />
     </div>
   );
