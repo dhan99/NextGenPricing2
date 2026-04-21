@@ -175,16 +175,35 @@ export function Dashboard() {
 
   return (
     <div className="p-3 sm:p-6 max-w-[1600px] mx-auto">
-      <div className="flex items-center justify-between mb-4 sm:mb-6">
+      {/* Hero: hidden on mobile to save vertical space — Topbar already shows persona context */}
+      <div className="hidden sm:flex items-center justify-between mb-6">
         <div className="min-w-0">
-          <div className="flex items-center gap-2 mb-1">
-            <span className={`text-[10px] sm:text-xs font-semibold uppercase tracking-wider px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full ${accent.badge}`}>
+          <div className="flex items-center gap-3 mb-1">
+            <span className={`text-xs font-semibold uppercase tracking-wider px-2.5 py-1 rounded-full ${accent.badge}`}>
               {persona?.fullTitle}
             </span>
           </div>
-          <h1 className="text-lg sm:text-2xl font-bold text-foreground tracking-tight truncate">{greeting.title}</h1>
-          <p className="hidden sm:block text-muted-foreground text-sm mt-1 max-w-2xl">{greeting.subtitle}</p>
+          <h1 className="text-2xl font-bold text-foreground tracking-tight">{greeting.title}</h1>
+          <p className="text-muted-foreground text-sm mt-1 max-w-2xl">{greeting.subtitle}</p>
         </div>
+      </div>
+
+      {/* Mobile-only compact header + primary CTA */}
+      <div className="sm:hidden mb-3">
+        <div className="flex items-center justify-between gap-2 mb-3">
+          <h1 className="text-base font-bold text-foreground tracking-tight truncate">{greeting.title}</h1>
+          <span className={`text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full whitespace-nowrap ${accent.badge}`}>
+            {persona?.role?.toUpperCase()}
+          </span>
+        </div>
+        {hasPermission("createDeal") && (
+          <Link href="/deals/new">
+            <button className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-primary text-primary-foreground text-sm font-semibold hover:opacity-90 transition-all">
+              <FileText className="w-4 h-4" />
+              New Deal
+            </button>
+          </Link>
+        )}
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4 mb-4 sm:mb-6">
@@ -230,7 +249,7 @@ export function Dashboard() {
                     document.getElementById(`dash-tab-${visibleTabs[nextIdx].key}`)?.focus();
                   }
                 }}
-                className={`inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px whitespace-nowrap focus:outline-none focus:ring-2 focus:ring-primary/30 rounded-t-md ${
+                className={`inline-flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 sm:py-2.5 text-xs sm:text-sm font-medium transition-colors border-b-2 -mb-px whitespace-nowrap focus:outline-none focus:ring-2 focus:ring-primary/30 rounded-t-md ${
                   isActive
                     ? "border-primary text-primary"
                     : "border-transparent text-muted-foreground hover:text-foreground"
@@ -392,7 +411,7 @@ export function Dashboard() {
 
       {/* AI ASSISTANT TAB */}
       {activeTab === "ai" && (
-        <div role="tabpanel" id="dash-panel-ai" aria-labelledby="dash-tab-ai" className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div role="tabpanel" id="dash-panel-ai" aria-labelledby="dash-tab-ai" className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-6">
           <div className="card">
             <div className="px-5 py-3 border-b border-border flex items-center justify-between">
               <h2 className="font-semibold text-foreground flex items-center gap-2 text-sm">
