@@ -78,18 +78,18 @@ export function NewDeal() {
   const submitting = createDeal.isPending || cloneDeal.isPending;
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8 max-w-3xl mx-auto">
-      <div className="flex items-center gap-4 mb-8">
+    <div className="p-3 sm:p-6 lg:p-8 max-w-3xl mx-auto">
+      <div className="flex items-center gap-3 mb-4 sm:mb-8">
         <Link href="/deals"><span className="text-muted-foreground hover:text-foreground cursor-pointer"><ArrowLeft className="w-5 h-5" /></span></Link>
         <div>
-          <h1 className="text-2xl font-bold text-foreground tracking-tight">Scope an Engagement</h1>
-          <p className="text-muted-foreground text-sm mt-1">Set up a new pricing engagement</p>
+          <h1 className="text-lg sm:text-2xl font-bold text-foreground tracking-tight leading-tight">Scope an Engagement</h1>
+          <p className="text-muted-foreground text-xs sm:text-sm">Set up a new pricing engagement</p>
         </div>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-6">
-        <div className="card p-4 sm:p-6">
-          <h2 className="text-base sm:text-lg font-semibold text-foreground mb-4">Deal Information</h2>
+      <form onSubmit={handleSubmit} className="space-y-3 sm:space-y-6">
+        <div className="card p-3 sm:p-6">
+          <h2 className="text-sm sm:text-lg font-semibold text-foreground mb-3 sm:mb-4">Deal Information</h2>
           <div className="grid grid-cols-2 gap-3">
             <div className="col-span-2">
               <label className="label">Client</label>
@@ -293,8 +293,8 @@ export function NewDeal() {
         </div>
 
         <fieldset disabled={!form.dealType} className={!form.dealType ? "opacity-50 pointer-events-none select-none" : ""}>
-          <div className="card p-4 sm:p-6">
-            <h2 className="text-base sm:text-lg font-semibold text-foreground mb-4">PDL Assignment</h2>
+          <div className="card p-3 sm:p-6">
+            <h2 className="text-sm sm:text-lg font-semibold text-foreground mb-3 sm:mb-4">PDL Assignment</h2>
             <div className="grid grid-cols-2 gap-3">
               <div className="col-span-2">
                 <label className="label">PDL Name</label>
@@ -309,9 +309,9 @@ export function NewDeal() {
         </fieldset>
 
         <fieldset disabled={!form.dealType} className={!form.dealType ? "opacity-50 pointer-events-none select-none" : ""}>
-          <div className="card p-4 sm:p-6">
-            <h2 className="text-base sm:text-lg font-semibold text-foreground mb-4">Additional Notes</h2>
-            <textarea value={form.notes} onChange={e => setForm({...form, notes: e.target.value})} className="input-field mt-1 min-h-[100px] resize-y" placeholder="Any additional context about this engagement..." />
+          <div className="card p-3 sm:p-6">
+            <h2 className="text-sm sm:text-lg font-semibold text-foreground mb-3 sm:mb-4">Additional Notes</h2>
+            <textarea value={form.notes} onChange={e => setForm({...form, notes: e.target.value})} className="input-field mt-1 min-h-[72px] sm:min-h-[100px] resize-y" placeholder="Any additional context about this engagement..." />
           </div>
         </fieldset>
 
