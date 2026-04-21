@@ -189,8 +189,8 @@ export function Dashboard() {
         </div>
       </div>
 
-      {/* Mobile-only compact header + primary CTA */}
-      <div className="sm:hidden mb-3">
+      {/* Mobile-only compact header + primary CTA — sticky so context is preserved while scrolling */}
+      <div className="sm:hidden sticky top-0 z-20 bg-background -mx-3 px-3 pt-3 pb-3 -mt-3 mb-3 border-b border-border">
         <div className="flex items-center justify-between gap-2 mb-3">
           <h1 className="text-base font-bold text-foreground tracking-tight truncate">{greeting.title}</h1>
           <span className={`text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full whitespace-nowrap ${accent.badge}`}>

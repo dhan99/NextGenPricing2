@@ -1987,8 +1987,8 @@ function DealBanner({ deal, currentStep, navigateToStep, summaryUnlocked }: { de
         </div>
       </div>
 
-      {/* Slim wizard rail */}
-      <div className="px-4 sm:px-6 lg:px-8 pb-3 overflow-x-auto">
+      {/* Slim wizard rail — sticky on mobile so users see current step while scrolling */}
+      <div className="sticky top-0 z-20 bg-background border-b border-border sm:static sm:border-0 px-4 sm:px-6 lg:px-8 pt-2 sm:pt-0 pb-3 overflow-x-auto">
         <div className="relative min-w-[480px] sm:min-w-0">
           {/* Baseline */}
           <div className="absolute left-3 right-3 top-1/2 h-0.5 bg-border -translate-y-1/2" />

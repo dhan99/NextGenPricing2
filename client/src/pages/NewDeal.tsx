@@ -79,11 +79,11 @@ export function NewDeal() {
 
   return (
     <div className="p-3 sm:p-6 lg:p-8 max-w-3xl mx-auto">
-      <div className="flex items-center gap-3 mb-4 sm:mb-8">
+      <div className="sticky top-0 z-20 bg-background -mx-3 sm:mx-0 px-3 sm:px-0 -mt-3 sm:mt-0 pt-3 sm:pt-0 pb-3 sm:pb-0 mb-4 sm:mb-8 border-b border-border sm:border-0 flex items-center gap-3">
         <Link href="/deals"><span className="text-muted-foreground hover:text-foreground cursor-pointer"><ArrowLeft className="w-5 h-5" /></span></Link>
-        <div>
-          <h1 className="text-lg sm:text-2xl font-bold text-foreground tracking-tight leading-tight">Scope an Engagement</h1>
-          <p className="text-muted-foreground text-xs sm:text-sm">Set up a new pricing engagement</p>
+        <div className="min-w-0">
+          <h1 className="text-base sm:text-2xl font-bold text-foreground tracking-tight leading-tight truncate">Scope an Engagement</h1>
+          <p className="hidden sm:block text-muted-foreground text-xs sm:text-sm">Set up a new pricing engagement</p>
         </div>
       </div>
 

@@ -53,13 +53,13 @@ export function DealsList() {
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground tracking-tight">Engagements</h1>
-          <p className="text-muted-foreground text-sm mt-1">
+      <div className="sticky top-0 z-20 bg-background -mx-4 sm:mx-0 px-4 sm:px-0 -mt-4 sm:mt-0 pt-3 sm:pt-0 pb-3 sm:pb-0 mb-4 sm:mb-6 border-b border-border sm:border-0 flex items-center justify-between">
+        <div className="min-w-0">
+          <h1 className="text-base sm:text-2xl font-bold text-foreground tracking-tight truncate">Engagements</h1>
+          <p className="text-[11px] sm:text-sm text-muted-foreground mt-0.5 sm:mt-1 truncate">
             {filtered.length} engagement{filtered.length !== 1 ? "s" : ""}
             {standaloneCount > 0 && archiveView === "active" && (
-              <span className="ml-2 inline-flex items-center gap-1 text-amber-700">
+              <span className="ml-2 hidden sm:inline-flex items-center gap-1 text-amber-700">
                 <Unlink className="w-3 h-3" /> {standaloneCount} not linked to a Dynamics opportunity
               </span>
             )}
