@@ -174,28 +174,28 @@ export function Dashboard() {
   }, [visibleKeys, activeTab, visibleTabs]);
 
   return (
-    <div className="p-4 sm:p-6 max-w-[1600px] mx-auto">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <div className="flex items-center gap-3 mb-1">
-            <span className={`text-xs font-semibold uppercase tracking-wider px-2.5 py-1 rounded-full ${accent.badge}`}>
+    <div className="p-3 sm:p-6 max-w-[1600px] mx-auto">
+      <div className="flex items-center justify-between mb-4 sm:mb-6">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 mb-1">
+            <span className={`text-[10px] sm:text-xs font-semibold uppercase tracking-wider px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full ${accent.badge}`}>
               {persona?.fullTitle}
             </span>
           </div>
-          <h1 className="text-2xl font-bold text-foreground tracking-tight">{greeting.title}</h1>
-          <p className="text-muted-foreground text-sm mt-1 max-w-2xl">{greeting.subtitle}</p>
+          <h1 className="text-lg sm:text-2xl font-bold text-foreground tracking-tight truncate">{greeting.title}</h1>
+          <p className="hidden sm:block text-muted-foreground text-sm mt-1 max-w-2xl">{greeting.subtitle}</p>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4 mb-4 sm:mb-6">
         {kpis.map((kpi) => {
           const content = (
-            <div className={`card p-5 h-full flex flex-col transition-all ${kpi.href ? "hover:shadow-md hover:border-primary/30 cursor-pointer" : ""}`}>
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-xs text-muted-foreground font-medium">{kpi.label}</span>
-                <kpi.icon className={`w-4 h-4 ${accent.text}`} />
+            <div className={`card p-3 sm:p-5 h-full flex flex-col transition-all ${kpi.href ? "hover:shadow-md hover:border-primary/30 cursor-pointer" : ""}`}>
+              <div className="flex items-center justify-between mb-1.5 sm:mb-3 gap-2">
+                <span className="text-[10px] sm:text-xs text-muted-foreground font-medium uppercase tracking-wider truncate">{kpi.label}</span>
+                <kpi.icon className={`w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0 ${accent.text}`} />
               </div>
-              <p className={`text-2xl font-bold ${kpi.valueClass || "text-foreground"}`}>{kpi.value}</p>
+              <p className={`text-base sm:text-2xl font-bold leading-tight ${kpi.valueClass || "text-foreground"}`}>{kpi.value}</p>
             </div>
           );
           return kpi.href ? (
@@ -305,8 +305,8 @@ export function Dashboard() {
       {/* PIPELINE TAB */}
       {activeTab === "pipeline" && hasPermission("viewDeals") && (
         <div role="tabpanel" id="dash-panel-pipeline" aria-labelledby="dash-tab-pipeline" className="card mb-6">
-            <div className="px-5 py-3 border-b border-border flex items-center gap-3">
-              <div className="flex-1 relative">
+            <div className="px-3 sm:px-5 py-3 border-b border-border flex items-center gap-2 sm:gap-3 flex-wrap">
+              <div className="flex-1 min-w-[140px] relative">
                 <Search className="w-4 h-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
                 <input
                   type="text"
@@ -317,7 +317,7 @@ export function Dashboard() {
                 />
               </div>
               <div className="flex items-center gap-2">
-                <span className="text-xs text-muted-foreground font-medium whitespace-nowrap">Status:</span>
+                <span className="hidden sm:inline text-xs text-muted-foreground font-medium whitespace-nowrap">Status:</span>
                 <select
                   value={statusFilter}
                   onChange={(e) => setStatusFilter(e.target.value)}
@@ -332,14 +332,14 @@ export function Dashboard() {
             <div className="divide-y divide-border max-h-[640px] overflow-y-auto">
               {filteredDeals.map((deal: any) => (
                 <Link key={deal.id} href={`/deals/${deal.id}`}>
-                  <div className="px-5 py-4 hover:bg-muted/50 transition-colors cursor-pointer">
-                    <div className="flex items-start justify-between gap-4">
+                  <div className="px-3 sm:px-5 py-3 sm:py-4 hover:bg-muted/50 transition-colors cursor-pointer">
+                    <div className="flex items-start justify-between gap-2 sm:gap-4">
                       <div className="flex-1 min-w-0">
-                        <p className="font-semibold text-foreground text-sm">{deal.client?.name || deal.title}</p>
-                        <p className="text-xs text-muted-foreground mt-0.5 truncate">
+                        <p className="font-semibold text-foreground text-[13px] sm:text-sm truncate">{deal.client?.name || deal.title}</p>
+                        <p className="text-[11px] sm:text-xs text-muted-foreground mt-0.5 truncate">
                           {deal.serviceLine || "—"} • {deal.dealType || "New"} • {deal.title}
                         </p>
-                        <div className="flex items-center gap-2 mt-2 flex-wrap">
+                        <div className="flex items-center gap-1.5 mt-1.5 sm:mt-2 flex-wrap">
                           <span className={`badge ${getStatusColor(deal.status)}`}>{getStatusLabel(deal.status)}</span>
                           {deal.marginPercent && parseFloat(deal.marginPercent) > 0 && (
                             <span className={`badge ${parseFloat(deal.marginPercent) < 25 ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700"}`}>
@@ -349,8 +349,8 @@ export function Dashboard() {
                         </div>
                       </div>
                       <div className="text-right shrink-0">
-                        <p className="font-semibold text-foreground text-sm">{formatCurrency(deal.totalFee || 0)}</p>
-                        <p className="text-xs text-muted-foreground mt-0.5">{deal.dealNumber}</p>
+                        <p className="font-semibold text-foreground text-[13px] sm:text-sm whitespace-nowrap">{formatCurrency(deal.totalFee || 0)}</p>
+                        <p className="text-[11px] sm:text-xs text-muted-foreground mt-0.5">{deal.dealNumber}</p>
                       </div>
                     </div>
                   </div>
@@ -366,14 +366,14 @@ export function Dashboard() {
       )}
 
       {activeTab === "pipeline" && summary?.statusBreakdown && summary.statusBreakdown.length > 0 && hasPermission("viewDeals") && (
-        <div className="card p-6 mb-6">
-          <h2 className="font-semibold text-foreground mb-4 flex items-center gap-2">
+        <div className="card p-3 sm:p-6 mb-6">
+          <h2 className="font-semibold text-foreground text-sm sm:text-base mb-3 sm:mb-4 flex items-center gap-2">
             <BarChart3 className="w-4 h-4 text-muted-foreground" />
             Pipeline by Status
           </h2>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3">
             {summary.statusBreakdown.map((s: any) => (
-              <div key={s.status} className="flex-1">
+              <div key={s.status} className="flex-1 min-w-0">
                 <div className="flex items-center justify-between mb-1">
                   <span className="text-xs font-medium text-muted-foreground">{getStatusLabel(s.status)}</span>
                   <span className="text-xs font-bold text-foreground">{s.count}</span>
