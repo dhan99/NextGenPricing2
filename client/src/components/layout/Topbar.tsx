@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useLocation, Link } from "wouter";
-import { ChevronRight, Search, Bell, Sparkles, LogOut, Plus, Shield } from "lucide-react";
+import { ChevronRight, Search, Bell, Sparkles, LogOut, Plus, Shield, Menu } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { useDeals } from "@/hooks/use-api";
 import { cn } from "@/lib/utils";
@@ -56,7 +56,11 @@ function useBreadcrumb(pathname: string) {
   return crumbs;
 }
 
-export function Topbar() {
+interface TopbarProps {
+  onMobileNavToggle?: () => void;
+}
+
+export function Topbar({ onMobileNavToggle }: TopbarProps = {}) {
   const [location, navigate] = useLocation();
   const { persona, hasPermission, logout } = useAuth();
   const [query, setQuery] = useState("");
@@ -88,9 +92,19 @@ export function Topbar() {
 
   return (
     <header className="sticky top-0 z-30 bg-card/95 backdrop-blur border-b border-border">
-      <div className="h-14 px-6 flex items-center gap-4">
-        {/* Breadcrumb */}
-        <nav className="flex items-center gap-1.5 text-sm min-w-0 flex-shrink-0">
+      <div className="h-14 px-3 sm:px-6 flex items-center gap-2 sm:gap-4">
+        {/* Mobile hamburger */}
+        {onMobileNavToggle && (
+          <button
+            onClick={onMobileNavToggle}
+            className="md:hidden h-9 w-9 rounded-lg hover:bg-muted/60 flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
+            aria-label="Open navigation"
+          >
+            <Menu className="w-5 h-5" />
+          </button>
+        )}
+        {/* Breadcrumb — hidden on small screens */}
+        <nav className="hidden sm:flex items-center gap-1.5 text-sm min-w-0 flex-shrink-0">
           {crumbs.map((c, i) => (
             <div key={i} className="flex items-center gap-1.5 min-w-0">
               {i > 0 && <ChevronRight className="w-3.5 h-3.5 text-muted-foreground shrink-0" />}
@@ -106,14 +120,14 @@ export function Topbar() {
         </nav>
 
         {/* Search */}
-        <form onSubmit={submitSearch} className="flex-1 max-w-xl mx-auto">
+        <form onSubmit={submitSearch} className="flex-1 max-w-xl mx-auto min-w-0">
           <div className="relative">
             <Search className="w-4 h-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search deals, clients, opportunity numbers…"
-              className="w-full h-9 pl-9 pr-3 rounded-lg bg-muted/40 border border-transparent focus:bg-background focus:border-input focus:ring-2 focus:ring-primary/20 text-sm text-foreground placeholder:text-muted-foreground outline-none transition-all"
+              placeholder="Search deals…"
+              className="w-full h-9 pl-9 pr-3 rounded-lg bg-muted/40 border border-transparent focus:bg-background focus:border-input focus:ring-2 focus:ring-primary/20 text-base sm:text-sm text-foreground placeholder:text-muted-foreground outline-none transition-all"
             />
           </div>
         </form>
@@ -124,7 +138,18 @@ export function Topbar() {
             <Link href="/deals/new">
               <button className="hidden sm:inline-flex items-center gap-1.5 h-9 px-3 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 text-sm font-medium transition-colors">
                 <Plus className="w-4 h-4" />
-                New Deal
+                <span className="hidden md:inline">New Deal</span>
+                <span className="md:hidden">New</span>
+              </button>
+            </Link>
+          )}
+          {hasPermission("createDeals") && (
+            <Link href="/deals/new">
+              <button
+                className="sm:hidden h-9 w-9 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 flex items-center justify-center"
+                aria-label="New Deal"
+              >
+                <Plus className="w-5 h-5" />
               </button>
             </Link>
           )}

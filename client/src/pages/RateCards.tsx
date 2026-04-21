@@ -11,7 +11,7 @@ export function RateCards() {
   const activeCard = selectedCard || (rateCards && rateCards.length > 0 ? rateCards[0].id : null);
 
   return (
-    <div className="p-8 max-w-6xl mx-auto">
+    <div className="p-4 sm:p-6 lg:p-8 max-w-6xl mx-auto">
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-foreground tracking-tight">Rate Cards</h1>
         <p className="text-muted-foreground text-sm mt-1">Manage billing rates by role and region</p>
@@ -63,7 +63,8 @@ function RateCardDetail({ cardId }: { cardId: number }) {
       <div className="px-6 py-4 border-b border-border">
         <h2 className="text-lg font-semibold text-foreground">Rate Table</h2>
       </div>
-      <table className="w-full">
+      <div className="overflow-x-auto">
+      <table className="w-full min-w-[640px]">
         <thead>
           <tr className="bg-muted/50">
             <th className="text-left px-6 py-3 text-xs font-semibold text-muted-foreground uppercase">Role</th>
@@ -93,6 +94,7 @@ function RateCardDetail({ cardId }: { cardId: number }) {
           })}
         </tbody>
       </table>
+      </div>
     </div>
   );
 }

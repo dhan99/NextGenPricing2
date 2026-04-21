@@ -174,7 +174,7 @@ export function Dashboard() {
   }, [visibleKeys, activeTab, visibleTabs]);
 
   return (
-    <div className="p-6 max-w-[1600px] mx-auto">
+    <div className="p-4 sm:p-6 max-w-[1600px] mx-auto">
       <div className="flex items-center justify-between mb-6">
         <div>
           <div className="flex items-center gap-3 mb-1">
@@ -459,7 +459,7 @@ function WorkdaySurface() {
           </span>
         </Link>
       </div>
-      <div className="grid grid-cols-5 divide-x divide-border">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 divide-x divide-y sm:divide-y-0 divide-border">
         {items.map(([label, n, cls]) => (
           <div key={label} className="p-4 text-center">
             <p className="text-xs text-muted-foreground">{label}</p>

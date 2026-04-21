@@ -79,7 +79,7 @@ export function NewDeal() {
   const submitting = createDeal.isPending || cloneDeal.isPending;
 
   return (
-    <div className="p-8 max-w-3xl mx-auto">
+    <div className="p-4 sm:p-6 lg:p-8 max-w-3xl mx-auto">
       <div className="flex items-center gap-4 mb-8">
         <Link href="/deals"><span className="text-muted-foreground hover:text-foreground cursor-pointer"><ArrowLeft className="w-5 h-5" /></span></Link>
         <div>
@@ -91,7 +91,7 @@ export function NewDeal() {
       <form onSubmit={handleSubmit} className="space-y-6">
         <div className="card p-6">
           <h2 className="text-lg font-semibold text-foreground mb-4">Deal Information</h2>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="label">Client</label>
               <select required value={form.clientId} onChange={e => setForm({...form, clientId: e.target.value, sourceDealId: ""})} className="input-field mt-1">
@@ -153,7 +153,7 @@ export function NewDeal() {
                 ))}
               </select>
               {selectedOpp && (
-                <div className="mt-3 grid grid-cols-3 gap-3 text-xs">
+                <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
                   <div className="bg-white border border-stone-200 rounded-md p-2">
                     <div className="text-muted-foreground">D365 Stage</div>
                     <div className="font-semibold text-foreground">{selectedOpp.stage} ({selectedOpp.probability}%)</div>
@@ -223,7 +223,7 @@ export function NewDeal() {
                 <p className="text-xs text-amber-700 mt-2">No prior submitted/approved deals found for this client. Create as a new engagement instead.</p>
               )}
               {selectedSource && (
-                <div className="mt-3 grid grid-cols-3 gap-3 text-xs">
+                <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
                   <div className="bg-white border border-stone-200 rounded-md p-2">
                     <div className="text-muted-foreground">Prior Fee</div>
                     <div className="font-semibold text-foreground">${parseFloat(selectedSource.totalFee || "0").toLocaleString()}</div>
@@ -245,7 +245,7 @@ export function NewDeal() {
             {!form.dealType && (
               <p className="text-xs text-muted-foreground mt-4 mb-2 italic">Select a Deal Type to enable the remaining fields.</p>
             )}
-            <div className="grid grid-cols-2 gap-4 mt-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
               <div className="col-span-2">
                 <label className="label">Deal Title</label>
                 <input type="text" required value={form.title} onChange={e => setForm({...form, title: e.target.value})} className="input-field mt-1" placeholder="e.g., ERP Modernization - Phase 1" />
@@ -296,7 +296,7 @@ export function NewDeal() {
         <fieldset disabled={!form.dealType} className={!form.dealType ? "opacity-50 pointer-events-none select-none" : ""}>
           <div className="card p-6">
             <h2 className="text-lg font-semibold text-foreground mb-4">PDL Assignment</h2>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="label">PDL Name</label>
                 <input type="text" value={form.pdlName} onChange={e => setForm({...form, pdlName: e.target.value})} className="input-field mt-1" placeholder="Full name" />

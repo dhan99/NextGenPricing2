@@ -218,7 +218,7 @@ export function RenewalLeadsheet() {
 
   if (!currentDeal.parentDealId) {
     return (
-      <div className="p-8 max-w-3xl mx-auto">
+      <div className="p-4 sm:p-6 lg:p-8 max-w-3xl mx-auto">
         <div className="card p-8 text-center">
           <h2 className="text-lg font-semibold text-foreground mb-2">Not a renewal deal</h2>
           <p className="text-sm text-muted-foreground mb-4">This deal does not have a prior-year source. The Renewal Leadsheet is only available for renewals created from an existing deal.</p>

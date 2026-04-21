@@ -24,7 +24,7 @@ export function Intapp() {
   const { data: settings } = useIntappSettings();
 
   return (
-    <div className="max-w-7xl mx-auto px-8 py-8">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8">
       <div className="mb-6 flex items-start justify-between">
         <div className="flex items-start gap-4">
           <div className="w-12 h-12 rounded-xl bg-amber-100 flex items-center justify-center">
@@ -92,7 +92,7 @@ function OverviewTab() {
         </div>
       </div>
 
-      <div className="grid grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         <Kpi label="Total screenings" value={dash.total} sub="Lifetime" />
         <Kpi label="Cleared" value={dash.byResult.clear} sub="No issues" tone="emerald" />
         <Kpi label="Review" value={dash.byResult.review} sub="Mitigations needed" tone="amber" />
@@ -100,7 +100,7 @@ function OverviewTab() {
         <Kpi label="QRM overrides" value={dash.byResult.override} sub="Audit-logged" tone="violet" />
       </div>
 
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <TierCard tier="low" label="Low risk" count={dash.byTier.low} />
         <TierCard tier="medium" label="Medium risk" count={dash.byTier.medium} />
         <TierCard tier="high" label="High risk" count={dash.byTier.high} />
@@ -184,8 +184,8 @@ function ScreeningsTab() {
         </button>
       </div>
 
-      <div className="card overflow-hidden">
-        <table className="w-full text-sm">
+      <div className="card overflow-x-auto">
+        <table className="w-full min-w-[640px] text-sm">
           <thead className="bg-stone-50 text-[11px] uppercase tracking-wider text-muted-foreground">
             <tr>
               <th className="text-left px-4 py-2.5">Requested</th>
@@ -305,7 +305,7 @@ function SettingsTab() {
 
       <div className="card p-5">
         <h3 className="text-sm font-semibold text-foreground mb-3">Live API configuration</h3>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <label className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">Tenant URL</label>
             <input type="text" defaultValue={settings.liveTenantUrl || settings.apiBaseUrl || ""}
@@ -372,7 +372,7 @@ function SettingsTab() {
             ))}
           </div>
         </div>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div className="col-span-2">
             <label className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">Recipients (comma-separated emails)</label>
             <input type="text" defaultValue={settings.qrmNotifyRecipients || ""}

@@ -65,7 +65,7 @@ export function DealDetail() {
     <div className="flex flex-col min-h-screen">
       <DealBanner deal={deal} currentStep={currentStep} navigateToStep={navigateToStep} summaryUnlocked={summaryUnlocked} />
 
-      <div className="flex-1 p-8 max-w-7xl mx-auto w-full">
+      <div className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto w-full">
         <SendBackHistoryBanner deal={deal} />
         {currentStep === 1 && <SetupStep deal={deal} />}
         {currentStep === 2 && <ScopeStep deal={deal} />}
@@ -258,7 +258,7 @@ function SetupStep({ deal }: { deal: any }) {
               </div>
             )}
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {editing ? (
               <>
                 <div className="col-span-2">
@@ -341,7 +341,7 @@ function SetupStep({ deal }: { deal: any }) {
 
         <div className="card p-6">
           <h2 className="text-lg font-semibold text-foreground mb-4">Client Details</h2>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div><label className="label">Client</label><p className="mt-1 text-sm text-foreground">{deal.client?.name}</p></div>
             <div><label className="label">Industry</label><p className="mt-1 text-sm text-foreground">{deal.client?.industry || "--"}</p></div>
             <div><label className="label">Segment</label><p className="mt-1 text-sm text-foreground">{deal.client?.segment || "--"}</p></div>
@@ -362,7 +362,7 @@ function SetupStep({ deal }: { deal: any }) {
           {similarity.data && (
             <div className="space-y-4">
               <p className="text-sm text-foreground leading-relaxed">{similarity.data.insights?.recommendation}</p>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="bg-card rounded-lg p-3">
                   <p className="text-xs text-muted-foreground">Avg Margin</p>
                   <p className="text-lg font-bold text-foreground">{similarity.data.insights?.averageMargin}%</p>
@@ -709,7 +709,7 @@ function ScopeStep({ deal }: { deal: any }) {
           {estimation.data && (
             <div className="space-y-3">
               <p className="text-xs text-foreground leading-relaxed">{estimation.data.narrative}</p>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <p className="text-xs font-semibold text-foreground mb-1.5">Total Hours</p>
                   <p className="text-2xl font-bold text-foreground">{estimation.data.totalHours?.toLocaleString()}</p>
@@ -854,7 +854,7 @@ function AssumptionsStep({ deal }: { deal: any }) {
               <p className="text-xs text-muted-foreground">Combined Multiplier</p>
               <p className={cn("text-3xl font-bold", totalMultiplier > 1.15 ? "text-amber-600" : totalMultiplier > 1 ? "text-foreground" : "text-emerald-600")}>{totalMultiplier.toFixed(2)}x</p>
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="bg-card rounded-lg p-3">
                 <p className="text-xs text-muted-foreground">Answered</p>
                 <p className="text-xl font-bold text-foreground">{answeredCount}<span className="text-sm font-normal text-muted-foreground">/{items.length}</span></p>
@@ -1875,9 +1875,9 @@ function DealBanner({ deal, currentStep, navigateToStep, summaryUnlocked }: { de
 
   return (
     <div className="border-b border-border bg-gradient-to-b from-card to-background">
-      <div className="px-8 pt-5 pb-3">
+      <div className="px-4 sm:px-6 lg:px-8 pt-4 sm:pt-5 pb-3">
         {/* Title row */}
-        <div className="flex items-start gap-4">
+        <div className="flex items-start gap-3 sm:gap-4">
           <Link href="/deals">
             <button className="mt-1 w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors" title="Back to engagements">
               <ArrowLeft className="w-4 h-4" />
@@ -1888,8 +1888,8 @@ function DealBanner({ deal, currentStep, navigateToStep, summaryUnlocked }: { de
           <div className="self-stretch w-1 rounded-full bg-gradient-to-b from-primary to-primary/40" />
 
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2.5 flex-wrap">
-              <h1 className="text-xl font-bold text-foreground truncate">{deal.title}</h1>
+            <div className="flex items-center gap-2 sm:gap-2.5 flex-wrap">
+              <h1 className="text-lg sm:text-xl font-bold text-foreground truncate">{deal.title}</h1>
               <span className={cn("inline-flex items-center text-[11px] font-semibold px-2 py-0.5 rounded-full", getStatusColor(deal.status))}>
                 {getStatusLabel(deal.status)}
               </span>
@@ -1986,8 +1986,8 @@ function DealBanner({ deal, currentStep, navigateToStep, summaryUnlocked }: { de
       </div>
 
       {/* Slim wizard rail */}
-      <div className="px-8 pb-3">
-        <div className="relative">
+      <div className="px-4 sm:px-6 lg:px-8 pb-3 overflow-x-auto">
+        <div className="relative min-w-[480px] sm:min-w-0">
           {/* Baseline */}
           <div className="absolute left-3 right-3 top-1/2 h-0.5 bg-border -translate-y-1/2" />
           <div
@@ -2019,12 +2019,17 @@ function DealBanner({ deal, currentStep, navigateToStep, summaryUnlocked }: { de
                   </span>
                   <span
                     className={cn(
-                      "text-[11px] font-medium whitespace-nowrap transition-colors",
+                      "hidden sm:block text-[11px] font-medium whitespace-nowrap transition-colors",
                       isActive ? "text-primary" : isDone ? "text-foreground/70" : "text-muted-foreground group-hover:text-foreground"
                     )}
                   >
                     {step.label}
                   </span>
+                  {isActive && (
+                    <span className="sm:hidden text-[10px] font-medium text-primary whitespace-nowrap">
+                      {step.label}
+                    </span>
+                  )}
                 </button>
               );
             })}
@@ -2693,7 +2698,7 @@ function SummaryStep({ deal }: { deal: any }) {
         </div>
 
         <div className="p-8">
-          <div className="grid grid-cols-4 gap-6 mb-8">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-6 mb-8">
             <div className="text-center p-4 bg-muted/50 rounded-xl">
               <p className="text-xs text-muted-foreground mb-1">Total Cost</p>
               <p className="text-lg font-bold text-foreground">{formatCurrency(deal.totalCost || 0)}</p>
@@ -2712,7 +2717,7 @@ function SummaryStep({ deal }: { deal: any }) {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-8">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
             <div>
               <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">Engagement Details</h3>
               <div className="space-y-2">
@@ -3965,7 +3970,7 @@ function WorkdayDealPanel({ deal }: { deal: any }) {
         </div>
       )}
 
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
         <div className="rounded-md bg-white border border-stone-200 p-3">
           <p className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">Cost Center</p>
           {cc ? (

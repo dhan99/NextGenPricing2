@@ -46,6 +46,20 @@
     @apply bg-background text-foreground antialiased;
     font-family: var(--font-sans);
   }
+  /* Prevent iOS auto-zoom on focus by ensuring 16px+ inputs on small screens */
+  @media (max-width: 640px) {
+    input:not([type="checkbox"]):not([type="radio"]),
+    select,
+    textarea {
+      font-size: 16px;
+    }
+  }
+  /* Touch targets at least 44px on mobile for primary buttons */
+  @media (max-width: 640px) {
+    button {
+      touch-action: manipulation;
+    }
+  }
 }
 
 @layer components {
@@ -65,9 +79,18 @@
     @apply bg-card rounded-xl border border-border shadow-sm;
   }
   .input-field {
-    @apply w-full px-3 py-2 bg-background border border-input rounded-lg text-sm
+    @apply w-full px-3 py-2 bg-background border border-input rounded-lg text-base sm:text-sm
       focus:outline-none focus:ring-2 focus:ring-ring/20 focus:border-primary
       transition-colors placeholder:text-muted-foreground;
+  }
+  .table-scroll {
+    @apply overflow-x-auto -mx-4 sm:mx-0;
+  }
+  .table-scroll > table {
+    @apply min-w-[640px];
+  }
+  .page-wrap {
+    @apply p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto;
   }
   .label {
     @apply text-sm font-medium text-foreground;

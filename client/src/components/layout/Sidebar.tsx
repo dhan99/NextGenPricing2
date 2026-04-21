@@ -1,13 +1,24 @@
 import { useLocation, Link } from "wouter";
-import { LayoutDashboard, FileText, Settings, ChevronDown, BookOpen, DollarSign, Layers, BarChart3, Database, ShieldAlert, Briefcase, MessageSquare, Target } from "lucide-react";
+import { LayoutDashboard, FileText, Settings, ChevronDown, BookOpen, DollarSign, Layers, BarChart3, Database, ShieldAlert, Briefcase, MessageSquare, Target, X } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "@/context/AuthContext";
 
-export function Sidebar() {
+interface SidebarProps {
+  mobileOpen?: boolean;
+  onMobileClose?: () => void;
+}
+
+export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
   const [location] = useLocation();
   const { hasPermission } = useAuth();
   const [adminOpen, setAdminOpen] = useState(location.startsWith("/admin"));
+
+  // Close mobile drawer on route change
+  useEffect(() => {
+    if (mobileOpen && onMobileClose) onMobileClose();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location]);
 
   const showDeals = hasPermission("viewDeals");
 
@@ -30,15 +41,26 @@ export function Sidebar() {
     { name: "Margin Targets", href: "/admin/margin-targets", icon: Target, show: true },
   ];
 
-  return (
-    <aside className="w-64 bg-sidebar-bg h-screen sticky top-0 flex flex-col border-r border-sidebar-accent">
-      <Link href="/">
-        <div className="px-6 py-6 border-b border-sidebar-accent cursor-pointer flex items-center justify-center" style={{ backgroundColor: "#fef3e7" }}>
-          <img src="/armanino-logo.svg" alt="Armanino" className="h-8 w-auto" />
-        </div>
-      </Link>
+  const sidebarBody = (
+    <>
+      <div className="relative border-b border-sidebar-accent" style={{ backgroundColor: "#fef3e7" }}>
+        <Link href="/">
+          <div className="px-6 py-6 cursor-pointer flex items-center justify-center">
+            <img src="/armanino-logo.svg" alt="Armanino" className="h-8 w-auto" />
+          </div>
+        </Link>
+        {onMobileClose && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onMobileClose(); }}
+            className="md:hidden absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-lg hover:bg-black/5"
+            aria-label="Close navigation"
+          >
+            <X className="w-5 h-5 text-stone-700" />
+          </button>
+        )}
+      </div>
 
-      <nav className="flex-1 px-3 py-4 space-y-1">
+      <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
         {navigation.filter(n => n.show).map((item) => {
           const isActive = item.href === "/" ? location === "/" : location.startsWith(item.href);
           return (
@@ -100,6 +122,29 @@ export function Sidebar() {
       <div className="px-4 py-3 border-t border-sidebar-accent text-[10px] text-sidebar-muted">
         2026 Armanino LLP · DealPad PoC
       </div>
-    </aside>
+    </>
+  );
+
+  return (
+    <>
+      {/* Desktop sidebar (md+) */}
+      <aside className="hidden md:flex w-64 bg-sidebar-bg h-screen sticky top-0 flex-col border-r border-sidebar-accent">
+        {sidebarBody}
+      </aside>
+
+      {/* Mobile drawer */}
+      {mobileOpen && (
+        <div className="md:hidden fixed inset-0 z-50 flex">
+          <div
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            onClick={onMobileClose}
+            aria-hidden="true"
+          />
+          <aside className="relative w-72 max-w-[85vw] bg-sidebar-bg h-full flex flex-col border-r border-sidebar-accent shadow-2xl animate-in slide-in-from-left">
+            {sidebarBody}
+          </aside>
+        </div>
+      )}
+    </>
   );
 }

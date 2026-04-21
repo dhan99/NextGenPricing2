@@ -130,7 +130,7 @@ export function MarginTargetsAdmin() {
   };
 
   return (
-    <div className="p-8 max-w-6xl mx-auto">
+    <div className="p-4 sm:p-6 lg:p-8 max-w-6xl mx-auto">
       <div className="flex items-center gap-3 mb-2">
         <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
           <Target className="w-5 h-5 text-primary" />
@@ -333,7 +333,8 @@ function OverrideList({
       {rows.length === 0 ? (
         <p className="px-6 py-6 text-xs text-muted-foreground">No overrides configured.</p>
       ) : (
-        <table className="w-full">
+        <div className="overflow-x-auto">
+        <table className="w-full min-w-[640px]">
           <thead>
             <tr className="bg-muted/40">
               <th className="text-left px-6 py-2 text-xs font-semibold text-muted-foreground uppercase">Name</th>
@@ -354,6 +355,7 @@ function OverrideList({
             ))}
           </tbody>
         </table>
+        </div>
       )}
     </div>
   );

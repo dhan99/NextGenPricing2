@@ -168,7 +168,7 @@ export function ScopeCatalogAdmin() {
   };
 
   return (
-    <div className="p-8 max-w-6xl mx-auto">
+    <div className="p-4 sm:p-6 lg:p-8 max-w-6xl mx-auto">
       <div className="flex items-start justify-between gap-4 mb-6">
         <div>
           <h1 className="text-2xl font-bold text-foreground tracking-tight">Scope Catalog</h1>
@@ -251,8 +251,8 @@ export function ScopeCatalogAdmin() {
             </div>
           </div>
 
-          <div className="card overflow-hidden">
-            <table className="w-full">
+          <div className="card overflow-x-auto">
+            <table className="w-full min-w-[640px]">
               <thead>
                 <tr className="bg-muted/50">
                   <th className="text-left px-6 py-3 text-xs font-semibold text-muted-foreground uppercase">Code</th>

@@ -66,7 +66,7 @@ export function WorkdayIntegration() {
   const mode = settings?.mode || "simulated";
 
   return (
-    <div className="px-8 py-6 max-w-[1400px] mx-auto">
+    <div className="px-4 sm:px-6 lg:px-8 py-4 sm:py-6 max-w-[1400px] mx-auto">
       <div className="flex items-start justify-between mb-6">
         <div>
           <div className="flex items-center gap-2 mb-1">
@@ -148,7 +148,7 @@ function CostCentersTab() {
       </div>
 
       {showNew && (
-        <div className="card p-4 grid grid-cols-6 gap-3 items-end bg-amber-50/40 border-amber-200">
+        <div className="card p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3 items-end bg-amber-50/40 border-amber-200">
           <div className="col-span-1"><label className="label">Code</label><input className="input-field" value={newDraft.code} onChange={(e) => setNewDraft({ ...newDraft, code: e.target.value })} placeholder="CC-..." /></div>
           <div className="col-span-2"><label className="label">Name</label><input className="input-field" value={newDraft.name} onChange={(e) => setNewDraft({ ...newDraft, name: e.target.value })} /></div>
           <div className="col-span-1"><label className="label">Business Unit</label><input className="input-field" value={newDraft.businessUnit} onChange={(e) => setNewDraft({ ...newDraft, businessUnit: e.target.value })} /></div>
@@ -162,8 +162,8 @@ function CostCentersTab() {
         </div>
       )}
 
-      <div className="card overflow-hidden">
-        <table className="w-full text-sm">
+      <div className="card overflow-x-auto">
+        <table className="w-full min-w-[640px] text-sm">
           <thead className="bg-stone-50 border-b border-stone-200">
             <tr className="text-xs uppercase tracking-wider text-muted-foreground">
               <th className="text-left px-4 py-2.5 font-semibold">Code</th>
@@ -250,7 +250,7 @@ function WorkersTab() {
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-7 gap-2">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-2">
         {Array.from(byRole.entries()).map(([role, agg]) => (
           <div key={role} className="card p-3">
             <p className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">{role}</p>
@@ -268,7 +268,7 @@ function WorkersTab() {
       </div>
 
       {showNew && (
-        <div className="card p-4 grid grid-cols-6 gap-3 items-end bg-amber-50/40 border-amber-200">
+        <div className="card p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3 items-end bg-amber-50/40 border-amber-200">
           <div><label className="label">Name</label><input className="input-field" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} /></div>
           <div><label className="label">Role</label><input className="input-field" value={draft.roleName} onChange={(e) => setDraft({ ...draft, roleName: e.target.value })} /></div>
           <div><label className="label">Region</label><input className="input-field" value={draft.region} onChange={(e) => setDraft({ ...draft, region: e.target.value })} /></div>
@@ -278,8 +278,8 @@ function WorkersTab() {
         </div>
       )}
 
-      <div className="card overflow-hidden">
-        <table className="w-full text-sm">
+      <div className="card overflow-x-auto">
+        <table className="w-full min-w-[640px] text-sm">
           <thead className="bg-stone-50 border-b border-stone-200">
             <tr className="text-xs uppercase tracking-wider text-muted-foreground">
               <th className="text-left px-4 py-2.5 font-semibold">Employee #</th>
@@ -334,8 +334,8 @@ function RateCardTab() {
         </div>
       </div>
 
-      <div className="card overflow-hidden">
-        <table className="w-full text-sm">
+      <div className="card overflow-x-auto">
+        <table className="w-full min-w-[640px] text-sm">
           <thead className="bg-stone-50 border-b border-stone-200">
             <tr className="text-xs uppercase tracking-wider text-muted-foreground">
               <th className="text-left px-4 py-2.5 font-semibold">Role</th>
@@ -390,14 +390,14 @@ function ValidationsTab() {
   const canOverride = persona?.role === "fin" || persona?.role === "sll";
 
   return (
-    <div className="grid grid-cols-3 gap-4">
+    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
       <div className="col-span-2 card overflow-hidden">
         <div className="px-4 py-2.5 border-b border-stone-200 flex items-center justify-between">
           <h3 className="text-sm font-semibold text-foreground flex items-center gap-2"><ShieldCheck className="w-4 h-4 text-primary" /> Recent Validations</h3>
           <span className="text-xs text-muted-foreground">{rows.length}</span>
         </div>
         {isLoading ? <div className="p-8 flex justify-center"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div> :
-        <table className="w-full text-sm">
+        <table className="w-full min-w-[640px] text-sm">
           <thead className="bg-stone-50 border-b border-stone-200">
             <tr className="text-xs uppercase tracking-wider text-muted-foreground">
               <th className="text-left px-4 py-2 font-semibold">Deal</th>
@@ -485,10 +485,10 @@ function SettingsTab() {
   if (!settings) return <div className="p-12 flex justify-center"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>;
 
   return (
-    <div className="grid grid-cols-2 gap-4">
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
       <div className="card p-5 space-y-4">
         <h3 className="text-sm font-semibold text-foreground flex items-center gap-2"><Database className="w-4 h-4 text-primary" /> Connection Mode</h3>
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           {["simulated", "live"].map((m) => (
             <button key={m} onClick={() => set({ mode: m })}
               className={`p-3 rounded-md border text-sm font-medium ${cur.mode === m ? "border-primary bg-primary/5 text-primary" : "border-stone-200 hover:bg-stone-50"}`}>
@@ -499,7 +499,7 @@ function SettingsTab() {
         <div className="space-y-2">
           <div><label className="label">Tenant URL</label><input className="input-field" value={cur.tenantUrl || ""} onChange={(e) => set({ tenantUrl: e.target.value })} placeholder="https://wd5.myworkday.com/tenant" /></div>
           <div><label className="label">ISU Username</label><input className="input-field" value={cur.isuUsername || ""} onChange={(e) => set({ isuUsername: e.target.value })} placeholder="dealpad_isu@tenant" /></div>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             <div><label className="label">API Client ID</label><input className="input-field" value={cur.apiClientId || ""} onChange={(e) => set({ apiClientId: e.target.value })} /></div>
             <div><label className="label">API Client Secret</label><input type="password" className="input-field" value={cur.apiClientSecret || ""} onChange={(e) => set({ apiClientSecret: e.target.value })} /></div>
           </div>
@@ -549,7 +549,7 @@ function EventLogPanel() {
         <span className="text-xs text-muted-foreground">{events.length} events · refreshes every 8s</span>
       </div>
       <div className="max-h-72 overflow-auto">
-        <table className="w-full text-xs">
+        <table className="w-full min-w-[640px] text-xs">
           <thead className="bg-stone-50 border-b border-stone-200 sticky top-0">
             <tr className="text-[10px] uppercase tracking-wider text-muted-foreground">
               <th className="text-left px-4 py-2 font-semibold">When</th>
