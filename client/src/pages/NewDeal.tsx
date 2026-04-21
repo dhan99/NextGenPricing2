@@ -88,17 +88,17 @@ export function NewDeal() {
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
-        <div className="card p-6">
-          <h2 className="text-lg font-semibold text-foreground mb-4">Deal Information</h2>
-          <div className="grid grid-cols-1 gap-4">
-            <div>
+        <div className="card p-4 sm:p-6">
+          <h2 className="text-base sm:text-lg font-semibold text-foreground mb-4">Deal Information</h2>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="col-span-2">
               <label className="label">Client</label>
               <select required value={form.clientId} onChange={e => setForm({...form, clientId: e.target.value, sourceDealId: ""})} className="input-field mt-1">
                 <option value="">Select client...</option>
                 {(clients || []).map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
             </div>
-            <div>
+            <div className="col-span-2">
               <label className="label">Deal Type</label>
               <select required value={form.dealType} onChange={e => setForm({...form, dealType: e.target.value, sourceDealId: ""})} className="input-field mt-1">
                 <option value="">Select...</option>
@@ -244,19 +244,19 @@ export function NewDeal() {
             {!form.dealType && (
               <p className="text-xs text-muted-foreground mt-4 mb-2 italic">Select a Deal Type to enable the remaining fields.</p>
             )}
-            <div className="grid grid-cols-1 gap-4 mt-4">
+            <div className="grid grid-cols-2 gap-3 mt-4">
               <div className="col-span-2">
                 <label className="label">Deal Title</label>
                 <input type="text" required value={form.title} onChange={e => setForm({...form, title: e.target.value})} className="input-field mt-1" placeholder="e.g., ERP Modernization - Phase 1" />
               </div>
-              <div>
+              <div className="col-span-2">
                 <label className="label">Business Unit</label>
                 <select value={form.businessUnit} onChange={e => setForm({...form, businessUnit: e.target.value})} className="input-field mt-1">
                   <option value="">Select...</option>
                   {businessUnits.map(bu => <option key={bu} value={bu}>{bu}</option>)}
                 </select>
               </div>
-              <div>
+              <div className="col-span-2">
                 <label className="label">Service Line</label>
                 <select value={form.serviceLine} onChange={e => setForm({...form, serviceLine: e.target.value})} className="input-field mt-1">
                   <option value="">Select...</option>
@@ -293,14 +293,14 @@ export function NewDeal() {
         </div>
 
         <fieldset disabled={!form.dealType} className={!form.dealType ? "opacity-50 pointer-events-none select-none" : ""}>
-          <div className="card p-6">
-            <h2 className="text-lg font-semibold text-foreground mb-4">PDL Assignment</h2>
-            <div className="grid grid-cols-1 gap-4">
-              <div>
+          <div className="card p-4 sm:p-6">
+            <h2 className="text-base sm:text-lg font-semibold text-foreground mb-4">PDL Assignment</h2>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="col-span-2">
                 <label className="label">PDL Name</label>
                 <input type="text" value={form.pdlName} onChange={e => setForm({...form, pdlName: e.target.value})} className="input-field mt-1" placeholder="Full name" />
               </div>
-              <div>
+              <div className="col-span-2">
                 <label className="label">PDL Email</label>
                 <input type="email" value={form.pdlEmail} onChange={e => setForm({...form, pdlEmail: e.target.value})} className="input-field mt-1" placeholder="email@armanino.com" />
               </div>
@@ -309,8 +309,8 @@ export function NewDeal() {
         </fieldset>
 
         <fieldset disabled={!form.dealType} className={!form.dealType ? "opacity-50 pointer-events-none select-none" : ""}>
-          <div className="card p-6">
-            <h2 className="text-lg font-semibold text-foreground mb-4">Additional Notes</h2>
+          <div className="card p-4 sm:p-6">
+            <h2 className="text-base sm:text-lg font-semibold text-foreground mb-4">Additional Notes</h2>
             <textarea value={form.notes} onChange={e => setForm({...form, notes: e.target.value})} className="input-field mt-1 min-h-[100px] resize-y" placeholder="Any additional context about this engagement..." />
           </div>
         </fieldset>
