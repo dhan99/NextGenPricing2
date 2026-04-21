@@ -18,7 +18,9 @@ export function DealsList() {
   const initialFilter = urlParams.get("status") || "all";
   const [statusFilter, setStatusFilter] = useState(initialFilter);
   const [linkFilter, setLinkFilter] = useState<"all" | "linked" | "standalone">("all");
-  const [viewMode, setViewMode] = useState<"table" | "card">("table");
+  const [viewMode, setViewMode] = useState<"table" | "card">(() =>
+    typeof window !== "undefined" && window.matchMedia("(max-width: 767px)").matches ? "card" : "table"
+  );
 
   const filtered = (deals || []).filter((d: any) => {
     const matchesSearch = !search || d.title.toLowerCase().includes(search.toLowerCase()) ||
@@ -128,7 +130,7 @@ export function DealsList() {
       </div>
 
       {viewMode === "table" ? (
-        <div className="card overflow-x-auto">
+        <div className="card overflow-x-auto hidden md:block">
           <table className="w-full min-w-[640px]">
             <thead>
               <tr className="border-b border-border bg-muted/50">
@@ -252,8 +254,11 @@ export function DealsList() {
             <div className="px-6 py-16 text-center text-muted-foreground text-sm">No deals match your filters.</div>
           )}
         </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      ) : null}
+
+      {/* Card view: shown when card mode selected, OR forced on mobile when table mode is active */}
+      {(viewMode === "card" || viewMode === "table") && (
+        <div className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 ${viewMode === "table" ? "md:hidden" : ""}`}>
           {filtered.map((deal: any) => (
             <Link key={deal.id} href={`/deals/${deal.id}`}>
               <div className="card p-5 hover:shadow-md transition-shadow cursor-pointer">
