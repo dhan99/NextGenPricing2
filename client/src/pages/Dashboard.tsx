@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect } from "react";
 import { useDashboardSummary, useDeals, useWorkdayDashboard } from "@/hooks/use-api";
 import { formatCurrency, formatPercent, getStatusColor, getStatusLabel } from "@/lib/utils";
 import { Link } from "wouter";
-import { TrendingUp, DollarSign, AlertCircle, ArrowRight, FileText, ShieldCheck, Layers, Network, BarChart3, Shield, CheckCircle, Search, Sparkles, Lightbulb, RefreshCw, Briefcase, Settings2 } from "lucide-react";
+import { TrendingUp, DollarSign, AlertCircle, ArrowRight, FileText, ShieldCheck, Layers, Network, BarChart3, Shield, CheckCircle, Search, Sparkles, Lightbulb, RefreshCw, Briefcase, Settings2, ChevronDown } from "lucide-react";
 import { useAuth, type PersonaRole } from "@/context/AuthContext";
 import { useQuery } from "@tanstack/react-query";
 import { AskDealPadAI } from "@/components/AskDealPadAI";
@@ -71,6 +71,7 @@ export function Dashboard() {
   const greeting = ROLE_GREETING[role];
 
   const [searchTerm, setSearchTerm] = useState("");
+  const [expandedDealId, setExpandedDealId] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState("all");
 
   const filteredDeals = useMemo(() => {
@@ -349,32 +350,106 @@ export function Dashboard() {
               </div>
             </div>
             <div className="divide-y divide-border max-h-[640px] overflow-y-auto">
-              {filteredDeals.map((deal: any) => (
-                <Link key={deal.id} href={`/deals/${deal.id}`}>
-                  <div className="px-3 sm:px-5 py-3 sm:py-4 hover:bg-muted/50 transition-colors cursor-pointer">
-                    <div className="flex items-start justify-between gap-2 sm:gap-4">
-                      <div className="flex-1 min-w-0">
-                        <p className="font-semibold text-foreground text-[13px] sm:text-sm truncate">{deal.client?.name || deal.title}</p>
-                        <p className="text-[11px] sm:text-xs text-muted-foreground mt-0.5 truncate">
-                          {deal.serviceLine || "—"} • {deal.dealType || "New"} • {deal.title}
-                        </p>
-                        <div className="flex items-center gap-1.5 mt-1.5 sm:mt-2 flex-wrap">
-                          <span className={`badge ${getStatusColor(deal.status)}`}>{getStatusLabel(deal.status)}</span>
-                          {deal.marginPercent && parseFloat(deal.marginPercent) > 0 && (
-                            <span className={`badge ${parseFloat(deal.marginPercent) < 25 ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700"}`}>
-                              {formatPercent(deal.marginPercent)} margin
-                            </span>
-                          )}
+              {filteredDeals.map((deal: any) => {
+                const isExpanded = expandedDealId === deal.id;
+                const marginNum = parseFloat(deal.marginPercent || "0");
+                return (
+                  <div key={deal.id}>
+                    {/* Desktop: full row, click to navigate */}
+                    <Link href={`/deals/${deal.id}`}>
+                      <div className="hidden sm:block px-5 py-4 hover:bg-muted/50 transition-colors cursor-pointer">
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="flex-1 min-w-0">
+                            <p className="font-semibold text-foreground text-sm truncate">{deal.client?.name || deal.title}</p>
+                            <p className="text-xs text-muted-foreground mt-0.5 truncate">
+                              {deal.serviceLine || "—"} • {deal.dealType || "New"} • {deal.title}
+                            </p>
+                            <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+                              <span className={`badge ${getStatusColor(deal.status)}`}>{getStatusLabel(deal.status)}</span>
+                              {marginNum > 0 && (
+                                <span className={`badge ${marginNum < 25 ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700"}`}>
+                                  {formatPercent(deal.marginPercent)} margin
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <div className="text-right shrink-0">
+                            <p className="font-semibold text-foreground text-sm whitespace-nowrap">{formatCurrency(deal.totalFee || 0)}</p>
+                            <p className="text-xs text-muted-foreground mt-0.5">{deal.dealNumber}</p>
+                          </div>
                         </div>
                       </div>
-                      <div className="text-right shrink-0">
-                        <p className="font-semibold text-foreground text-[13px] sm:text-sm whitespace-nowrap">{formatCurrency(deal.totalFee || 0)}</p>
-                        <p className="text-[11px] sm:text-xs text-muted-foreground mt-0.5">{deal.dealNumber}</p>
-                      </div>
+                    </Link>
+
+                    {/* Mobile: expandable card — priority info visible, rest collapses */}
+                    <div className="sm:hidden">
+                      <button
+                        type="button"
+                        onClick={() => setExpandedDealId(isExpanded ? null : deal.id)}
+                        aria-expanded={isExpanded}
+                        aria-controls={`deal-expand-${deal.id}`}
+                        className="w-full text-left px-3 py-3 hover:bg-muted/50 active:bg-muted/70 transition-colors"
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex-1 min-w-0">
+                            <p className="font-semibold text-foreground text-[13px] truncate">{deal.client?.name || deal.title}</p>
+                            <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                              <span className={`badge ${getStatusColor(deal.status)}`}>{getStatusLabel(deal.status)}</span>
+                              {marginNum > 0 && (
+                                <span className={`badge ${marginNum < 25 ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700"}`}>
+                                  {formatPercent(deal.marginPercent)}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex items-start gap-1.5 shrink-0">
+                            <div className="text-right">
+                              <p className="font-semibold text-foreground text-[13px] whitespace-nowrap">{formatCurrency(deal.totalFee || 0)}</p>
+                              <p className="text-[11px] text-muted-foreground mt-0.5">{deal.dealNumber}</p>
+                            </div>
+                            <ChevronDown className={`w-4 h-4 text-muted-foreground mt-0.5 transition-transform ${isExpanded ? "rotate-180" : ""}`} />
+                          </div>
+                        </div>
+                      </button>
+                      {isExpanded && (
+                        <div id={`deal-expand-${deal.id}`} className="px-3 pb-3 pt-1 bg-muted/20 border-t border-border/60">
+                          <dl className="grid grid-cols-2 gap-x-3 gap-y-2 text-[11px]">
+                            <div>
+                              <dt className="text-muted-foreground uppercase tracking-wider">Service Line</dt>
+                              <dd className="text-foreground font-medium mt-0.5 truncate">{deal.serviceLine || "—"}</dd>
+                            </div>
+                            <div>
+                              <dt className="text-muted-foreground uppercase tracking-wider">Deal Type</dt>
+                              <dd className="text-foreground font-medium mt-0.5 truncate">{deal.dealType || "New"}</dd>
+                            </div>
+                            <div className="col-span-2">
+                              <dt className="text-muted-foreground uppercase tracking-wider">Title</dt>
+                              <dd className="text-foreground font-medium mt-0.5">{deal.title}</dd>
+                            </div>
+                            {deal.totalHours && parseFloat(deal.totalHours) > 0 && (
+                              <div>
+                                <dt className="text-muted-foreground uppercase tracking-wider">Hours</dt>
+                                <dd className="text-foreground font-medium mt-0.5">{parseFloat(deal.totalHours).toLocaleString()}</dd>
+                              </div>
+                            )}
+                            {deal.pdlName && (
+                              <div>
+                                <dt className="text-muted-foreground uppercase tracking-wider">PDL</dt>
+                                <dd className="text-foreground font-medium mt-0.5 truncate">{deal.pdlName}</dd>
+                              </div>
+                            )}
+                          </dl>
+                          <Link href={`/deals/${deal.id}`}>
+                            <button className="w-full mt-3 flex items-center justify-center gap-1.5 py-2 rounded-lg bg-primary text-primary-foreground text-xs font-semibold hover:opacity-90 transition-all">
+                              Open deal <ArrowRight className="w-3 h-3" />
+                            </button>
+                          </Link>
+                        </div>
+                      )}
                     </div>
                   </div>
-                </Link>
-              ))}
+                );
+              })}
               {filteredDeals.length === 0 && (
                 <div className="px-6 py-12 text-center text-muted-foreground text-sm">
                   {searchTerm || statusFilter !== "all" ? "No deals match your filters." : "No deals yet."}
