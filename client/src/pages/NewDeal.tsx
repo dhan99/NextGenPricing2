@@ -88,9 +88,9 @@ export function NewDeal() {
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
-        <div className="card p-6">
+        <div className="card p-6 @container">
           <h2 className="text-lg font-semibold text-foreground mb-4">Deal Information</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 @md:grid-cols-2 gap-4">
             <div>
               <label className="label">Client</label>
               <select required value={form.clientId} onChange={e => setForm({...form, clientId: e.target.value, sourceDealId: ""})} className="input-field mt-1">
@@ -244,7 +244,7 @@ export function NewDeal() {
             {!form.dealType && (
               <p className="text-xs text-muted-foreground mt-4 mb-2 italic">Select a Deal Type to enable the remaining fields.</p>
             )}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+            <div className="grid grid-cols-1 @md:grid-cols-2 gap-4 mt-4">
               <div className="col-span-2">
                 <label className="label">Deal Title</label>
                 <input type="text" required value={form.title} onChange={e => setForm({...form, title: e.target.value})} className="input-field mt-1" placeholder="e.g., ERP Modernization - Phase 1" />
@@ -293,9 +293,9 @@ export function NewDeal() {
         </div>
 
         <fieldset disabled={!form.dealType} className={!form.dealType ? "opacity-50 pointer-events-none select-none" : ""}>
-          <div className="card p-6">
+          <div className="card p-6 @container">
             <h2 className="text-lg font-semibold text-foreground mb-4">PDL Assignment</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 @md:grid-cols-2 gap-4">
               <div>
                 <label className="label">PDL Name</label>
                 <input type="text" value={form.pdlName} onChange={e => setForm({...form, pdlName: e.target.value})} className="input-field mt-1" placeholder="Full name" />
