@@ -21,25 +21,27 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
   }, [location]);
 
   const showDeals = hasPermission("viewDeals");
+  const canManageRates = hasPermission("manageRateCards");
+  const canManageCatalog = hasPermission("manageScopeCatalog");
 
   const navigation = [
-    { name: "Dashboard", href: "/", icon: LayoutDashboard, show: true },
-    { name: "Engagements", href: "/deals", icon: FileText, show: true },
-    { name: "Analytics", href: "/analytics", icon: BarChart3, show: hasPermission("viewDeals") },
-    { name: "Dynamics CRM", href: "/integrations/dynamics", icon: Database, show: true, dividerBefore: true },
-    { name: "Intapp Risk", href: "/integrations/intapp", icon: ShieldAlert, show: true },
-    { name: "Workday", href: "/integrations/workday", icon: Briefcase, show: true },
-    { name: "Architecture", href: "/architecture", icon: Layers, show: true, dividerBefore: true },
+    { name: "Dashboard", href: "/", icon: LayoutDashboard, show: hasPermission("viewDashboard") },
+    { name: "Engagements", href: "/deals", icon: FileText, show: showDeals },
+    { name: "Analytics", href: "/analytics", icon: BarChart3, show: showDeals },
+    { name: "Dynamics CRM", href: "/integrations/dynamics", icon: Database, show: showDeals, dividerBefore: true },
+    { name: "Intapp Risk", href: "/integrations/intapp", icon: ShieldAlert, show: hasPermission("viewRiskSummary") },
+    { name: "Workday", href: "/integrations/workday", icon: Briefcase, show: showDeals },
+    { name: "Architecture", href: "/architecture", icon: Layers, show: hasPermission("viewArchitecture"), dividerBefore: true },
   ];
 
-  const showAdmin = true;
   const adminNavigation = [
-    { name: "Rate Cards", href: "/admin/rate-cards", icon: DollarSign, show: true },
-    { name: "Scope Catalog", href: "/admin/scope-catalog", icon: BookOpen, show: true },
-    { name: "Prompt Sets", href: "/admin/prompt-sets", icon: MessageSquare, show: true },
-    { name: "Engagement Letters", href: "/admin/engagement-letters", icon: FileText, show: true },
-    { name: "Margin Targets", href: "/admin/margin-targets", icon: Target, show: true },
+    { name: "Rate Cards", href: "/admin/rate-cards", icon: DollarSign, show: canManageRates },
+    { name: "Scope Catalog", href: "/admin/scope-catalog", icon: BookOpen, show: canManageCatalog },
+    { name: "Prompt Sets", href: "/admin/prompt-sets", icon: MessageSquare, show: canManageCatalog },
+    { name: "Engagement Letters", href: "/admin/engagement-letters", icon: FileText, show: canManageCatalog },
+    { name: "Margin Targets", href: "/admin/margin-targets", icon: Target, show: canManageRates },
   ];
+  const showAdmin = adminNavigation.some(n => n.show);
 
   const sidebarBody = (
     <>

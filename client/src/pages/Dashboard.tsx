@@ -160,7 +160,7 @@ export function Dashboard() {
   const visibleTabs = useMemo(() => {
     const all: { key: TabKey; label: string; icon: any; visible: boolean }[] = [
       { key: "pipeline", label: "Pipeline", icon: Briefcase, visible: hasPermission("viewDeals") },
-      { key: "ai", label: "AI Assistant", icon: Sparkles, visible: true },
+      { key: "ai", label: "AI Assistant", icon: Sparkles, visible: hasPermission("runAI") },
       { key: "ops", label: "Operations", icon: Settings2, visible: hasOpsTab },
     ];
     return all.filter((t) => t.visible);
@@ -417,11 +417,13 @@ export function Dashboard() {
             </div>
           </div>
 
-          <AskDealPadAI
-            inline
-            intro={askIntro}
-            context={{ screen: "dashboard", screenLabel: greeting.title }}
-          />
+          {hasPermission("runAI") && (
+            <AskDealPadAI
+              inline
+              intro={askIntro}
+              context={{ screen: "dashboard", screenLabel: greeting.title }}
+            />
+          )}
         </div>
       )}
 

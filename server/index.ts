@@ -3,6 +3,7 @@ import cors from "cors";
 import path from "path";
 import { registerRoutes } from "./routes";
 import { seedAll } from "./seed";
+import { attachRole } from "./rbac";
 import { db } from "./db";
 import { sql } from "drizzle-orm";
 import * as schema from "../shared/schema";
@@ -12,6 +13,7 @@ const PORT = parseInt(process.env.PORT || "3001");
 
 app.use(cors());
 app.use(express.json());
+app.use(attachRole);
 
 async function initializeDatabase() {
   try {

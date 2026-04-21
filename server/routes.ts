@@ -3,6 +3,7 @@ import { db } from "./db";
 import { clients, deals, scopeCatalog, dealScopeItems, scopeTemplates, scopeTemplateItems, roles, rateCards, rateCardEntries, pricingLines, scenarios, approvals, promptResponses, activityLog, changeOrders, dynamicsOpportunities, promptSets, promptSetItems, marginTargets } from "../shared/schema";
 import { evaluatePracticeLeadTrigger, resolveMarginTarget, type MarginTargetRow, type DealLike } from "../shared/policy";
 import { eq, desc, sql, and, count, isNull, isNotNull, asc, inArray } from "drizzle-orm";
+import { requirePerm, requireAnyPerm } from "./rbac";
 
 // Load all margin-target rows once and resolve the effective target for a
 // given deal. Used everywhere the server needs a target margin (Practice
@@ -553,7 +554,7 @@ export function registerRoutes(app: Express) {
   // secret in ADMIN_RESEED_TOKEN. Useful when a deploy lands against an
   // already-existing empty database and you don't want to redeploy just to
   // re-trigger seeding. All steps remain idempotent.
-  app.post("/api/admin/reseed", async (req: Request, res: Response) => {
+  app.post("/api/admin/reseed", requirePerm("manageRateCards"), async (req: Request, res: Response) => {
     const expected = process.env.ADMIN_RESEED_TOKEN;
     if (!expected) {
       return res.status(503).json({
@@ -588,7 +589,7 @@ export function registerRoutes(app: Express) {
     const n = parseFloat(v);
     return Number.isFinite(n) ? n : null;
   }
-  app.get("/api/margin-targets", async (_req: Request, res: Response) => {
+  app.get("/api/margin-targets", requirePerm("viewMargins"), async (_req: Request, res: Response) => {
     const rows = await db.select().from(marginTargets);
     const firm = rows.find((r) => r.scope === "firm");
     const overrides = rows
@@ -612,7 +613,7 @@ export function registerRoutes(app: Express) {
 
   // Returns the resolved target for a given deal — used by the client so
   // every surface lines up with what the server enforces.
-  app.get("/api/deals/:id/margin-target", async (req: Request, res: Response) => {
+  app.get("/api/deals/:id/margin-target", requirePerm("viewMargins"), async (req: Request, res: Response) => {
     const dealId = parseInt(req.params.id);
     const [d] = await db.select().from(deals).where(eq(deals.id, dealId));
     if (!d) return res.status(404).json({ error: "Deal not found" });
@@ -654,7 +655,7 @@ export function registerRoutes(app: Express) {
   }
 
   // Set/update the firm-wide default. Idempotent upsert on the singleton row.
-  app.put("/api/margin-targets/firm", async (req: Request, res: Response) => {
+  app.put("/api/margin-targets/firm", requirePerm("manageRateCards"), async (req: Request, res: Response) => {
     const v = validatePercent(req.body?.percent);
     if (v.error) return res.status(400).json({ error: v.error });
     const existing = await db.select().from(marginTargets).where(and(eq(marginTargets.scope, "firm"), isNull(marginTargets.scopeKey)));
@@ -687,7 +688,7 @@ export function registerRoutes(app: Express) {
   // Create a per-BU or per-serviceLine override. The optional policy fields
   // (techAdminFeePct, lineItemRounding, fixedFeeRounding) are only meaningful
   // for service-line scope but accepted on either for forward compatibility.
-  app.post("/api/margin-targets/overrides", async (req: Request, res: Response) => {
+  app.post("/api/margin-targets/overrides", requirePerm("manageRateCards"), async (req: Request, res: Response) => {
     const { scope, scopeKey } = req.body || {};
     if (scope !== "bu" && scope !== "serviceLine") return res.status(400).json({ error: "scope must be 'bu' or 'serviceLine'" });
     const key = typeof scopeKey === "string" ? scopeKey.trim() : "";
@@ -709,7 +710,7 @@ export function registerRoutes(app: Express) {
     }
   });
 
-  app.patch("/api/margin-targets/overrides/:id", async (req: Request, res: Response) => {
+  app.patch("/api/margin-targets/overrides/:id", requirePerm("manageRateCards"), async (req: Request, res: Response) => {
     const id = parseInt(req.params.id);
     const patch: Record<string, any> = { updatedAt: new Date() };
     if ("percent" in (req.body || {})) {
@@ -731,7 +732,7 @@ export function registerRoutes(app: Express) {
     res.json(shapeOverride(updated));
   });
 
-  app.delete("/api/margin-targets/overrides/:id", async (req: Request, res: Response) => {
+  app.delete("/api/margin-targets/overrides/:id", requirePerm("manageRateCards"), async (req: Request, res: Response) => {
     const id = parseInt(req.params.id);
     const result = await db.delete(marginTargets)
       .where(and(eq(marginTargets.id, id), isNotNull(marginTargets.scopeKey)))
@@ -741,7 +742,7 @@ export function registerRoutes(app: Express) {
   });
 
   // ========== DASHBOARD ==========
-  app.get("/api/dashboard/summary", async (_req: Request, res: Response) => {
+  app.get("/api/dashboard/summary", requirePerm("viewDashboard"), async (_req: Request, res: Response) => {
     const [dealStats] = await db.select({
       total: count(),
       totalFee: sql<string>`COALESCE(SUM(CAST(total_fee AS NUMERIC)), 0)`,
@@ -770,18 +771,18 @@ export function registerRoutes(app: Express) {
   });
 
   // ========== CLIENTS ==========
-  app.get("/api/clients", async (_req: Request, res: Response) => {
+  app.get("/api/clients", requirePerm("viewDeals"), async (_req: Request, res: Response) => {
     const result = await db.select().from(clients).orderBy(clients.name);
     res.json(result);
   });
 
-  app.get("/api/clients/:id", async (req: Request, res: Response) => {
+  app.get("/api/clients/:id", requirePerm("viewDeals"), async (req: Request, res: Response) => {
     const [result] = await db.select().from(clients).where(eq(clients.id, parseInt(req.params.id)));
     if (!result) return res.status(404).json({ error: "Client not found" });
     res.json(result);
   });
 
-  app.patch("/api/clients/:id", async (req: Request, res: Response) => {
+  app.patch("/api/clients/:id", requirePerm("editDeals"), async (req: Request, res: Response) => {
     const id = parseInt(req.params.id);
     const [prior] = await db.select().from(clients).where(eq(clients.id, id));
     if (!prior) return res.status(404).json({ error: "Client not found" });
@@ -797,7 +798,7 @@ export function registerRoutes(app: Express) {
   });
 
   // ========== DEALS ==========
-  app.get("/api/deals", async (req: Request, res: Response) => {
+  app.get("/api/deals", requirePerm("viewDeals"), async (req: Request, res: Response) => {
     const includeArchived = req.query.includeArchived === "true";
     const onlyArchived = req.query.onlyArchived === "true";
     const result = await db.query.deals.findMany({
@@ -817,7 +818,7 @@ export function registerRoutes(app: Express) {
     res.json(result.map((d) => ({ ...d, dynamicsLink: linkMap.get(d.id) || null })));
   });
 
-  app.get("/api/deals/:id", async (req: Request, res: Response) => {
+  app.get("/api/deals/:id", requirePerm("viewDeals"), async (req: Request, res: Response) => {
     const result = await db.query.deals.findFirst({
       where: eq(deals.id, parseInt(req.params.id)),
       with: {
@@ -843,7 +844,7 @@ export function registerRoutes(app: Express) {
 
   // Lightweight: re-sum pricing lines and write totals back to the deal header.
   // Used by the Review checklist "Recalculate" action to clear calc-parity mismatches.
-  app.post("/api/deals/:id/recalc-totals", async (req: Request, res: Response) => {
+  app.post("/api/deals/:id/recalc-totals", requirePerm("editDeals"), async (req: Request, res: Response) => {
     const dealId = parseInt(req.params.id);
     if (isNaN(dealId)) return res.status(400).json({ error: "Invalid deal id" });
     // Single source of truth: persistDealTotals applies T&M / Tech & Admin /
@@ -859,7 +860,7 @@ export function registerRoutes(app: Express) {
     res.json({ success: true, ...(totals || {}) });
   });
 
-  app.post("/api/deals", async (req: Request, res: Response) => {
+  app.post("/api/deals", requirePerm("createDeals"), async (req: Request, res: Response) => {
     const dealCount = await db.select({ count: count() }).from(deals);
     const dealNumber = `DL-2026-${String(dealCount[0].count + 1).padStart(3, "0")}`;
     const { dynamicsOpportunityId, ...dealBody } = req.body || {};
@@ -885,7 +886,7 @@ export function registerRoutes(app: Express) {
     res.status(201).json(newDeal);
   });
 
-  app.patch("/api/deals/:id", async (req: Request, res: Response) => {
+  app.patch("/api/deals/:id", requirePerm("editDeals"), async (req: Request, res: Response) => {
     const dealId = parseInt(req.params.id);
     const [prior] = await db.select().from(deals).where(eq(deals.id, dealId));
     if (!prior) return res.status(404).json({ error: "Deal not found" });
@@ -988,7 +989,7 @@ export function registerRoutes(app: Express) {
     return { values: out };
   }
 
-  app.post("/api/deals/:id/archive", async (req: Request, res: Response) => {
+  app.post("/api/deals/:id/archive", requirePerm("editDeals"), async (req: Request, res: Response) => {
     const dealId = parseInt(req.params.id);
     const userName = req.body?.userName || "System";
     const [updated] = await db.update(deals)
@@ -1013,7 +1014,7 @@ export function registerRoutes(app: Express) {
     res.json({ ...updated, unlinkedOpportunityNumber: unlinkedOpp });
   });
 
-  app.post("/api/deals/:id/restore", async (req: Request, res: Response) => {
+  app.post("/api/deals/:id/restore", requirePerm("editDeals"), async (req: Request, res: Response) => {
     const dealId = parseInt(req.params.id);
     const userName = req.body?.userName || "System";
     const [updated] = await db.update(deals)
@@ -1033,7 +1034,7 @@ export function registerRoutes(app: Express) {
   // SYNCHRONOUSLY before transitioning a deal to "submitted". Use this
   // route from the UI instead of PATCHing status directly.
   // ------------------------------------------------------------------
-  app.post("/api/deals/:id/submit", async (req: Request, res: Response) => {
+  app.post("/api/deals/:id/submit", requirePerm("editDeals"), async (req: Request, res: Response) => {
     const dealId = parseInt(req.params.id);
     const actor = (req.header("x-user-name") || req.body?.userName || "Unknown").trim();
     const gate = await assertSubmissionAllowed(dealId, actor);
@@ -1053,7 +1054,7 @@ export function registerRoutes(app: Express) {
     res.json({ deal: updated, screening: gate.screening });
   });
 
-  app.post("/api/deals/:id/clone", async (req: Request, res: Response) => {
+  app.post("/api/deals/:id/clone", requirePerm("createDeals"), async (req: Request, res: Response) => {
     const source = await db.query.deals.findFirst({
       where: eq(deals.id, parseInt(req.params.id)),
       with: { client: true, scopeItems: true, pricingLines: true, promptResponses: true },
@@ -1160,7 +1161,7 @@ export function registerRoutes(app: Express) {
     res.status(201).json(result);
   });
 
-  app.post("/api/deals/:id/reset-pricing", async (req: Request, res: Response) => {
+  app.post("/api/deals/:id/reset-pricing", requirePerm("editPricing"), async (req: Request, res: Response) => {
     const dealId = parseInt(req.params.id);
     const deal = await db.query.deals.findFirst({ where: eq(deals.id, dealId) });
     if (!deal) return res.status(404).json({ error: "Deal not found" });
@@ -1216,7 +1217,7 @@ export function registerRoutes(app: Express) {
     res.json({ success: true, totalFee: calcFee, totalCost: calcCost, totalHours: calcHours });
   });
 
-  app.post("/api/deals/:id/rate-adjust", async (req: Request, res: Response) => {
+  app.post("/api/deals/:id/rate-adjust", requirePerm("editPricing"), async (req: Request, res: Response) => {
     const dealId = parseInt(req.params.id);
     const factor = parseFloat(req.body.factor);
     if (!factor || factor <= 0) return res.status(400).json({ error: "Invalid factor" });
@@ -1323,7 +1324,7 @@ export function registerRoutes(app: Express) {
     },
   };
 
-  app.get("/api/engagement-input-spec/:serviceLine", async (req: Request, res: Response) => {
+  app.get("/api/engagement-input-spec/:serviceLine", requirePerm("viewDeals"), async (req: Request, res: Response) => {
     const sl = req.params.serviceLine;
     const preset = ENGAGEMENT_INPUT_PRESETS[sl] || ENGAGEMENT_INPUT_PRESETS["_generic"];
 
@@ -1351,7 +1352,7 @@ export function registerRoutes(app: Express) {
     res.json({ serviceLine: sl, ...preset, defaults, overrideSources });
   });
 
-  app.get("/api/scope-catalog", async (req: Request, res: Response) => {
+  app.get("/api/scope-catalog", requireAnyPerm("viewDeals", "manageScopeCatalog"), async (req: Request, res: Response) => {
     const includeInactive = req.query.includeInactive === "1" || req.query.includeInactive === "true";
     const rows = await db.select().from(scopeCatalog).orderBy(scopeCatalog.sortOrder);
     res.json(includeInactive ? rows : rows.filter(r => r.isActive !== false));
@@ -1382,7 +1383,7 @@ export function registerRoutes(app: Express) {
     return { value: n };
   }
 
-  app.post("/api/scope-catalog", async (req: Request, res: Response) => {
+  app.post("/api/scope-catalog", requirePerm("manageScopeCatalog"), async (req: Request, res: Response) => {
     try {
       const body = req.body || {};
       const code = String(body.code ?? "").trim();
@@ -1426,7 +1427,7 @@ export function registerRoutes(app: Express) {
     }
   });
 
-  app.patch("/api/scope-catalog/:id", async (req: Request, res: Response) => {
+  app.patch("/api/scope-catalog/:id", requirePerm("manageScopeCatalog"), async (req: Request, res: Response) => {
     try {
       const id = parseInt(req.params.id);
       if (Number.isNaN(id)) return res.status(400).json({ error: "Invalid id" });
@@ -1504,7 +1505,7 @@ export function registerRoutes(app: Express) {
     }
   });
 
-  app.delete("/api/scope-catalog/:id", async (req: Request, res: Response) => {
+  app.delete("/api/scope-catalog/:id", requirePerm("manageScopeCatalog"), async (req: Request, res: Response) => {
     const id = parseInt(req.params.id);
     const userName = (req.body?.userName as string) || null;
     // Always soft-delete (deactivate) — preserve historical references on existing deals
@@ -1520,7 +1521,7 @@ export function registerRoutes(app: Express) {
   });
 
   // ========== DEAL SCOPE ITEMS ==========
-  app.get("/api/deals/:dealId/scope-items", async (req: Request, res: Response) => {
+  app.get("/api/deals/:dealId/scope-items", requirePerm("viewDeals"), async (req: Request, res: Response) => {
     const result = await db.query.dealScopeItems.findMany({
       where: eq(dealScopeItems.dealId, parseInt(req.params.dealId)),
       with: { scopeItem: true },
@@ -1528,7 +1529,7 @@ export function registerRoutes(app: Express) {
     res.json(result);
   });
 
-  app.post("/api/deals/:dealId/scope-items", async (req: Request, res: Response) => {
+  app.post("/api/deals/:dealId/scope-items", requirePerm("editDeals"), async (req: Request, res: Response) => {
     const dealId = parseInt(req.params.dealId);
     const cascade = req.body?.cascade !== false; // default true
     const [check] = await db.select({ isActive: scopeCatalog.isActive, code: scopeCatalog.code })
@@ -1573,7 +1574,7 @@ export function registerRoutes(app: Express) {
   });
 
   // ========== SCOPE TEMPLATES ==========
-  app.get("/api/scope-templates", async (req: Request, res: Response) => {
+  app.get("/api/scope-templates", requirePerm("viewDeals"), async (req: Request, res: Response) => {
     const serviceLine = (req.query.serviceLine as string) || null;
     const tpls = await db.select().from(scopeTemplates)
       .where(eq(scopeTemplates.isActive, true))
@@ -1601,7 +1602,7 @@ export function registerRoutes(app: Express) {
     res.json(result);
   });
 
-  app.post("/api/deals/:dealId/apply-template/:templateId", async (req: Request, res: Response) => {
+  app.post("/api/deals/:dealId/apply-template/:templateId", requirePerm("editDeals"), async (req: Request, res: Response) => {
     const dealId = parseInt(req.params.dealId);
     const templateId = parseInt(req.params.templateId);
     const items = await db.select().from(scopeTemplateItems).where(eq(scopeTemplateItems.templateId, templateId));
@@ -1657,7 +1658,7 @@ export function registerRoutes(app: Express) {
     res.status(201).json({ insertedCount: inserted.length, items: inserted, skippedInactive });
   });
 
-  app.delete("/api/deals/:dealId/scope-items/:id", async (req: Request, res: Response) => {
+  app.delete("/api/deals/:dealId/scope-items/:id", requirePerm("editDeals"), async (req: Request, res: Response) => {
     const dealId = parseInt(req.params.dealId);
     await db.delete(dealScopeItems).where(
       and(eq(dealScopeItems.id, parseInt(req.params.id)), eq(dealScopeItems.dealId, dealId))
@@ -1667,19 +1668,19 @@ export function registerRoutes(app: Express) {
   });
 
   // ========== ROLES & RATE CARDS ==========
-  app.get("/api/roles", async (_req: Request, res: Response) => {
+  app.get("/api/roles", requirePerm("viewPricing"), async (_req: Request, res: Response) => {
     const result = await db.select().from(roles).orderBy(roles.sortOrder);
     res.json(result);
   });
 
-  app.get("/api/rate-cards", async (_req: Request, res: Response) => {
+  app.get("/api/rate-cards", requirePerm("viewPricing"), async (_req: Request, res: Response) => {
     const result = await db.query.rateCards.findMany({
       orderBy: [desc(rateCards.isActive)],
     });
     res.json(result);
   });
 
-  app.get("/api/rate-cards/:id/entries", async (req: Request, res: Response) => {
+  app.get("/api/rate-cards/:id/entries", requirePerm("viewPricing"), async (req: Request, res: Response) => {
     const result = await db.select({
       id: rateCardEntries.id,
       rateCardId: rateCardEntries.rateCardId,
@@ -1696,7 +1697,7 @@ export function registerRoutes(app: Express) {
   });
 
   // ========== PRICING LINES ==========
-  app.get("/api/deals/:dealId/pricing", async (req: Request, res: Response) => {
+  app.get("/api/deals/:dealId/pricing", requirePerm("viewPricing"), async (req: Request, res: Response) => {
     const dealId = parseInt(req.params.dealId);
     let result = await db.query.pricingLines.findMany({
       where: eq(pricingLines.dealId, dealId),
@@ -1777,7 +1778,7 @@ export function registerRoutes(app: Express) {
     res.json(result);
   });
 
-  app.post("/api/deals/:dealId/pricing", async (req: Request, res: Response) => {
+  app.post("/api/deals/:dealId/pricing", requirePerm("editPricing"), async (req: Request, res: Response) => {
     const dealId = parseInt(req.params.dealId);
     const hours = parseFloat(req.body.hours || "0");
     const rate = parseFloat(req.body.rate || "0");
@@ -1797,14 +1798,14 @@ export function registerRoutes(app: Express) {
     res.status(201).json(line);
   });
 
-  app.delete("/api/deals/:dealId/pricing", async (req: Request, res: Response) => {
+  app.delete("/api/deals/:dealId/pricing", requirePerm("editPricing"), async (req: Request, res: Response) => {
     const dealId = parseInt(req.params.dealId);
     await db.delete(pricingLines).where(eq(pricingLines.dealId, dealId));
     await persistDealTotals(dealId);
     res.json({ success: true });
   });
 
-  app.patch("/api/deals/:dealId/pricing/:id", async (req: Request, res: Response) => {
+  app.patch("/api/deals/:dealId/pricing/:id", requirePerm("editPricing"), async (req: Request, res: Response) => {
     const dealId = parseInt(req.params.dealId);
     const lineId = parseInt(req.params.id);
 
@@ -1939,7 +1940,7 @@ export function registerRoutes(app: Express) {
   });
 
   // ========== SCENARIOS ==========
-  app.get("/api/deals/:dealId/scenarios", async (req: Request, res: Response) => {
+  app.get("/api/deals/:dealId/scenarios", requirePerm("viewMargins"), async (req: Request, res: Response) => {
     const dealId = parseInt(req.params.dealId);
     let result = await db.select().from(scenarios)
       .where(eq(scenarios.dealId, dealId))
@@ -2001,7 +2002,7 @@ export function registerRoutes(app: Express) {
     res.json(result);
   });
 
-  app.post("/api/deals/:dealId/scenarios/:id/select", async (req: Request, res: Response) => {
+  app.post("/api/deals/:dealId/scenarios/:id/select", requirePerm("editPricing"), async (req: Request, res: Response) => {
     const dealId = parseInt(req.params.dealId);
     const scenarioId = parseInt(req.params.id);
 
@@ -2088,14 +2089,14 @@ export function registerRoutes(app: Express) {
   });
 
   // ========== APPROVALS ==========
-  app.get("/api/deals/:dealId/approvals", async (req: Request, res: Response) => {
+  app.get("/api/deals/:dealId/approvals", requirePerm("viewDeals"), async (req: Request, res: Response) => {
     const result = await db.select().from(approvals)
       .where(eq(approvals.dealId, parseInt(req.params.dealId)))
       .orderBy(desc(approvals.submittedAt));
     res.json(result);
   });
 
-  app.post("/api/deals/:dealId/approvals", async (req: Request, res: Response) => {
+  app.post("/api/deals/:dealId/approvals", requirePerm("editDeals"), async (req: Request, res: Response) => {
     const dealId = parseInt(req.params.dealId);
     const actor = (req.header("x-user-name") || req.body?.submittedBy || req.body?.userName || "Unknown").trim();
     // SERVER-SIDE GATING: refuse to create the approval (and refuse to flip
@@ -2166,7 +2167,7 @@ export function registerRoutes(app: Express) {
     res.status(201).json(approval);
   });
 
-  app.patch("/api/approvals/:id", async (req: Request, res: Response) => {
+  app.patch("/api/approvals/:id", requirePerm("approveDeals"), async (req: Request, res: Response) => {
     const id = parseInt(req.params.id);
     const existing = await db.query.approvals.findFirst({ where: eq(approvals.id, id) });
     if (!existing) return res.status(404).json({ error: "approval_not_found" });
@@ -2243,7 +2244,7 @@ export function registerRoutes(app: Express) {
   });
 
   // ========== PROMPT RESPONSES ==========
-  app.get("/api/deals/:dealId/prompts", async (req: Request, res: Response) => {
+  app.get("/api/deals/:dealId/prompts", requirePerm("viewDeals"), async (req: Request, res: Response) => {
     const dealId = parseInt(req.params.dealId);
     let result = await db.select().from(promptResponses)
       .where(eq(promptResponses.dealId, dealId))
@@ -2260,7 +2261,7 @@ export function registerRoutes(app: Express) {
     res.json(result);
   });
 
-  app.post("/api/deals/:dealId/prompts", async (req: Request, res: Response) => {
+  app.post("/api/deals/:dealId/prompts", requirePerm("editDeals"), async (req: Request, res: Response) => {
     const [prompt] = await db.insert(promptResponses).values({
       dealId: parseInt(req.params.dealId),
       ...req.body,
@@ -2268,7 +2269,7 @@ export function registerRoutes(app: Express) {
     res.status(201).json(prompt);
   });
 
-  app.patch("/api/deals/:dealId/prompts/:id", async (req: Request, res: Response) => {
+  app.patch("/api/deals/:dealId/prompts/:id", requirePerm("editDeals"), async (req: Request, res: Response) => {
     const dealId = parseInt(req.params.dealId);
     const [updated] = await db.update(promptResponses)
       .set({ answer: req.body.answer, impactMultiplier: req.body.impactMultiplier })
@@ -2281,7 +2282,7 @@ export function registerRoutes(app: Express) {
 
   // ========== PROMPT SETS (Pricing Operations governance — US-12) ==========
   // List sets, optionally filtered by status / BU / serviceLine.
-  app.get("/api/prompt-sets", async (req: Request, res: Response) => {
+  app.get("/api/prompt-sets", requireAnyPerm("viewDeals", "manageScopeCatalog"), async (req: Request, res: Response) => {
     const conds: any[] = [];
     if (req.query.status) conds.push(eq(promptSets.status, String(req.query.status)));
     if (req.query.businessUnit) conds.push(eq(promptSets.businessUnit, String(req.query.businessUnit)));
@@ -2294,7 +2295,7 @@ export function registerRoutes(app: Express) {
   });
 
   // Resolve the active published set for (BU, serviceLine) using same precedence as new-deal flow.
-  app.get("/api/prompt-sets/active", async (req: Request, res: Response) => {
+  app.get("/api/prompt-sets/active", requireAnyPerm("viewDeals", "manageScopeCatalog"), async (req: Request, res: Response) => {
     const bu = (req.query.businessUnit as string) || null;
     const sl = (req.query.serviceLine as string) || null;
     const set = await findActivePromptSet(bu, sl);
@@ -2305,7 +2306,7 @@ export function registerRoutes(app: Express) {
     res.json({ ...set, items });
   });
 
-  app.get("/api/prompt-sets/:id", async (req: Request, res: Response) => {
+  app.get("/api/prompt-sets/:id", requireAnyPerm("viewDeals", "manageScopeCatalog"), async (req: Request, res: Response) => {
     const id = parseInt(req.params.id);
     const [set] = await db.select().from(promptSets).where(eq(promptSets.id, id));
     if (!set) return res.status(404).json({ error: "Prompt set not found" });
@@ -2316,7 +2317,7 @@ export function registerRoutes(app: Express) {
   });
 
   // Create a new draft set (version starts at 1 unless caller specifies).
-  app.post("/api/prompt-sets", async (req: Request, res: Response) => {
+  app.post("/api/prompt-sets", requirePerm("manageScopeCatalog"), async (req: Request, res: Response) => {
     const { name, businessUnit, serviceLine, notes, version } = req.body || {};
     if (!name || typeof name !== "string") return res.status(400).json({ error: "name is required" });
     const createdBy = (req.header("x-user-name") || "Unknown").trim();
@@ -2329,7 +2330,7 @@ export function registerRoutes(app: Express) {
   });
 
   // Update draft metadata (cannot edit published sets — clone instead).
-  app.patch("/api/prompt-sets/:id", async (req: Request, res: Response) => {
+  app.patch("/api/prompt-sets/:id", requirePerm("manageScopeCatalog"), async (req: Request, res: Response) => {
     const id = parseInt(req.params.id);
     const [existing] = await db.select().from(promptSets).where(eq(promptSets.id, id));
     if (!existing) return res.status(404).json({ error: "Prompt set not found" });
@@ -2346,7 +2347,7 @@ export function registerRoutes(app: Express) {
   });
 
   // Delete a draft set (cascades to items). Published/archived sets cannot be deleted.
-  app.delete("/api/prompt-sets/:id", async (req: Request, res: Response) => {
+  app.delete("/api/prompt-sets/:id", requirePerm("manageScopeCatalog"), async (req: Request, res: Response) => {
     const id = parseInt(req.params.id);
     const [existing] = await db.select().from(promptSets).where(eq(promptSets.id, id));
     if (!existing) return res.status(404).json({ error: "Prompt set not found" });
@@ -2358,7 +2359,7 @@ export function registerRoutes(app: Express) {
   });
 
   // Publish a draft. Auto-archives any prior published set with same (BU, serviceLine).
-  app.post("/api/prompt-sets/:id/publish", async (req: Request, res: Response) => {
+  app.post("/api/prompt-sets/:id/publish", requirePerm("manageScopeCatalog"), async (req: Request, res: Response) => {
     const id = parseInt(req.params.id);
     const [existing] = await db.select().from(promptSets).where(eq(promptSets.id, id));
     if (!existing) return res.status(404).json({ error: "Prompt set not found" });
@@ -2391,7 +2392,7 @@ export function registerRoutes(app: Express) {
   });
 
   // Clone a set as a new draft with version = max(version)+1 for that (BU, serviceLine).
-  app.post("/api/prompt-sets/:id/clone", async (req: Request, res: Response) => {
+  app.post("/api/prompt-sets/:id/clone", requirePerm("manageScopeCatalog"), async (req: Request, res: Response) => {
     const id = parseInt(req.params.id);
     const [src] = await db.select().from(promptSets).where(eq(promptSets.id, id));
     if (!src) return res.status(404).json({ error: "Prompt set not found" });
@@ -2426,7 +2427,7 @@ export function registerRoutes(app: Express) {
   });
 
   // Manually archive any set (publishers may want to retire without replacement).
-  app.post("/api/prompt-sets/:id/archive", async (req: Request, res: Response) => {
+  app.post("/api/prompt-sets/:id/archive", requirePerm("manageScopeCatalog"), async (req: Request, res: Response) => {
     const id = parseInt(req.params.id);
     const actor = (req.header("x-user-name") || "Unknown").trim();
     const [updated] = await db.update(promptSets)
@@ -2460,7 +2461,7 @@ export function registerRoutes(app: Express) {
     return { value: cleaned };
   }
 
-  app.post("/api/prompt-sets/:id/items", async (req: Request, res: Response) => {
+  app.post("/api/prompt-sets/:id/items", requirePerm("manageScopeCatalog"), async (req: Request, res: Response) => {
     const setId = parseInt(req.params.id);
     const guard = await assertDraftSet(setId);
     if (guard.error) return res.status(guard.status!).json({ error: guard.error });
@@ -2481,7 +2482,7 @@ export function registerRoutes(app: Express) {
     res.status(201).json(created);
   });
 
-  app.patch("/api/prompt-sets/:id/items/:itemId", async (req: Request, res: Response) => {
+  app.patch("/api/prompt-sets/:id/items/:itemId", requirePerm("manageScopeCatalog"), async (req: Request, res: Response) => {
     const setId = parseInt(req.params.id);
     const itemId = parseInt(req.params.itemId);
     const guard = await assertDraftSet(setId);
@@ -2506,7 +2507,7 @@ export function registerRoutes(app: Express) {
     res.json(updated);
   });
 
-  app.delete("/api/prompt-sets/:id/items/:itemId", async (req: Request, res: Response) => {
+  app.delete("/api/prompt-sets/:id/items/:itemId", requirePerm("manageScopeCatalog"), async (req: Request, res: Response) => {
     const setId = parseInt(req.params.id);
     const itemId = parseInt(req.params.itemId);
     const guard = await assertDraftSet(setId);
@@ -2519,7 +2520,7 @@ export function registerRoutes(app: Express) {
 
   // ========== AI ENDPOINTS ==========
 
-  app.post("/api/ai/deal-similarity", async (req: Request, res: Response) => {
+  app.post("/api/ai/deal-similarity", requirePerm("runAI"), async (req: Request, res: Response) => {
     const { clientId, serviceLine, businessUnit } = req.body;
     const similarDeals = await db.query.deals.findMany({
       where: and(
@@ -2558,7 +2559,7 @@ export function registerRoutes(app: Express) {
     });
   });
 
-  app.post("/api/ai/effort-estimation", async (req: Request, res: Response) => {
+  app.post("/api/ai/effort-estimation", requirePerm("runAI"), async (req: Request, res: Response) => {
     const { scopeItems: items, complexity, prompts, startDate, endDate } = req.body;
     const complexityMultipliers: Record<string, number> = { low: 0.8, medium: 1.0, high: 1.2, very_high: 1.5 };
     const baseMultiplier = complexityMultipliers[complexity] || 1.0;
@@ -2630,7 +2631,7 @@ export function registerRoutes(app: Express) {
     });
   });
 
-  app.post("/api/ai/margin-advisor", async (req: Request, res: Response) => {
+  app.post("/api/ai/margin-advisor", requirePerm("runAI"), async (req: Request, res: Response) => {
     const { pricingLines: lines, dealId, targetMargin: explicitTarget } = req.body;
     if (!lines || !Array.isArray(lines)) {
       return res.json({ suggestions: [], currentMargin: 0 });
@@ -2723,7 +2724,7 @@ export function registerRoutes(app: Express) {
     });
   });
 
-  app.post("/api/ai/scenario-recommendation", async (req: Request, res: Response) => {
+  app.post("/api/ai/scenario-recommendation", requirePerm("runAI"), async (req: Request, res: Response) => {
     const { dealId } = req.body;
     const dealScenarios = await db.select().from(scenarios).where(eq(scenarios.dealId, dealId));
 
@@ -2755,7 +2756,7 @@ export function registerRoutes(app: Express) {
     });
   });
 
-  app.post("/api/ai/risk-summary", async (req: Request, res: Response) => {
+  app.post("/api/ai/risk-summary", requirePerm("runAI"), async (req: Request, res: Response) => {
     const { dealId } = req.body;
     const deal = await db.query.deals.findFirst({
       where: eq(deals.id, dealId),
@@ -2813,7 +2814,7 @@ export function registerRoutes(app: Express) {
   // drafted DealPad deal (scope, prompts, pricing, scenarios, risk) in a
   // pendingReviewAgent state for human review. Each step is logged to
   // activityLog with a structured metadata.agentRun payload.
-  app.post("/api/dynamics/opportunities/:id/agent-draft", async (req: Request, res: Response) => {
+  app.post("/api/dynamics/opportunities/:id/agent-draft", requirePerm("createDeals"), async (req: Request, res: Response) => {
     const oppId = parseInt(req.params.id);
     if (isNaN(oppId)) return res.status(400).json({ error: "Invalid id" });
     const userName = (req.header("x-user-name") || req.body?.userName || "Agent").toString();
@@ -3317,7 +3318,7 @@ export function registerRoutes(app: Express) {
   // Approve & Submit an agent-drafted deal — creates an approval (which the
   // existing routing in shared/policy.ts may upgrade to Practice Lead) and
   // flips the deal to "submitted". Mirrors the wizard's Approve step.
-  app.post("/api/deals/:id/agent-approve", async (req: Request, res: Response) => {
+  app.post("/api/deals/:id/agent-approve", requirePerm("createDeals"), async (req: Request, res: Response) => {
     const dealId = parseInt(req.params.id);
     const userName = (req.header("x-user-name") || req.body?.userName || "Reviewer").toString();
     const [deal] = await db.select().from(deals).where(eq(deals.id, dealId));
@@ -3381,7 +3382,7 @@ export function registerRoutes(app: Express) {
 
   // Discard an agent-drafted deal — archives it (which also unlinks the D365
   // opportunity so it can be re-scoped or re-run).
-  app.post("/api/deals/:id/agent-discard", async (req: Request, res: Response) => {
+  app.post("/api/deals/:id/agent-discard", requirePerm("createDeals"), async (req: Request, res: Response) => {
     const dealId = parseInt(req.params.id);
     const userName = (req.header("x-user-name") || req.body?.userName || "Reviewer").toString();
     const [deal] = await db.select().from(deals).where(eq(deals.id, dealId));
@@ -3417,7 +3418,7 @@ export function registerRoutes(app: Express) {
   // Open an agent-drafted deal in the wizard for editing — moves currentStep
   // back to 1 and snapshots the pre-edit state to the activity log so the
   // original draft can be compared after Resubmit.
-  app.post("/api/deals/:id/agent-open-wizard", async (req: Request, res: Response) => {
+  app.post("/api/deals/:id/agent-open-wizard", requirePerm("editDeals"), async (req: Request, res: Response) => {
     const dealId = parseInt(req.params.id);
     const userName = (req.header("x-user-name") || req.body?.userName || "Reviewer").toString();
     const deal = await db.query.deals.findFirst({
@@ -3462,7 +3463,7 @@ export function registerRoutes(app: Express) {
   // Resubmit an agent-drafted deal back to Summary review (status remains
   // pendingReviewAgent so the badge persists). Re-runs the risk narrative
   // against the edited values and logs the resubmission.
-  app.post("/api/deals/:id/agent-resubmit", async (req: Request, res: Response) => {
+  app.post("/api/deals/:id/agent-resubmit", requirePerm("editDeals"), async (req: Request, res: Response) => {
     const dealId = parseInt(req.params.id);
     const userName = (req.header("x-user-name") || req.body?.userName || "Reviewer").toString();
     const [deal] = await db.select().from(deals).where(eq(deals.id, dealId));
@@ -3511,13 +3512,13 @@ export function registerRoutes(app: Express) {
   });
 
   // ========== ACTIVITY LOG ==========
-  app.get("/api/activity", async (_req: Request, res: Response) => {
+  app.get("/api/activity", requirePerm("viewDashboard"), async (_req: Request, res: Response) => {
     const result = await db.select().from(activityLog).orderBy(desc(activityLog.createdAt)).limit(20);
     res.json(result);
   });
 
   // ========== ARCHITECTURE CONVERSATIONAL AI ==========
-  app.post("/api/ai/architecture-chat", async (req: Request, res: Response) => {
+  app.post("/api/ai/architecture-chat", requirePerm("viewArchitecture"), async (req: Request, res: Response) => {
     const { message, history } = req.body;
     if (!message) return res.status(400).json({ error: "message is required" });
 
@@ -3704,7 +3705,7 @@ export function registerRoutes(app: Express) {
     return base[role] || base.pdl;
   }
 
-  app.get("/api/ai/dashboard-insights", async (req: Request, res: Response) => {
+  app.get("/api/ai/dashboard-insights", requirePerm("viewDashboard"), async (req: Request, res: Response) => {
     const role = String(req.query.role || "pdl").toLowerCase();
     const allDeals = await db.select().from(deals);
     const pendingApprovals = allDeals.filter(d => d.status === "submitted").length;
@@ -3718,7 +3719,7 @@ export function registerRoutes(app: Express) {
   });
 
   // ========== ASK DEALPAD AI (contextual) ==========
-  app.post("/api/ai/ask", async (req: Request, res: Response) => {
+  app.post("/api/ai/ask", requirePerm("runAI"), async (req: Request, res: Response) => {
     const { question, context, role } = req.body || {};
     if (!question || typeof question !== "string" || !question.trim()) {
       return res.status(400).json({ error: "question is required" });
@@ -4053,7 +4054,7 @@ export function registerRoutes(app: Express) {
   });
 
   // ========== CHANGE ORDERS ==========
-  app.get("/api/deals/:dealId/change-orders", async (req: Request, res: Response) => {
+  app.get("/api/deals/:dealId/change-orders", requirePerm("viewDeals"), async (req: Request, res: Response) => {
     const dealId = parseInt(req.params.dealId);
     const result = await db.select().from(changeOrders)
       .where(eq(changeOrders.dealId, dealId))
@@ -4061,7 +4062,7 @@ export function registerRoutes(app: Express) {
     res.json(result);
   });
 
-  app.post("/api/deals/:dealId/change-orders", async (req: Request, res: Response) => {
+  app.post("/api/deals/:dealId/change-orders", requirePerm("editDeals"), async (req: Request, res: Response) => {
     const dealId = parseInt(req.params.dealId);
     const deal = await db.query.deals.findFirst({ where: eq(deals.id, dealId) });
     if (!deal) return res.status(404).json({ error: "Deal not found" });
@@ -4114,7 +4115,7 @@ export function registerRoutes(app: Express) {
     res.json(order);
   });
 
-  app.patch("/api/change-orders/:id", async (req: Request, res: Response) => {
+  app.patch("/api/change-orders/:id", requirePerm("editDeals"), async (req: Request, res: Response) => {
     const id = parseInt(req.params.id);
     const { status, approvedBy } = req.body;
 
@@ -4164,7 +4165,7 @@ export function registerRoutes(app: Express) {
   });
 
   // ========== ANALYTICS ==========
-  app.get("/api/analytics/overview", async (_req: Request, res: Response) => {
+  app.get("/api/analytics/overview", requirePerm("viewMargins"), async (_req: Request, res: Response) => {
     const allDeals = await db.query.deals.findMany({ with: { client: true, approvals: true } });
     const allApprovals = await db.select().from(approvals);
 
@@ -4275,7 +4276,7 @@ export function registerRoutes(app: Express) {
   });
 
   // ========== PROPOSAL GENERATION ==========
-  app.get("/api/deals/:dealId/proposal", async (req: Request, res: Response) => {
+  app.get("/api/deals/:dealId/proposal", requirePerm("viewDeals"), async (req: Request, res: Response) => {
     const dealId = parseInt(req.params.dealId);
     const deal = await db.query.deals.findFirst({
       where: eq(deals.id, dealId),

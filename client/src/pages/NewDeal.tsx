@@ -4,7 +4,6 @@ import { useClients, useCreateDeal, useDeals, useCloneDeal, useEligibleOpportuni
 import { useAuth } from "@/context/AuthContext";
 import { ArrowLeft, FileText, Loader2, Sparkles, Repeat, Briefcase, Database } from "lucide-react";
 import { Link } from "wouter";
-import { AskDealPadAI } from "@/components/AskDealPadAI";
 
 export function NewDeal() {
   const { data: clients } = useClients();
@@ -316,7 +315,7 @@ export function NewDeal() {
           </div>
         </fieldset>
 
-        <AskDealPadAI context={{ screen: "new-deal", screenLabel: "New Deal" }} />
+        {/* Ask AI is only available for roles with runAI permission */}
         <div className="flex items-center justify-end gap-3">
           <Link href="/deals"><button type="button" className="btn-ghost">Cancel</button></Link>
           <button type="submit" disabled={submitting || !form.dealType || (isRenewal && !form.sourceDealId)} className="btn-primary">

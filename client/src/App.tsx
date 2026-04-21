@@ -78,11 +78,21 @@ function AuthenticatedApp() {
         <Route path="/deals/:id/change-orders">
           {hasPermission("viewDeals") ? <ChangeOrders /> : <NoAccess feature="change orders" />}
         </Route>
-        <Route path="/integrations/dynamics" component={DynamicsCRM} />
-        <Route path="/integrations/intapp" component={Intapp} />
-        <Route path="/integrations/workday" component={WorkdayIntegration} />
-        <Route path="/architecture" component={ArchitectureHub} />
-        <Route path="/architecture-i" component={ArchitectureInteractive} />
+        <Route path="/integrations/dynamics">
+          {hasPermission("viewDeals") ? <DynamicsCRM /> : <NoAccess feature="the CRM integration" />}
+        </Route>
+        <Route path="/integrations/intapp">
+          {hasPermission("viewRiskSummary") ? <Intapp /> : <NoAccess feature="the conflicts & risk integration" />}
+        </Route>
+        <Route path="/integrations/workday">
+          {hasPermission("viewDeals") ? <WorkdayIntegration /> : <NoAccess feature="the Workday integration" />}
+        </Route>
+        <Route path="/architecture">
+          {hasPermission("viewArchitecture") ? <ArchitectureHub /> : <NoAccess feature="architecture" />}
+        </Route>
+        <Route path="/architecture-i">
+          {hasPermission("viewArchitecture") ? <ArchitectureInteractive /> : <NoAccess feature="architecture" />}
+        </Route>
         <Route>
           <div className="flex items-center justify-center min-h-screen">
             <p className="text-xl text-muted-foreground">Page not found</p>

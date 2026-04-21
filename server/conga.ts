@@ -2,6 +2,7 @@ import type { Express, Request, Response } from "express";
 import { db } from "./db";
 import { eq, desc, and, sql } from "drizzle-orm";
 import PDFDocument from "pdfkit";
+import { requirePerm, requireAnyPerm } from "./rbac";
 import {
   congaSettings, congaTemplates, engagementLetters,
   deals, clients, pricingLines, roles as rolesTable,
@@ -503,11 +504,11 @@ export function registerCongaRoutes(app: Express) {
   seedConga().catch((e) => console.error("Conga seed error:", e));
 
   // Settings (read + patch). Lets admins flip simulated↔live and configure URLs.
-  app.get("/api/conga/settings", async (_req, res) => {
+  app.get("/api/conga/settings", requirePerm("viewDeals"), async (_req, res) => {
     res.json(await getSettings());
   });
 
-  app.patch("/api/conga/settings", async (req, res) => {
+  app.patch("/api/conga/settings", requirePerm("manageScopeCatalog"), async (req, res) => {
     const { mode, liveBaseUrl, liveTenantId, defaultTemplateKey } = req.body || {};
     const current = await getSettings();
     const patch: any = { updatedAt: new Date() };
@@ -522,7 +523,7 @@ export function registerCongaRoutes(app: Express) {
   });
 
   // Templates list (used by both the deal modal and the admin view).
-  app.get("/api/conga/templates", async (_req, res) => {
+  app.get("/api/conga/templates", requireAnyPerm("viewDeals", "manageScopeCatalog"), async (_req, res) => {
     const provider = await getProvider();
     try {
       const templates = await provider.listTemplates();
@@ -536,7 +537,7 @@ export function registerCongaRoutes(app: Express) {
   });
 
   // Per-deal letter history.
-  app.get("/api/conga/deals/:dealId/letters", async (req, res) => {
+  app.get("/api/conga/deals/:dealId/letters", requirePerm("viewDeals"), async (req, res) => {
     const dealId = parseInt(req.params.dealId);
     if (Number.isNaN(dealId)) return res.status(400).json({ error: "Invalid deal id" });
     const rows = await db.select().from(engagementLetters)
@@ -553,7 +554,7 @@ export function registerCongaRoutes(app: Express) {
 
   // Generate a new engagement letter for a deal. Returns the row metadata —
   // the client opens /api/conga/letters/:id/download in a new tab to view it.
-  app.post("/api/conga/deals/:dealId/letters", async (req, res) => {
+  app.post("/api/conga/deals/:dealId/letters", requirePerm("editDeals"), async (req, res) => {
     const dealId = parseInt(req.params.dealId);
     if (Number.isNaN(dealId)) return res.status(400).json({ error: "Invalid deal id" });
     const { templateId, generatedBy } = req.body || {};
@@ -604,7 +605,7 @@ export function registerCongaRoutes(app: Express) {
 
   // Bi-directional: push (deliver) a generated letter back to Conga's
   // delivery / e-sign pipeline. Updates engagement_letters.status to "delivered".
-  app.post("/api/conga/letters/:id/deliver", async (req, res) => {
+  app.post("/api/conga/letters/:id/deliver", requirePerm("editDeals"), async (req, res) => {
     // Identity from trusted headers, NEVER request body. Only roles that own the
     // engagement-letter delivery flow may trigger an external send.
     const actorName = ((req.headers["x-user-name"] as string) || "").trim();
@@ -644,7 +645,7 @@ export function registerCongaRoutes(app: Express) {
   // Download a previously-generated letter as application/pdf. The stored
   // base64 PDF is decoded and streamed back so re-downloads return the exact
   // same document that was generated originally.
-  app.get("/api/conga/letters/:id/download", async (req, res) => {
+  app.get("/api/conga/letters/:id/download", requirePerm("viewDeals"), async (req, res) => {
     const id = parseInt(req.params.id);
     if (Number.isNaN(id)) return res.status(400).json({ error: "Invalid id" });
     const [row] = await db.select().from(engagementLetters).where(eq(engagementLetters.id, id));

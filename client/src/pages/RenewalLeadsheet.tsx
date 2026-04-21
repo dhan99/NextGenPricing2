@@ -43,7 +43,7 @@ export function RenewalLeadsheet() {
   const [, params] = useRoute("/deals/:id/renewal-leadsheet");
   const [, navigate] = useLocation();
   const dealId = params?.id ? parseInt(params.id) : 0;
-  const { persona } = useAuth();
+  const { persona, hasPermission } = useAuth();
 
   const { data: currentDeal } = useDeal(dealId);
   const parentId = currentDeal?.parentDealId || 0;
@@ -500,12 +500,14 @@ export function RenewalLeadsheet() {
           </div>
         </div>
       )}
-      <AskDealPadAI context={{
-        screen: "renewal-leadsheet",
-        screenLabel: `Renewal Leadsheet · ${currentDeal?.dealNumber || ""}`,
-        dealId: currentDeal?.id,
-        deal: currentDeal,
-      }} />
+      {hasPermission("runAI") && (
+        <AskDealPadAI context={{
+          screen: "renewal-leadsheet",
+          screenLabel: `Renewal Leadsheet · ${currentDeal?.dealNumber || ""}`,
+          dealId: currentDeal?.id,
+          deal: currentDeal,
+        }} />
+      )}
     </div>
   );
 }

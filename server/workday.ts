@@ -1,5 +1,6 @@
 import type { Express, Request, Response } from "express";
 import { db } from "./db";
+import { requirePerm, requireAnyPerm } from "./rbac";
 import {
   deals, pricingLines, roles as rolesTable,
   workdaySettings, workdayCostCenters, workdayWorkers, workdayRateCards,
@@ -662,7 +663,7 @@ export function registerWorkdayRoutes(app: Express) {
   // Seeding is centralized in seedAll() (server/seed.ts) and runs before app.listen.
 
   // Bi-directional: push approved deal back to Workday as a Project record.
-  app.post("/api/workday/deals/:id/push", async (req: Request, res: Response) => {
+  app.post("/api/workday/deals/:id/push", requirePerm("editDeals"), async (req: Request, res: Response) => {
     // Identity is derived from trusted headers, NEVER request body.
     const actorName = (req.header("x-user-name") || "").trim();
     const role = (req.header("x-user-role") || "").trim().toLowerCase();
@@ -682,9 +683,9 @@ export function registerWorkdayRoutes(app: Express) {
     res.json(result);
   });
 
-  app.get("/api/workday/settings", async (_req, res) => res.json(await getWorkdaySettings()));
+  app.get("/api/workday/settings", requirePerm("viewDeals"), async (_req, res) => res.json(await getWorkdaySettings()));
 
-  app.patch("/api/workday/settings", async (req: Request, res: Response) => {
+  app.patch("/api/workday/settings", requirePerm("manageRateCards"), async (req: Request, res: Response) => {
     const cur = await getWorkdaySettings();
     const allowed = ["mode", "tenantUrl", "isuUsername", "apiClientId", "apiClientSecret",
       "autoValidateOnSave", "autoCheckOnSubmit", "nightlyRefreshEnabled", "rateVarianceTolerancePct"];
@@ -701,10 +702,10 @@ export function registerWorkdayRoutes(app: Express) {
   });
 
   // Cost centers
-  app.get("/api/workday/cost-centers", async (_req, res) => {
+  app.get("/api/workday/cost-centers", requirePerm("viewDeals"), async (_req, res) => {
     res.json(await db.select().from(workdayCostCenters).orderBy(workdayCostCenters.code));
   });
-  app.post("/api/workday/cost-centers", async (req, res) => {
+  app.post("/api/workday/cost-centers", requirePerm("manageRateCards"), async (req, res) => {
     const { code, name, fiscalYear, totalBudget, committed, businessUnit, currency, userName } = req.body || {};
     if (!code || !name) return res.status(400).json({ error: "code and name required" });
     const [row] = await db.insert(workdayCostCenters).values({
@@ -716,7 +717,7 @@ export function registerWorkdayRoutes(app: Express) {
     await logEvent({ eventType: "pull", entity: "CostCenter", entityName: name, entityRefId: row.id, message: `Cost center ${code} created`, actorName: userName });
     res.status(201).json(row);
   });
-  app.patch("/api/workday/cost-centers/:id", async (req, res) => {
+  app.patch("/api/workday/cost-centers/:id", requirePerm("manageRateCards"), async (req, res) => {
     const id = parseInt(req.params.id);
     const allowed = ["name", "fiscalYear", "totalBudget", "committed", "businessUnit", "currency"];
     const patch: any = {};
@@ -726,17 +727,17 @@ export function registerWorkdayRoutes(app: Express) {
     await logEvent({ eventType: "pull", entity: "CostCenter", entityName: row?.name, entityRefId: id, message: `Cost center ${row?.code} updated`, fields: Object.keys(patch), actorName: req.body?.userName });
     res.json(row);
   });
-  app.delete("/api/workday/cost-centers/:id", async (req, res) => {
+  app.delete("/api/workday/cost-centers/:id", requirePerm("manageRateCards"), async (req, res) => {
     const id = parseInt(req.params.id);
     await db.delete(workdayCostCenters).where(eq(workdayCostCenters.id, id));
     res.json({ ok: true });
   });
 
   // Workers
-  app.get("/api/workday/workers", async (_req, res) => {
+  app.get("/api/workday/workers", requirePerm("viewDeals"), async (_req, res) => {
     res.json(await db.select().from(workdayWorkers).orderBy(workdayWorkers.name));
   });
-  app.post("/api/workday/workers", async (req, res) => {
+  app.post("/api/workday/workers", requirePerm("manageRateCards"), async (req, res) => {
     const { name, roleName, region, weeklyCapacityHours, availableHours, standardCostRate, userName } = req.body || {};
     if (!name || !roleName) return res.status(400).json({ error: "name and roleName required" });
     const [row] = await db.insert(workdayWorkers).values({
@@ -751,7 +752,7 @@ export function registerWorkdayRoutes(app: Express) {
     await logEvent({ eventType: "pull", entity: "Worker", entityName: name, entityRefId: row.id, message: `Worker ${name} added (${roleName})`, actorName: userName });
     res.status(201).json(row);
   });
-  app.patch("/api/workday/workers/:id", async (req, res) => {
+  app.patch("/api/workday/workers/:id", requirePerm("manageRateCards"), async (req, res) => {
     const id = parseInt(req.params.id);
     const allowed = ["name", "roleName", "region", "weeklyCapacityHours", "availableHours", "standardCostRate"];
     const patch: any = {};
@@ -762,17 +763,17 @@ export function registerWorkdayRoutes(app: Express) {
     const [row] = await db.update(workdayWorkers).set(patch).where(eq(workdayWorkers.id, id)).returning();
     res.json(row);
   });
-  app.delete("/api/workday/workers/:id", async (req, res) => {
+  app.delete("/api/workday/workers/:id", requirePerm("manageRateCards"), async (req, res) => {
     const id = parseInt(req.params.id);
     await db.delete(workdayWorkers).where(eq(workdayWorkers.id, id));
     res.json({ ok: true });
   });
 
   // Rate card
-  app.get("/api/workday/rate-card", async (_req, res) => {
+  app.get("/api/workday/rate-card", requirePerm("viewPricing"), async (_req, res) => {
     res.json(await db.select().from(workdayRateCards).orderBy(workdayRateCards.roleName));
   });
-  app.patch("/api/workday/rate-card/:id", async (req, res) => {
+  app.patch("/api/workday/rate-card/:id", requirePerm("manageRateCards"), async (req, res) => {
     const id = parseInt(req.params.id);
     const patch: any = { updatedAt: new Date() };
     if (req.body.standardCostRate !== undefined) patch.standardCostRate = String(req.body.standardCostRate);
@@ -784,7 +785,7 @@ export function registerWorkdayRoutes(app: Express) {
   });
 
   // Validations
-  app.get("/api/workday/validations", async (req, res) => {
+  app.get("/api/workday/validations", requirePerm("viewDeals"), async (req, res) => {
     const dealId = req.query.dealId ? parseInt(String(req.query.dealId)) : null;
     const status = req.query.status ? String(req.query.status) : null;
     let rows = await db.select().from(workdayValidations).orderBy(desc(workdayValidations.requestedAt)).limit(200);
@@ -797,7 +798,7 @@ export function registerWorkdayRoutes(app: Express) {
     res.json(rows.map((r) => ({ ...r, dealTitle: dealMap.get(r.dealId)?.title || null, dealNumber: dealMap.get(r.dealId)?.dealNumber || null })));
   });
 
-  app.get("/api/workday/validations/:id", async (req, res) => {
+  app.get("/api/workday/validations/:id", requirePerm("viewDeals"), async (req, res) => {
     const id = parseInt(req.params.id);
     const [v] = await db.select().from(workdayValidations).where(eq(workdayValidations.id, id));
     if (!v) return res.status(404).json({ error: "Not found" });
@@ -805,7 +806,7 @@ export function registerWorkdayRoutes(app: Express) {
     res.json({ ...v, findings });
   });
 
-  app.get("/api/workday/deals/:dealId/latest", async (req, res) => {
+  app.get("/api/workday/deals/:dealId/latest", requirePerm("viewDeals"), async (req, res) => {
     const dealId = parseInt(req.params.dealId);
     const [v] = await db.select().from(workdayValidations)
       .where(eq(workdayValidations.dealId, dealId))
@@ -820,14 +821,14 @@ export function registerWorkdayRoutes(app: Express) {
     res.json({ ...v, findings, costCenter });
   });
 
-  app.post("/api/workday/deals/:dealId/validate", async (req, res) => {
+  app.post("/api/workday/deals/:dealId/validate", requirePerm("editDeals"), async (req, res) => {
     const dealId = parseInt(req.params.dealId);
     const provider = await getProvider();
     const result = await provider.validateDeal(dealId, { trigger: "manual", actorName: req.body?.userName });
     res.json(result);
   });
 
-  app.post("/api/workday/deals/:dealId/link", async (req, res) => {
+  app.post("/api/workday/deals/:dealId/link", requirePerm("editDeals"), async (req, res) => {
     const dealId = parseInt(req.params.dealId);
     const { costCenterId, userName } = req.body || {};
     const ccId = costCenterId ? parseInt(costCenterId) : null;
@@ -848,7 +849,7 @@ export function registerWorkdayRoutes(app: Express) {
     res.json({ ok: true, costCenter: cc });
   });
 
-  app.post("/api/workday/validations/:id/override", async (req, res) => {
+  app.post("/api/workday/validations/:id/override", requirePerm("approveDeals"), async (req, res) => {
     const id = parseInt(req.params.id);
     const { justification, userName, role } = req.body || {};
     if (!justification || justification.trim().length < 5) {
@@ -872,13 +873,13 @@ export function registerWorkdayRoutes(app: Express) {
   });
 
   // Events / audit log
-  app.get("/api/workday/events", async (_req, res) => {
+  app.get("/api/workday/events", requirePerm("viewDeals"), async (_req, res) => {
     const rows = await db.select().from(workdayEvents).orderBy(desc(workdayEvents.timestamp)).limit(150);
     res.json(rows);
   });
 
   // Dashboard rollup
-  app.get("/api/workday/dashboard", async (_req, res) => {
+  app.get("/api/workday/dashboard", requirePerm("viewDashboard"), async (_req, res) => {
     const allDeals = await db.select().from(deals);
     const dealIds = allDeals.map((d) => d.id);
     if (dealIds.length === 0) return res.json({ counts: { clean: 0, over_budget: 0, staffing_shortfall: 0, rate_variance: 0, unvalidated: 0 }, attention: [] });

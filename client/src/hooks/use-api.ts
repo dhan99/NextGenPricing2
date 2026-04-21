@@ -21,6 +21,11 @@ async function fetchApi(url: string, options?: RequestInit) {
   if (!res.ok) {
     let body: any = null;
     try { body = await res.json(); } catch {}
+    // 401 means our role header was missing/invalid — clear stale persona and
+    // let AuthProvider redirect to the Login screen on next render.
+    if (res.status === 401 && typeof window !== "undefined") {
+      try { localStorage.removeItem("dealpad_persona"); } catch {}
+    }
     const msg = body?.error || `API error: ${res.status}`;
     const err: any = new Error(msg);
     err.status = res.status;

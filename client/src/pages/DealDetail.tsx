@@ -148,16 +148,18 @@ export function DealDetail() {
           )}
         </div>
       </div>
-      <AskDealPadAI context={{
-        screen: STEP_KEYS[currentStep] || "wizard-setup",
-        screenLabel: `${STEPS[currentStep - 1]?.label || "Wizard"} · ${deal.dealNumber}`,
-        dealId: deal.id,
-        deal,
-        extra: {
-          overrideCount: (deal.pricingLines || []).filter((l: any) => l.rateOverridden).length,
-          pricingLineCount: (deal.pricingLines || []).length,
-        },
-      }} />
+      {hasPermission("runAI") && (
+        <AskDealPadAI context={{
+          screen: STEP_KEYS[currentStep] || "wizard-setup",
+          screenLabel: `${STEPS[currentStep - 1]?.label || "Wizard"} · ${deal.dealNumber}`,
+          dealId: deal.id,
+          deal,
+          extra: {
+            overrideCount: (deal.pricingLines || []).filter((l: any) => l.rateOverridden).length,
+            pricingLineCount: (deal.pricingLines || []).length,
+          },
+        }} />
+      )}
     </div>
   );
 }

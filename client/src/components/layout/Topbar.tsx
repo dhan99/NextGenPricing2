@@ -154,14 +154,16 @@ export function Topbar({ onMobileNavToggle }: TopbarProps = {}) {
             </Link>
           )}
 
-          <button
-            onClick={openAskAI}
-            className="hidden md:inline-flex items-center gap-1.5 h-9 px-3 rounded-lg border border-primary/30 bg-primary/5 hover:bg-primary/10 text-primary text-sm font-medium transition-colors"
-            title="Ask DealPad AI"
-          >
-            <Sparkles className="w-4 h-4" />
-            Ask AI
-          </button>
+          {hasPermission("runAI") && (
+            <button
+              onClick={openAskAI}
+              className="hidden md:inline-flex items-center gap-1.5 h-9 px-3 rounded-lg border border-primary/30 bg-primary/5 hover:bg-primary/10 text-primary text-sm font-medium transition-colors"
+              title="Ask DealPad AI"
+            >
+              <Sparkles className="w-4 h-4" />
+              Ask AI
+            </button>
+          )}
 
           <Link href="/deals?status=submitted">
             <button className="relative h-9 w-9 rounded-lg hover:bg-muted/60 flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors" title="Pending approvals">

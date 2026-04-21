@@ -1,5 +1,6 @@
 import type { Request, Response, Express } from "express";
 import { db } from "./db";
+import { requirePerm, requireAnyPerm } from "./rbac";
 import {
   clients, deals, dynamicsAccounts, dynamicsOpportunities, dynamicsSyncLog,
   dynamicsSettings, dynamicsOwners, approvals, activityLog,
@@ -367,12 +368,12 @@ export function registerDynamicsRoutes(app: Express) {
   // Seeding is centralized in seedAll() (server/seed.ts) and runs before app.listen.
 
   // ============ READ ============
-  app.get("/api/dynamics/accounts", async (_req, res) => {
+  app.get("/api/dynamics/accounts", requirePerm("viewDeals"), async (_req, res) => {
     const rows = await db.select().from(dynamicsAccounts).orderBy(dynamicsAccounts.name);
     res.json(rows.map(formatAccount));
   });
 
-  app.get("/api/dynamics/accounts/:id", async (req, res) => {
+  app.get("/api/dynamics/accounts/:id", requirePerm("viewDeals"), async (req, res) => {
     const id = parseInt(req.params.id);
     if (isNaN(id)) return res.status(400).json({ error: "Invalid id" });
     const [row] = await db.select().from(dynamicsAccounts).where(eq(dynamicsAccounts.id, id));
@@ -380,7 +381,7 @@ export function registerDynamicsRoutes(app: Express) {
     res.json(formatAccount(row));
   });
 
-  app.get("/api/dynamics/opportunities", async (_req, res) => {
+  app.get("/api/dynamics/opportunities", requirePerm("viewDeals"), async (_req, res) => {
     const rows = await db.select().from(dynamicsOpportunities).orderBy(desc(dynamicsOpportunities.updatedAt));
     const linkedDealIds = rows.map((r) => r.dealpadDealId).filter((id): id is number => id != null);
     const dealMap = new Map<number, any>();
@@ -411,7 +412,7 @@ export function registerDynamicsRoutes(app: Express) {
 
   // Opportunities eligible to be turned into a DealPad deal:
   // Develop or Propose stage, not yet linked. Filter by client when ?clientId is provided.
-  app.get("/api/dynamics/opportunities/eligible", async (req, res) => {
+  app.get("/api/dynamics/opportunities/eligible", requirePerm("createDeals"), async (req, res) => {
     const clientId = req.query.clientId ? parseInt(String(req.query.clientId)) : null;
     let rows = await db.select().from(dynamicsOpportunities)
       .where(sql`${dynamicsOpportunities.dealpadDealId} IS NULL AND ${dynamicsOpportunities.stage} IN ('Develop','Propose')`);
@@ -428,7 +429,7 @@ export function registerDynamicsRoutes(app: Express) {
     res.json(enriched);
   });
 
-  app.post("/api/dynamics/opportunities/:id/unlink", async (req, res) => {
+  app.post("/api/dynamics/opportunities/:id/unlink", requirePerm("editDeals"), async (req, res) => {
     const id = parseInt(req.params.id);
     if (Number.isNaN(id)) return res.status(400).json({ error: "Invalid id" });
     const result = await unlinkOpportunity(id, req.body?.userName);
@@ -439,7 +440,7 @@ export function registerDynamicsRoutes(app: Express) {
   // Sales sends an approved deal back to DealPad for revision (from CRM view).
   // Reuses the existing `rejected` revision path — PDL can amend and re-submit
   // through the standard approval workflow. Auto-push fans out the stage update.
-  app.post("/api/dynamics/opportunities/:id/send-back", async (req, res) => {
+  app.post("/api/dynamics/opportunities/:id/send-back", requirePerm("editDeals"), async (req, res) => {
     const id = parseInt(req.params.id);
     if (Number.isNaN(id)) return res.status(400).json({ error: "Invalid id" });
     const reason = (req.body?.reason || "").toString().trim();
@@ -498,13 +499,13 @@ export function registerDynamicsRoutes(app: Express) {
     res.json({ success: true, dealId: deal.id, dealStatus: "rejected" });
   });
 
-  app.get("/api/dynamics/scope-templates", (_req, res) => {
+  app.get("/api/dynamics/scope-templates", requirePerm("viewDeals"), (_req, res) => {
     res.json(Object.entries(SCOPE_TEMPLATES).map(([key, v]) => ({ key, ...v })));
   });
 
   // Create new D365 opportunity. Optional `seedScope: true` makes it Develop-eligible
   // by attaching a service-line template + complexity hint that flows into the deal on import.
-  app.post("/api/dynamics/opportunities", async (req, res) => {
+  app.post("/api/dynamics/opportunities", requirePerm("editDeals"), async (req, res) => {
     const {
       accountId, name, estimatedValue, stage = "Qualify",
       estimatedCloseDate, ownerName, scopeTemplateKey, userName,
@@ -553,27 +554,27 @@ export function registerDynamicsRoutes(app: Express) {
     res.status(201).json({ ...formatOpp(created), scopeTemplate: tmpl ? { key: scopeTemplateKey, ...tmpl } : null });
   });
 
-  app.get("/api/dynamics/pipeline", async (_req, res) => {
+  app.get("/api/dynamics/pipeline", requirePerm("viewDeals"), async (_req, res) => {
     const opps = await db.select().from(dynamicsOpportunities);
     const owners = await db.select().from(dynamicsOwners);
     res.json(buildPipelineSummary(opps, owners));
   });
 
-  app.get("/api/dynamics/sync-log", async (_req, res) => {
+  app.get("/api/dynamics/sync-log", requirePerm("viewDeals"), async (_req, res) => {
     const rows = await db.select().from(dynamicsSyncLog).orderBy(desc(dynamicsSyncLog.timestamp)).limit(100);
     res.json(rows);
   });
 
-  app.get("/api/dynamics/settings", async (_req, res) => {
+  app.get("/api/dynamics/settings", requirePerm("viewDeals"), async (_req, res) => {
     res.json(await getSettings());
   });
 
-  app.get("/api/dynamics/owners", async (_req, res) => {
+  app.get("/api/dynamics/owners", requirePerm("viewDeals"), async (_req, res) => {
     res.json(await db.select().from(dynamicsOwners).orderBy(dynamicsOwners.name));
   });
 
   // ============ WRITE: Settings ============
-  app.patch("/api/dynamics/settings", async (req, res) => {
+  app.patch("/api/dynamics/settings", requirePerm("manageRateCards"), async (req, res) => {
     const { autoPushEnabled, autoPushOnStageChange, autoPushOnFeeChange, nightlyBatchEnabled } = req.body || {};
     const current = await getSettings();
     const patch: any = { updatedAt: new Date() };
@@ -594,7 +595,7 @@ export function registerDynamicsRoutes(app: Express) {
   });
 
   // ============ WRITE: Account edit ============
-  app.patch("/api/dynamics/accounts/:id", async (req, res) => {
+  app.patch("/api/dynamics/accounts/:id", requirePerm("editDeals"), async (req, res) => {
     const id = parseInt(req.params.id);
     if (isNaN(id)) return res.status(400).json({ error: "Invalid id" });
     const allowed = [
@@ -623,7 +624,7 @@ export function registerDynamicsRoutes(app: Express) {
   });
 
   // ============ WRITE: Opportunity edit ============
-  app.patch("/api/dynamics/opportunities/:id", async (req, res) => {
+  app.patch("/api/dynamics/opportunities/:id", requirePerm("editDeals"), async (req, res) => {
     const id = parseInt(req.params.id);
     if (isNaN(id)) return res.status(400).json({ error: "Invalid id" });
     const allowed = ["name", "estimatedValue", "stage", "probability", "estimatedCloseDate",
@@ -656,7 +657,7 @@ export function registerDynamicsRoutes(app: Express) {
   });
 
   // ============ WRITE: Import opportunity → DealPad draft ============
-  app.post("/api/dynamics/opportunities/:id/import", async (req, res) => {
+  app.post("/api/dynamics/opportunities/:id/import", requirePerm("createDeals"), async (req, res) => {
     const id = parseInt(req.params.id);
     if (isNaN(id)) return res.status(400).json({ error: "Invalid id" });
     const [opp] = await db.select().from(dynamicsOpportunities).where(eq(dynamicsOpportunities.id, id));
@@ -724,7 +725,7 @@ export function registerDynamicsRoutes(app: Express) {
   });
 
   // ============ WRITE: Manual push deal → D365 ============
-  app.post("/api/dynamics/deals/:id/push", async (req, res) => {
+  app.post("/api/dynamics/deals/:id/push", requirePerm("editDeals"), async (req, res) => {
     const id = parseInt(req.params.id);
     if (isNaN(id)) return res.status(400).json({ error: "Invalid id" });
     const result = await pushDealToDynamics(id, req.body?.userName, "manual");
@@ -733,7 +734,7 @@ export function registerDynamicsRoutes(app: Express) {
   });
 
   // ============ WRITE: Bulk sync simulation ============
-  app.post("/api/dynamics/sync", async (req, res) => {
+  app.post("/api/dynamics/sync", requirePerm("editDeals"), async (req, res) => {
     const { entity = "All", direction = "bidirectional", userName } = req.body || {};
     let pulled = 0, pushed = 0;
 
@@ -770,7 +771,7 @@ export function registerDynamicsRoutes(app: Express) {
   });
 
   // ============ Nightly batch trigger ============
-  app.post("/api/dynamics/nightly-batch", async (req, res) => {
+  app.post("/api/dynamics/nightly-batch", requirePerm("manageRateCards"), async (req, res) => {
     const settings = await getSettings();
     if (!settings.nightlyBatchEnabled) {
       return res.status(400).json({ error: "Nightly batch is disabled in Settings" });
