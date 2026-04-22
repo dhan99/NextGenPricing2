@@ -42,19 +42,19 @@ export function DynamicsCRM() {
   const { data: settings } = useDynamicsSettings();
 
   return (
-    <div className="px-8 py-6 max-w-[1400px] mx-auto">
-      <div className="flex items-start justify-between mb-6">
-        <div>
+    <div className="px-4 sm:px-8 py-4 sm:py-6 max-w-[1400px] mx-auto">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between mb-5 sm:mb-6">
+        <div className="min-w-0">
           <div className="flex items-center gap-2 mb-1">
             <Database className="w-4 h-4 text-primary" />
             <span className="text-xs uppercase tracking-wider font-semibold text-muted-foreground">Integration · Pilot Simulation</span>
           </div>
-          <h1 className="text-2xl font-bold text-foreground">Microsoft Dynamics 365 CRM</h1>
-          <p className="text-sm text-muted-foreground mt-1">
+          <h1 className="text-xl sm:text-2xl font-bold text-foreground">Microsoft Dynamics 365 CRM</h1>
+          <p className="text-xs sm:text-sm text-muted-foreground mt-1">
             Persistent simulation: leadership-editable records, bi-directional sync, and configurable auto-push
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <div className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-emerald-50 border border-emerald-200">
             <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
             <span className="text-xs font-medium text-emerald-700">Connected</span>
@@ -68,7 +68,7 @@ export function DynamicsCRM() {
           <button
             onClick={() => sync.mutate({ entity: "All", direction: "bidirectional", userName: persona?.name })}
             disabled={sync.isPending}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-primary text-white text-sm font-medium hover:bg-primary/90 disabled:opacity-50"
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-primary text-white text-sm font-medium hover:bg-primary/90 disabled:opacity-50 ml-auto sm:ml-0"
           >
             {sync.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
             Sync All
@@ -76,8 +76,8 @@ export function DynamicsCRM() {
         </div>
       </div>
 
-      <div className="border-b border-stone-200 mb-6">
-        <div className="flex gap-1">
+      <div className="border-b border-stone-200 mb-5 sm:mb-6 -mx-4 sm:mx-0 px-4 sm:px-0">
+        <div className="flex gap-1 overflow-x-auto no-scrollbar">
           {[
             { id: "accounts" as const, label: "Client Accounts", icon: Building2, sub: "Master data sync" },
             { id: "opportunities" as const, label: "Opportunities", icon: Briefcase, sub: "Pipeline bi-directional" },
@@ -86,7 +86,7 @@ export function DynamicsCRM() {
           ].map((t) => (
             <button
               key={t.id} onClick={() => setTab(t.id)}
-              className={`px-5 py-3 text-sm font-medium border-b-2 transition-colors ${
+              className={`px-3 sm:px-5 py-2.5 sm:py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap flex-shrink-0 ${
                 tab === t.id ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"
               }`}
             >
@@ -94,7 +94,7 @@ export function DynamicsCRM() {
                 <t.icon className="w-4 h-4" />
                 <div className="text-left">
                   <div>{t.label}</div>
-                  <div className="text-[10px] font-normal text-muted-foreground">{t.sub}</div>
+                  <div className="hidden sm:block text-[10px] font-normal text-muted-foreground">{t.sub}</div>
                 </div>
               </div>
             </button>
@@ -144,10 +144,10 @@ function AccountsTab() {
 
   return (
     <div className="space-y-6">
-      <div className="card p-5 bg-amber-50/50 border-amber-200">
-        <div className="flex items-start gap-3">
-          <Building2 className="w-5 h-5 text-primary mt-0.5" />
-          <div className="flex-1">
+      <div className="card p-4 sm:p-5 bg-amber-50/50 border-amber-200">
+        <div className="flex flex-col sm:flex-row sm:items-start gap-3">
+          <Building2 className="w-5 h-5 text-primary mt-0.5 flex-shrink-0" />
+          <div className="flex-1 min-w-0">
             <h3 className="text-sm font-semibold text-foreground mb-1">Role 1 · Client master data (system of record)</h3>
             <p className="text-xs text-muted-foreground leading-relaxed">
               Account records persist in DealPad's Postgres simulating the D365 store. Leadership can edit revenue, owner,
@@ -163,7 +163,7 @@ function AccountsTab() {
           <button
             onClick={() => sync.mutate({ entity: "Account", direction: "inbound", userName: persona?.name })}
             disabled={sync.isPending}
-            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md bg-white border border-stone-300 text-xs font-medium hover:bg-stone-50 disabled:opacity-50"
+            className="inline-flex items-center justify-center gap-2 px-3 py-1.5 rounded-md bg-white border border-stone-300 text-xs font-medium hover:bg-stone-50 disabled:opacity-50 flex-shrink-0 self-start"
           >
             <ArrowDownToLine className="w-3.5 h-3.5" />
             Pull Now
@@ -171,9 +171,9 @@ function AccountsTab() {
         </div>
       </div>
 
-      <div className="grid grid-cols-12 gap-4">
-        <div className={`card p-0 overflow-hidden ${selected ? "col-span-7" : "col-span-12"}`}>
-          <table className="w-full text-sm">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+        <div className={`card p-0 overflow-x-auto ${selected ? "lg:col-span-7" : "lg:col-span-12"}`}>
+          <table className="w-full text-sm min-w-[640px]">
             <thead className="bg-stone-50 border-b border-stone-200 text-xs uppercase tracking-wider text-muted-foreground">
               <tr>
                 <th className="px-4 py-3 text-left font-semibold">Account #</th>
@@ -209,7 +209,7 @@ function AccountsTab() {
         </div>
 
         {selected && (
-          <div className="col-span-5 card p-5 sticky top-4 self-start">
+          <div className="lg:col-span-5 card p-4 sm:p-5 lg:sticky lg:top-4 lg:self-start">
             <div className="flex items-start justify-between mb-4">
               <div>
                 <h3 className="text-base font-semibold text-foreground">{selected.name}</h3>
@@ -354,10 +354,10 @@ function OpportunitiesTab() {
 
   return (
     <div className="space-y-6">
-      <div className="card p-5 bg-amber-50/50 border-amber-200">
-        <div className="flex items-start gap-3">
-          <Briefcase className="w-5 h-5 text-primary mt-0.5" />
-          <div className="flex-1">
+      <div className="card p-4 sm:p-5 bg-amber-50/50 border-amber-200">
+        <div className="flex flex-col sm:flex-row sm:items-start gap-3">
+          <Briefcase className="w-5 h-5 text-primary mt-0.5 flex-shrink-0" />
+          <div className="flex-1 min-w-0">
             <h3 className="text-sm font-semibold text-foreground mb-1">Role 2 · Opportunity pipeline (bi-directional)</h3>
             <p className="text-xs text-muted-foreground leading-relaxed">
               Importing creates a real DealPad draft deal linked to the D365 opportunity. Outbound: stage, fee, probability,
@@ -370,7 +370,7 @@ function OpportunitiesTab() {
               <span className="badge-soft">Editable inline</span>
             </div>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap flex-shrink-0">
             <button onClick={() => setShowNew(true)}
               className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md bg-primary text-white text-xs font-medium hover:bg-primary/90">
               <Plus className="w-3.5 h-3.5" /> New Opportunity
@@ -395,10 +395,10 @@ function OpportunitiesTab() {
       )}
 
       {ready.length > 0 && (
-        <div className="card p-5 border-emerald-300 bg-gradient-to-br from-emerald-50/80 to-emerald-50/30">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+        <div className="card p-4 sm:p-5 border-emerald-300 bg-gradient-to-br from-emerald-50/80 to-emerald-50/30">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-3">
+            <div className="flex items-center gap-2 flex-wrap">
+              <CheckCircle2 className="w-5 h-5 text-emerald-600 flex-shrink-0" />
               <h3 className="text-sm font-semibold text-foreground">Ready for Sales Next Step ({ready.length})</h3>
               <span className="px-2 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wider bg-emerald-100 text-emerald-700">
                 Scoped &amp; Priced
@@ -408,10 +408,10 @@ function OpportunitiesTab() {
           </div>
           <div className="space-y-2">
             {ready.map((o: any) => (
-              <div key={o.id} className="p-3 rounded-md bg-white border border-emerald-200 flex items-center gap-4">
+              <div key={o.id} className="p-3 rounded-md bg-white border border-emerald-200 flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium text-foreground truncate">{o.name}</span>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-sm font-medium text-foreground">{o.name}</span>
                     <span className="text-[10px] font-mono text-muted-foreground">{o.opportunityNumber}</span>
                   </div>
                   <div className="text-xs text-muted-foreground mt-0.5 flex flex-wrap gap-x-4 gap-y-0.5">
@@ -422,17 +422,17 @@ function OpportunitiesTab() {
                     <span className="font-mono">{o.dealpadDeal?.dealNumber}</span>
                   </div>
                 </div>
-                <div className="flex items-center gap-2 flex-shrink-0">
+                <div className="flex items-center gap-2 flex-wrap sm:flex-shrink-0">
                   <a
                     href={`/deals/${o.dealpadDeal?.id}`}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-stone-300 bg-white text-xs font-medium hover:bg-stone-50"
+                    className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md border border-stone-300 bg-white text-xs font-medium hover:bg-stone-50 flex-1 sm:flex-initial"
                     data-testid={`link-deal-${o.dealpadDeal?.id}`}
                   >
                     <ExternalLink className="w-3.5 h-3.5" /> Open in DealPad
                   </a>
                   <button
                     onClick={() => setSendBackOpp(o)}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-amber-300 bg-amber-50 text-amber-800 text-xs font-medium hover:bg-amber-100"
+                    className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md border border-amber-300 bg-amber-50 text-amber-800 text-xs font-medium hover:bg-amber-100 flex-1 sm:flex-initial"
                     data-testid={`button-send-back-${o.id}`}
                   >
                     <Send className="w-3.5 h-3.5" /> Send back to DealPad
@@ -445,10 +445,10 @@ function OpportunitiesTab() {
       )}
 
       {queued.length > 0 && (
-        <div className="card p-5 border-amber-300">
-          <div className="flex items-center justify-between mb-3">
+        <div className="card p-4 sm:p-5 border-amber-300">
+          <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between mb-3">
             <div className="flex items-center gap-2">
-              <AlertTriangle className="w-4 h-4 text-amber-600" />
+              <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0" />
               <h3 className="text-sm font-semibold text-foreground">Queued for import ({queued.length})</h3>
             </div>
             <span className="text-xs text-muted-foreground">New opportunities in Dynamics not yet imported</span>
@@ -566,11 +566,12 @@ function OpportunitiesTab() {
       )}
 
       <div className="card p-0 overflow-hidden">
-        <div className="px-5 py-3 border-b border-stone-200 flex items-center justify-between">
+        <div className="px-4 sm:px-5 py-3 border-b border-stone-200 flex items-center justify-between gap-3 flex-wrap">
           <h3 className="text-sm font-semibold text-foreground">Synced opportunities ({synced.length})</h3>
           <span className="text-xs text-muted-foreground">DealPad ⇄ Dynamics</span>
         </div>
-        <table className="w-full text-sm">
+        <div className="overflow-x-auto">
+        <table className="w-full text-sm min-w-[820px]">
           <thead className="bg-stone-50 border-b border-stone-200 text-xs uppercase tracking-wider text-muted-foreground">
             <tr>
               <th className="px-4 py-3 text-left font-semibold">Opportunity</th>
@@ -713,6 +714,7 @@ function OpportunitiesTab() {
             })}
           </tbody>
         </table>
+        </div>
       </div>
 
       {agentRunOppId !== null && (agentDraft.isPending || agentDraft.isError) && (
@@ -769,10 +771,10 @@ function PipelineTab() {
 
   return (
     <div className="space-y-6">
-      <div className="card p-5 bg-amber-50/50 border-amber-200">
+      <div className="card p-4 sm:p-5 bg-amber-50/50 border-amber-200">
         <div className="flex items-start gap-3">
-          <TrendingUp className="w-5 h-5 text-primary mt-0.5" />
-          <div className="flex-1">
+          <TrendingUp className="w-5 h-5 text-primary mt-0.5 flex-shrink-0" />
+          <div className="flex-1 min-w-0">
             <h3 className="text-sm font-semibold text-foreground mb-1">Role 3 · Pipeline reporting (Dynamics is source of truth)</h3>
             <p className="text-xs text-muted-foreground leading-relaxed">
               These rollups read from the persisted opportunity store, so every push (manual or auto) immediately moves
@@ -782,14 +784,14 @@ function PipelineTab() {
         </div>
       </div>
 
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
         <Kpi label="Open Pipeline" value={fmtMoney(p.totalPipelineValue)} sub={`${p.openOpportunities} opps`} />
         <Kpi label="Weighted Pipeline" value={fmtMoney(p.weightedPipelineValue)} sub="Probability-adjusted" />
         <Kpi label="Win Rate (YTD)" value={`${p.winRate.toFixed(1)}%`} sub={`${p.wonYTD.count}W / ${p.lostYTD.count}L`} />
         <Kpi label="Quota Attainment" value={`${quotaAttainment.toFixed(1)}%`} sub={`${fmtMoney(p.wonYTD.value)} of ${fmtMoney(p.quotaTotal)}`} />
       </div>
 
-      <div className="card p-5">
+      <div className="card p-4 sm:p-5">
         <h3 className="text-sm font-semibold text-foreground mb-4">Pipeline by stage</h3>
         <div className="space-y-3">
           {p.byStage.map((s: any) => {
@@ -816,8 +818,8 @@ function PipelineTab() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
-        <div className="card p-5">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="card p-4 sm:p-5">
           <h3 className="text-sm font-semibold text-foreground mb-4">Forecast roll-up</h3>
           <div className="space-y-3">
             {[
@@ -847,7 +849,7 @@ function PipelineTab() {
           </div>
         </div>
 
-        <div className="card p-5">
+        <div className="card p-4 sm:p-5">
           <h3 className="text-sm font-semibold text-foreground mb-4">Owner performance</h3>
           <div className="space-y-3">
             {p.byOwner.map((o: any) => {
@@ -897,9 +899,9 @@ function SettingsTab() {
 
   return (
     <div className="space-y-6">
-      <div className="card p-5">
-        <div className="flex items-start justify-between mb-4">
-          <div>
+      <div className="card p-4 sm:p-5">
+        <div className="flex items-start justify-between gap-3 mb-4">
+          <div className="min-w-0">
             <h3 className="text-sm font-semibold text-foreground">Outbound auto-push</h3>
             <p className="text-xs text-muted-foreground mt-1">When enabled, every deal change in DealPad immediately writes back to the linked D365 opportunity.</p>
           </div>
@@ -926,9 +928,9 @@ function SettingsTab() {
         </div>
       </div>
 
-      <div className="card p-5">
-        <div className="flex items-start justify-between mb-4">
-          <div>
+      <div className="card p-4 sm:p-5">
+        <div className="flex items-start justify-between gap-3 mb-4">
+          <div className="min-w-0">
             <h3 className="text-sm font-semibold text-foreground">Inbound nightly batch</h3>
             <p className="text-xs text-muted-foreground mt-1">Refreshes all account and open opportunity records from D365 (simulated).</p>
           </div>
@@ -1086,9 +1088,9 @@ function NewOpportunityModal({ onClose }: { onClose: () => void }) {
           <button onClick={onClose} className="text-muted-foreground hover:text-foreground"><X className="w-5 h-5" /></button>
         </div>
 
-        <form onSubmit={submit} className="p-6 space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div className="col-span-2">
+        <form onSubmit={submit} className="p-4 sm:p-6 space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="sm:col-span-2">
               <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Account</label>
               <select required value={form.accountId} onChange={(e) => setForm({ ...form, accountId: e.target.value })}
                 className="w-full mt-1 px-3 py-2 border border-stone-300 rounded-md text-sm focus:outline-none focus:border-primary">
@@ -1097,7 +1099,7 @@ function NewOpportunityModal({ onClose }: { onClose: () => void }) {
               </select>
             </div>
 
-            <div className="col-span-2 p-4 rounded-lg bg-amber-50/50 border border-amber-200">
+            <div className="sm:col-span-2 p-4 rounded-lg bg-amber-50/50 border border-amber-200">
               <div className="flex items-start gap-2 mb-2">
                 <Sparkles className="w-4 h-4 text-primary mt-0.5" />
                 <div>
@@ -1119,7 +1121,7 @@ function NewOpportunityModal({ onClose }: { onClose: () => void }) {
               )}
             </div>
 
-            <div className="col-span-2">
+            <div className="sm:col-span-2">
               <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Opportunity Name</label>
               <input required type="text" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })}
                 placeholder="e.g., Acme Corp - 2026 Annual Audit"
