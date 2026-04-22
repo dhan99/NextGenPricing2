@@ -232,9 +232,27 @@ export function RenewalLeadsheet() {
   const cyLabel = currentDeal.dealNumber || "Current Year";
 
   return (
-    <div className="px-8 py-6 max-w-7xl mx-auto space-y-6">
-      {/* Header */}
-      <div className="flex items-start justify-between">
+    <div className="px-3 sm:px-8 py-3 sm:py-6 max-w-7xl mx-auto space-y-4 sm:space-y-6">
+      {/* Header — sticky compact on mobile, original layout on desktop */}
+      <div className="sm:hidden sticky top-0 z-20 bg-background -mx-3 px-3 -mt-3 pt-3 pb-2 border-b border-border">
+        <div className="flex items-center justify-between gap-2">
+          <div className="min-w-0">
+            <h1 className="text-base font-bold text-foreground tracking-tight leading-tight">Renewal Leadsheet</h1>
+            <p className="text-[11px] text-muted-foreground mt-0.5 truncate">
+              {currentDeal.client?.name || "Client"} — {currentDeal.title}
+            </p>
+          </div>
+          <div className="flex items-center gap-1 shrink-0">
+            <span title="Calc Parity: Verified" className="inline-flex items-center justify-center w-7 h-7 rounded-full border border-emerald-300 bg-emerald-50 text-emerald-700">
+              <CheckCircle2 className="w-3.5 h-3.5" />
+            </span>
+            <button className="btn-ghost p-1.5" title="Download"><Download className="w-4 h-4" /></button>
+            <button className="btn-ghost p-1.5" title="Refresh"><RefreshCw className="w-4 h-4" /></button>
+          </div>
+        </div>
+      </div>
+
+      <div className="hidden sm:flex items-start justify-between">
         <div>
           <h1 className="text-2xl font-bold text-foreground tracking-tight">Renewal Leadsheet</h1>
           <p className="text-sm text-muted-foreground mt-1">
@@ -352,8 +370,81 @@ export function RenewalLeadsheet() {
         </div>
       </div>
 
-      {/* Scope comparison table */}
-      <div className="card overflow-hidden">
+      {/* Scope comparison — mobile cards */}
+      <div className="sm:hidden space-y-2">
+        <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-1">
+          Scope · {currentDeal.client?.name || "Client"}
+        </div>
+        {scopeRows.length === 0 ? (
+          <div className="card p-4 text-center text-xs text-muted-foreground">
+            No scope items found. Add scope items to the deal to see line-by-line comparison.
+          </div>
+        ) : (
+          scopeRows.map((r) => {
+            const hrsUp = r.dHrs > 0;
+            const hrsDown = r.dHrs < 0;
+            const feeUp = r.dFee > 0;
+            const feeDown = r.dFee < 0;
+            return (
+              <div key={r.id} className="card p-3">
+                <div className="flex items-start justify-between gap-2 mb-2">
+                  <div className="text-[13px] font-medium text-primary leading-snug min-w-0 flex-1">
+                    {r.code ? `${r.code} ` : ""}{r.name}
+                  </div>
+                  <span className="shrink-0 text-[10px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded-full">
+                    {fmtPct(r.margin)}
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-[11px]">
+                  <div className="bg-stone-50 rounded p-2">
+                    <div className="text-muted-foreground uppercase tracking-wider text-[9px] mb-0.5">Hours</div>
+                    <div className="flex items-baseline gap-1.5">
+                      <span className="text-foreground/60">{Math.round(r.pyHrs)}</span>
+                      <span className="text-muted-foreground">→</span>
+                      <span className="font-semibold text-foreground">{Math.round(r.cyHrs)}</span>
+                    </div>
+                    <div className={`text-[10px] font-medium mt-0.5 ${hrsUp ? "text-emerald-600" : hrsDown ? "text-red-600" : "text-muted-foreground"}`}>
+                      {hrsUp ? "+" : ""}{Math.round(r.dHrs)}
+                    </div>
+                  </div>
+                  <div className="bg-stone-50 rounded p-2">
+                    <div className="text-muted-foreground uppercase tracking-wider text-[9px] mb-0.5">Fee</div>
+                    <div className="flex items-baseline gap-1.5">
+                      <span className="text-foreground/60">{fmtMoney(r.pyFee)}</span>
+                    </div>
+                    <div className="font-semibold text-foreground">{fmtMoney(r.cyFee)}</div>
+                    <div className={`text-[10px] font-medium mt-0.5 ${feeUp ? "text-emerald-600" : feeDown ? "text-red-600" : "text-muted-foreground"}`}>
+                      {feeUp ? "+" : feeDown ? "−" : ""}{fmtMoney(Math.abs(r.dFee))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })
+        )}
+        {/* Mobile total */}
+        <div className="card p-3 bg-stone-50 border-stone-300">
+          <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1.5">Total</div>
+          <div className="grid grid-cols-2 gap-2 text-[11px]">
+            <div>
+              <div className="text-muted-foreground text-[9px] uppercase tracking-wider">Hours</div>
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-foreground/60">{Math.round(totalRow.pyHrs)}</span>
+                <span className="text-muted-foreground">→</span>
+                <span className="font-bold text-foreground">{Math.round(totalRow.cyHrs)}</span>
+              </div>
+            </div>
+            <div>
+              <div className="text-muted-foreground text-[9px] uppercase tracking-wider">Fee</div>
+              <div className="font-bold text-foreground">{fmtMoney(totalRow.cyFee)}</div>
+              <div className="text-[10px] text-muted-foreground">vs {fmtMoney(totalRow.pyFee)}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Scope comparison table — desktop only */}
+      <div className="hidden sm:block card overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-stone-50 border-b border-stone-200">
@@ -471,20 +562,21 @@ export function RenewalLeadsheet() {
         </div>
       </div>
 
-      {/* Footer actions */}
-      <div className="flex items-center justify-between pt-2">
+      {/* Footer actions — primary CTA full-width on mobile, inline on desktop */}
+      <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-3 pt-2">
         <Link href={`/deals/${dealId}`}>
-          <button className="btn-ghost">
+          <button className="btn-ghost w-full sm:w-auto justify-center">
             <ArrowLeft className="w-4 h-4" />
             Back to Wizard
           </button>
         </Link>
-        <div className="flex items-center gap-3">
-          <button className="btn-ghost">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+          <button className="btn-ghost w-full sm:w-auto justify-center order-2 sm:order-1">
             <Download className="w-4 h-4" />
-            Download PDF Summary
+            <span className="sm:hidden">Download PDF</span>
+            <span className="hidden sm:inline">Download PDF Summary</span>
           </button>
-          <button onClick={handleSubmitApproval} disabled={submitApproval.isPending} className="btn-primary">
+          <button onClick={handleSubmitApproval} disabled={submitApproval.isPending} className="btn-primary w-full sm:w-auto justify-center order-1 sm:order-2">
             {submitApproval.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
             Submit for Approval
             <ArrowRight className="w-4 h-4" />
