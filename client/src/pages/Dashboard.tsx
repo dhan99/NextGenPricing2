@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
-import { useDashboardSummary, useDeals, useWorkdayDashboard } from "@/hooks/use-api";
+import { useDashboardSummary, useDeals, useWorkdayDashboard, fetchApi } from "@/hooks/use-api";
 import { formatCurrency, formatPercent, getStatusColor, getStatusLabel } from "@/lib/utils";
 import { Link } from "wouter";
 import { TrendingUp, DollarSign, AlertCircle, ArrowRight, FileText, ShieldCheck, Layers, Network, BarChart3, Shield, CheckCircle, Search, Sparkles, Lightbulb, RefreshCw, Briefcase, Settings2, ChevronDown, ChevronUp, ChevronsUpDown } from "lucide-react";
@@ -139,10 +139,7 @@ export function Dashboard() {
   // AI Insights
   const { data: insightsData, isLoading: insightsLoading, refetch: refetchInsights } = useQuery<{ capability: string; insights: Insight[] }>({
     queryKey: ["dashboard-insights", role],
-    queryFn: async () => {
-      const r = await fetch(`/api/ai/dashboard-insights?role=${role}`);
-      return r.json();
-    },
+    queryFn: () => fetchApi(`/api/ai/dashboard-insights?role=${role}`),
   });
 
   const askIntro = `Hi ${persona?.name.split(" ")[0] || "there"}! I can answer questions within your ${persona?.fullTitle || "role"} capability. Try asking about pipeline, margins, or approvals.`;
