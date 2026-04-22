@@ -15,6 +15,7 @@ export interface Persona {
     approveDeals: boolean;
     manageRateCards: boolean;
     manageScopeCatalog: boolean;
+    viewAdminConfig: boolean;
     viewPricing: boolean;
     editPricing: boolean;
     viewMargins: boolean;
@@ -39,6 +40,7 @@ export const PERSONAS: Record<PersonaRole, Persona> = {
       approveDeals: false,
       manageRateCards: false,
       manageScopeCatalog: false,
+      viewAdminConfig: true,
       viewPricing: true,
       editPricing: true,
       viewMargins: true,
@@ -61,6 +63,7 @@ export const PERSONAS: Record<PersonaRole, Persona> = {
       approveDeals: true,
       manageRateCards: false,
       manageScopeCatalog: false,
+      viewAdminConfig: false,
       viewPricing: true,
       editPricing: false,
       viewMargins: true,
@@ -83,6 +86,7 @@ export const PERSONAS: Record<PersonaRole, Persona> = {
       approveDeals: false,
       manageRateCards: true,
       manageScopeCatalog: true,
+      viewAdminConfig: true,
       viewPricing: true,
       editPricing: false,
       viewMargins: true,
@@ -105,6 +109,7 @@ export const PERSONAS: Record<PersonaRole, Persona> = {
       approveDeals: false,
       manageRateCards: false,
       manageScopeCatalog: false,
+      viewAdminConfig: false,
       viewPricing: true,
       editPricing: false,
       viewMargins: true,
@@ -127,6 +132,7 @@ export const PERSONAS: Record<PersonaRole, Persona> = {
       approveDeals: false,
       manageRateCards: false,
       manageScopeCatalog: false,
+      viewAdminConfig: false,
       viewPricing: true,
       editPricing: false,
       viewMargins: true,
@@ -149,6 +155,7 @@ export const PERSONAS: Record<PersonaRole, Persona> = {
       approveDeals: false,
       manageRateCards: false,
       manageScopeCatalog: false,
+      viewAdminConfig: false,
       viewPricing: false,
       editPricing: false,
       viewMargins: false,

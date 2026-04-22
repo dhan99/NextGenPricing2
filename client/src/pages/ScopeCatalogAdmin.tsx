@@ -8,6 +8,7 @@ import {
 import { useAuth } from "@/context/AuthContext";
 import { useMemo, useState } from "react";
 import { Search, BookOpen, Layers, Package, Plus, Pencil, Power, X, Check } from "lucide-react";
+import { ReadOnlyAdminBanner } from "@/components/ReadOnlyAdminBanner";
 
 type FormState = {
   code: string;
@@ -44,7 +45,7 @@ const SERVICE_LINE_OPTIONS = [
   "Consulting",
 ];
 
-export function ScopeCatalogAdmin() {
+export function ScopeCatalogAdmin({ readOnly = false }: { readOnly?: boolean }) {
   const { persona } = useAuth();
   const { data: catalog } = useScopeCatalog({ includeInactive: true });
   const { data: templates } = useScopeTemplates(null);
@@ -82,6 +83,7 @@ export function ScopeCatalogAdmin() {
   });
 
   const openCreate = () => {
+    if (readOnly) return;
     setEditingId(null);
     setForm(EMPTY_FORM);
     setFormError("");
@@ -89,6 +91,7 @@ export function ScopeCatalogAdmin() {
   };
 
   const openEdit = (item: any) => {
+    if (readOnly) return;
     setEditingId(item.id);
     setForm({
       code: item.code || "",
@@ -114,6 +117,7 @@ export function ScopeCatalogAdmin() {
   };
 
   const submitForm = async () => {
+    if (readOnly) return;
     setFormError("");
     if (!form.code.trim() || !form.name.trim() || !form.category.trim()) {
       setFormError("Code, name, and category are required.");
@@ -159,6 +163,7 @@ export function ScopeCatalogAdmin() {
     .filter(Boolean);
 
   const handleDeactivate = async (item: any) => {
+    if (readOnly) return;
     if (item.isActive === false) {
       await updateItem.mutateAsync({ id: item.id, data: { isActive: true, userName: persona?.name } });
       return;
@@ -174,13 +179,14 @@ export function ScopeCatalogAdmin() {
           <h1 className="text-2xl font-bold text-foreground tracking-tight">Scope Catalog</h1>
           <p className="text-muted-foreground text-sm mt-1">Governed scope items, assemblies, and starter templates</p>
         </div>
-        {tab === "items" && (
+        {tab === "items" && !readOnly && (
           <button onClick={openCreate} className="btn-primary inline-flex items-center gap-2">
             <Plus className="w-4 h-4" />
             New Scope Item
           </button>
         )}
       </div>
+      {readOnly && <ReadOnlyAdminBanner feature="the scope catalog" />}
 
       <div className="flex items-center gap-1 bg-muted rounded-lg p-0.5 mb-4 w-fit">
         <button onClick={() => setTab("items")} className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${tab === "items" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>
@@ -298,22 +304,26 @@ export function ScopeCatalogAdmin() {
                         )}
                       </td>
                       <td className="px-6 py-3 text-right">
-                        <div className="inline-flex items-center gap-1">
-                          <button
-                            onClick={() => openEdit(item)}
-                            className="p-1.5 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded transition-colors"
-                            title="Edit"
-                          >
-                            <Pencil className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => handleDeactivate(item)}
-                            className={`p-1.5 rounded transition-colors ${inactive ? "text-success hover:bg-success/10" : "text-muted-foreground hover:text-destructive hover:bg-destructive/10"}`}
-                            title={inactive ? "Reactivate" : "Deactivate"}
-                          >
-                            <Power className="w-4 h-4" />
-                          </button>
-                        </div>
+                        {readOnly ? (
+                          <span className="text-xs text-muted-foreground">—</span>
+                        ) : (
+                          <div className="inline-flex items-center gap-1">
+                            <button
+                              onClick={() => openEdit(item)}
+                              className="p-1.5 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded transition-colors"
+                              title="Edit"
+                            >
+                              <Pencil className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => handleDeactivate(item)}
+                              className={`p-1.5 rounded transition-colors ${inactive ? "text-success hover:bg-success/10" : "text-muted-foreground hover:text-destructive hover:bg-destructive/10"}`}
+                              title={inactive ? "Reactivate" : "Deactivate"}
+                            >
+                              <Power className="w-4 h-4" />
+                            </button>
+                          </div>
+                        )}
                       </td>
                     </tr>
                   );
@@ -327,7 +337,7 @@ export function ScopeCatalogAdmin() {
         </>
       )}
 
-      {editorOpen && (
+      {editorOpen && !readOnly && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={closeEditor}>
           <div className="bg-card rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between px-6 py-4 border-b border-border">

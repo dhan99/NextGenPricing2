@@ -58,19 +58,29 @@ function AuthenticatedApp() {
           {(params) => hasPermission("viewDeals") ? <DealDetail /> : <NoAccess feature="deal details" />}
         </Route>
         <Route path="/admin/rate-cards">
-          {hasPermission("manageRateCards") ? <RateCards /> : <NoAccess feature="rate card management" />}
+          {hasPermission("manageRateCards") || hasPermission("viewAdminConfig")
+            ? <RateCards />
+            : <NoAccess feature="rate card management" />}
         </Route>
         <Route path="/admin/scope-catalog">
-          {hasPermission("manageScopeCatalog") ? <ScopeCatalogAdmin /> : <NoAccess feature="scope catalog management" />}
+          {hasPermission("manageScopeCatalog") || hasPermission("viewAdminConfig")
+            ? <ScopeCatalogAdmin readOnly={!hasPermission("manageScopeCatalog")} />
+            : <NoAccess feature="scope catalog management" />}
         </Route>
         <Route path="/admin/prompt-sets">
-          {hasPermission("manageScopeCatalog") ? <PromptSetsAdmin /> : <NoAccess feature="prompt set governance" />}
+          {hasPermission("manageScopeCatalog") || hasPermission("viewAdminConfig")
+            ? <PromptSetsAdmin readOnly={!hasPermission("manageScopeCatalog")} />
+            : <NoAccess feature="prompt set governance" />}
         </Route>
         <Route path="/admin/engagement-letters">
-          {hasPermission("manageScopeCatalog") ? <CongaTemplatesAdmin /> : <NoAccess feature="engagement letter templates" />}
+          {hasPermission("manageScopeCatalog") || hasPermission("viewAdminConfig")
+            ? <CongaTemplatesAdmin readOnly={!hasPermission("manageScopeCatalog")} />
+            : <NoAccess feature="engagement letter templates" />}
         </Route>
         <Route path="/admin/margin-targets">
-          {hasPermission("manageRateCards") ? <MarginTargetsAdmin /> : <NoAccess feature="margin target governance" />}
+          {hasPermission("manageRateCards") || hasPermission("viewAdminConfig")
+            ? <MarginTargetsAdmin readOnly={!hasPermission("manageRateCards")} />
+            : <NoAccess feature="margin target governance" />}
         </Route>
         <Route path="/analytics">
           {hasPermission("viewDeals") ? <Analytics /> : <NoAccess feature="analytics" />}

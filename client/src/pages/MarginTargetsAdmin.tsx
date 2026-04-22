@@ -8,6 +8,7 @@ import {
   useDeleteMarginTargetOverride,
   useEngagementInputSpec,
 } from "@/hooks/use-api";
+import { ReadOnlyAdminBanner } from "@/components/ReadOnlyAdminBanner";
 
 // Canonical service-line and business-unit lists — mirror PromptSetsAdmin so
 // admins see the same names everywhere. Update both files together when the
@@ -50,7 +51,7 @@ const parseOptionalNum = (s: string): number | null | undefined => {
   return Number.isFinite(n) ? n : undefined;
 };
 
-export function MarginTargetsAdmin() {
+export function MarginTargetsAdmin({ readOnly = false }: { readOnly?: boolean }) {
   const { data } = useMarginTargets();
   const updateFirm = useUpdateFirmMarginTarget();
   const createOverride = useCreateMarginTargetOverride();
@@ -142,6 +143,8 @@ export function MarginTargetsAdmin() {
           </p>
         </div>
       </div>
+      {readOnly && <ReadOnlyAdminBanner feature="margin targets and policies" />}
+      <fieldset disabled={readOnly} className="contents">
 
       <p className="text-xs text-muted-foreground mb-6 ml-13">
         Resolution order on every deal: <strong>Deal override</strong> → <strong>Business Unit</strong> → <strong>Service Line</strong> → <strong>Firm default</strong>.
@@ -297,6 +300,7 @@ export function MarginTargetsAdmin() {
         onSave={(id, payload) => updateOverride.mutate({ id, ...payload })}
         onDelete={(id) => deleteOverride.mutate(id)}
       />
+      </fieldset>
     </div>
   );
 }

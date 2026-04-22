@@ -2,8 +2,9 @@ import { useState } from "react";
 import { useCongaTemplates, useCongaSettings, useUpdateCongaSettings } from "@/hooks/use-api";
 import { FileText, Settings, Database, ChevronDown, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { ReadOnlyAdminBanner } from "@/components/ReadOnlyAdminBanner";
 
-export function CongaTemplatesAdmin() {
+export function CongaTemplatesAdmin({ readOnly = false }: { readOnly?: boolean }) {
   const { data: tmplResp, isLoading } = useCongaTemplates();
   const { data: settings } = useCongaSettings();
   const update = useUpdateCongaSettings();
@@ -23,6 +24,9 @@ export function CongaTemplatesAdmin() {
         </p>
       </div>
 
+      {readOnly && <ReadOnlyAdminBanner feature="engagement letter templates" />}
+
+      <fieldset disabled={readOnly}>
       <div className="card p-6">
         <div className="flex items-center gap-2 mb-4">
           <Settings className="w-5 h-5 text-primary" />
@@ -74,6 +78,7 @@ export function CongaTemplatesAdmin() {
           Conga Composer REST API. No code change required.
         </p>
       </div>
+      </fieldset>
 
       <div className="card p-6">
         <div className="flex items-center justify-between mb-4">

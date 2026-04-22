@@ -23,6 +23,10 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
   const showDeals = hasPermission("viewDeals");
   const canManageRates = hasPermission("manageRateCards");
   const canManageCatalog = hasPermission("manageScopeCatalog");
+  const canViewAdmin = hasPermission("viewAdminConfig");
+  const showRates = canManageRates || canViewAdmin;
+  const showCatalog = canManageCatalog || canViewAdmin;
+  const adminReadOnly = canViewAdmin && !canManageRates && !canManageCatalog;
 
   const navigation = [
     { name: "Dashboard", href: "/", icon: LayoutDashboard, show: hasPermission("viewDashboard") },
@@ -35,11 +39,11 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
   ];
 
   const adminNavigation = [
-    { name: "Rate Cards", href: "/admin/rate-cards", icon: DollarSign, show: canManageRates },
-    { name: "Scope Catalog", href: "/admin/scope-catalog", icon: BookOpen, show: canManageCatalog },
-    { name: "Prompt Sets", href: "/admin/prompt-sets", icon: MessageSquare, show: canManageCatalog },
-    { name: "Engagement Letters", href: "/admin/engagement-letters", icon: FileText, show: canManageCatalog },
-    { name: "Margin Targets", href: "/admin/margin-targets", icon: Target, show: canManageRates },
+    { name: "Rate Cards", href: "/admin/rate-cards", icon: DollarSign, show: showRates },
+    { name: "Scope Catalog", href: "/admin/scope-catalog", icon: BookOpen, show: showCatalog },
+    { name: "Prompt Sets", href: "/admin/prompt-sets", icon: MessageSquare, show: showCatalog },
+    { name: "Engagement Letters", href: "/admin/engagement-letters", icon: FileText, show: showCatalog },
+    { name: "Margin Targets", href: "/admin/margin-targets", icon: Target, show: showRates },
   ];
   const showAdmin = adminNavigation.some(n => n.show);
 
@@ -99,6 +103,11 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
               <div className="flex items-center gap-3">
                 <Settings className="w-4.5 h-4.5" />
                 Admin
+                {adminReadOnly && (
+                  <span className="ml-1 text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 border border-amber-200">
+                    Read-only
+                  </span>
+                )}
               </div>
               <ChevronDown className={cn("w-4 h-4 transition-transform", adminOpen && "rotate-180")} />
             </button>

@@ -6,6 +6,7 @@ import {
   useCreatePromptSetItem, useUpdatePromptSetItem, useDeletePromptSetItem,
 } from "@/hooks/use-api";
 import { MessageSquare, Plus, Send, Copy, Archive, Trash2, Pencil, Check, X, AlertCircle } from "lucide-react";
+import { ReadOnlyAdminBanner } from "@/components/ReadOnlyAdminBanner";
 
 const BUSINESS_UNITS = ["", "Tax Advisory", "Audit", "Risk Advisory", "Consulting", "Technology Consulting", "Compliance Consulting"];
 const SERVICE_LINES = ["", "Tax-PHB", "Tax-Corporate", "Audit", "Risk Assurance", "Cloud Services", "Digital Transformation", "Compliance Consulting"];
@@ -16,7 +17,7 @@ const STATUS_STYLES: Record<string, string> = {
   archived: "bg-stone-100 text-stone-600 border-stone-200",
 };
 
-export function PromptSetsAdmin() {
+export function PromptSetsAdmin({ readOnly = false }: { readOnly?: boolean }) {
   const [statusFilter, setStatusFilter] = useState<string>("");
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [showCreate, setShowCreate] = useState(false);
@@ -38,14 +39,17 @@ export function PromptSetsAdmin() {
             Govern complexity-driver prompts per Business Unit and Service Line. Sets are versioned and published; deals automatically use the most-specific published set for their BU + Service Line.
           </p>
         </div>
-        <button
-          onClick={() => setShowCreate(true)}
-          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90"
-        >
-          <Plus className="w-4 h-4" />
-          New Prompt Set
-        </button>
+        {!readOnly && (
+          <button
+            onClick={() => setShowCreate(true)}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90"
+          >
+            <Plus className="w-4 h-4" />
+            New Prompt Set
+          </button>
+        )}
       </div>
+      {readOnly && <ReadOnlyAdminBanner feature="prompt sets" />}
 
       <div className="grid grid-cols-12 gap-6">
         <div className="col-span-5">
@@ -95,15 +99,17 @@ export function PromptSetsAdmin() {
         </div>
 
         <div className="col-span-7">
+          <fieldset disabled={readOnly} className="contents">
           {detail ? <PromptSetDetail set={detail} /> : (
             <div className="card p-12 text-center text-sm text-muted-foreground">
-              Select a prompt set on the left to view and edit it.
+              Select a prompt set on the left to view{readOnly ? " it." : " and edit it."}
             </div>
           )}
+          </fieldset>
         </div>
       </div>
 
-      {showCreate && <CreateSetModal onClose={() => setShowCreate(false)} onCreated={(id) => { setShowCreate(false); setSelectedId(id); }} />}
+      {showCreate && !readOnly && <CreateSetModal onClose={() => setShowCreate(false)} onCreated={(id) => { setShowCreate(false); setSelectedId(id); }} />}
     </div>
   );
 }
