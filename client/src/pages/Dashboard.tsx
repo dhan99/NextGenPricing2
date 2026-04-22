@@ -199,16 +199,16 @@ export function Dashboard() {
         </div>
       </div>
 
-      {/* KPIs: mobile horizontal scroll of slim chips · desktop 4-col grid */}
-      <div className="sm:hidden flex items-stretch gap-2 overflow-x-auto -mx-3 px-3 pb-1 mb-3 snap-x snap-mandatory">
+      {/* KPIs: mobile compact 2-col grid · desktop 4-col grid */}
+      <div className="sm:hidden grid grid-cols-2 gap-2 mb-3">
         {kpis.map((kpi) => {
           const content = (
-            <div className="card p-2.5 min-w-[140px] snap-start flex flex-col">
-              <div className="flex items-center gap-1.5 mb-1">
+            <div className="card p-2.5 flex flex-col">
+              <div className="flex items-center gap-1.5 mb-0.5 min-w-0">
                 <kpi.icon className={`w-3 h-3 shrink-0 ${accent.text}`} />
                 <span className="text-[9px] text-muted-foreground font-medium uppercase tracking-wider truncate">{kpi.label}</span>
               </div>
-              <p className={`text-base font-bold leading-tight ${kpi.valueClass || "text-foreground"}`}>{kpi.value}</p>
+              <p className={`text-base font-bold leading-tight truncate ${kpi.valueClass || "text-foreground"}`}>{kpi.value}</p>
             </div>
           );
           return kpi.href ? (
