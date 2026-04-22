@@ -3693,10 +3693,12 @@ function EngagementLettersPanel({ dealId, onGenerate }: { dealId: number; onGene
                   {l.status}
                 </span>
                 {l.status === "generated" && (
-                  <a href={`/api/conga/letters/${l.id}/download`} target="_blank" rel="noopener noreferrer"
-                     className="text-xs px-3 py-1.5 rounded-md bg-primary text-primary-foreground hover:opacity-90 flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => openProtectedDoc(`/api/conga/letters/${l.id}/download`).catch((err) => alert(err?.message || "Failed to open engagement letter"))}
+                    className="text-xs px-3 py-1.5 rounded-md bg-primary text-primary-foreground hover:opacity-90 flex items-center gap-1">
                     <Download className="w-3 h-3" /> Download
-                  </a>
+                  </button>
                 )}
               </div>
             </div>
@@ -3732,7 +3734,7 @@ function EngagementLetterModal({ deal, onClose }: { deal: any; onClose: () => vo
     try {
       const res: any = await generate.mutateAsync({ dealId: deal.id, templateId: selectedId });
       onClose();
-      if (res?.id) window.open(`/api/conga/letters/${res.id}/download`, "_blank", "noopener,noreferrer");
+      if (res?.id) openProtectedDoc(`/api/conga/letters/${res.id}/download`).catch(() => {/* surfaced inline */});
     } catch {/* react-query exposes via .error */}
   };
 
