@@ -1778,18 +1778,18 @@ function PricingStep({ deal }: { deal: any }) {
               </p>
             </div>
           )}
-          <div className="overflow-auto max-h-[60vh] relative">
-            <table className="w-full">
-              <thead className="sticky top-0 z-10">
-                <tr className="bg-muted/95 backdrop-blur supports-[backdrop-filter]:bg-muted/80 shadow-[0_1px_0_0_var(--tw-shadow-color)] shadow-border">
-                  <th className="text-left px-6 py-3 text-xs font-semibold text-muted-foreground uppercase">Role</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase">Level</th>
-                  <th className="text-right px-4 py-3 text-xs font-semibold text-muted-foreground uppercase">Hours</th>
-                  <th className="text-right px-4 py-3 text-xs font-semibold text-muted-foreground uppercase">Rate</th>
-                  <th className="text-right px-4 py-3 text-xs font-semibold text-muted-foreground uppercase">Cost Rate</th>
-                  <th className="text-right px-4 py-3 text-xs font-semibold text-muted-foreground uppercase">Fee</th>
-                  <th className="text-right px-4 py-3 text-xs font-semibold text-muted-foreground uppercase">Cost</th>
-                  <th className="text-right px-6 py-3 text-xs font-semibold text-muted-foreground uppercase">Margin</th>
+          <div className="overflow-auto max-h-[520px] relative">
+            <table className="w-full border-separate border-spacing-0">
+              <thead>
+                <tr>
+                  <th className="sticky top-0 z-20 bg-muted text-left px-6 py-3 text-xs font-semibold text-muted-foreground uppercase border-b border-border">Role</th>
+                  <th className="sticky top-0 z-20 bg-muted text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase border-b border-border">Level</th>
+                  <th className="sticky top-0 z-20 bg-muted text-right px-4 py-3 text-xs font-semibold text-muted-foreground uppercase border-b border-border">Hours</th>
+                  <th className="sticky top-0 z-20 bg-muted text-right px-4 py-3 text-xs font-semibold text-muted-foreground uppercase border-b border-border">Rate</th>
+                  <th className="sticky top-0 z-20 bg-muted text-right px-4 py-3 text-xs font-semibold text-muted-foreground uppercase border-b border-border">Cost Rate</th>
+                  <th className="sticky top-0 z-20 bg-muted text-right px-4 py-3 text-xs font-semibold text-muted-foreground uppercase border-b border-border">Fee</th>
+                  <th className="sticky top-0 z-20 bg-muted text-right px-4 py-3 text-xs font-semibold text-muted-foreground uppercase border-b border-border">Cost</th>
+                  <th className="sticky top-0 z-20 bg-muted text-right px-6 py-3 text-xs font-semibold text-muted-foreground uppercase border-b border-border">Margin</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
