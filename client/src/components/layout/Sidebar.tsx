@@ -28,7 +28,7 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
     { name: "Dashboard", href: "/", icon: LayoutDashboard, show: hasPermission("viewDashboard") },
     { name: "Engagements", href: "/deals", icon: FileText, show: showDeals },
     { name: "Analytics", href: "/analytics", icon: BarChart3, show: showDeals },
-    { name: "Dynamics CRM", href: "/integrations/dynamics", icon: Database, show: showDeals, dividerBefore: true },
+    { name: "Dynamics CRM", href: "/integrations/dynamics", icon: Database, show: showDeals, dividerBefore: true, sectionLabel: "Integrations" },
     { name: "Intapp Risk", href: "/integrations/intapp", icon: ShieldAlert, show: hasPermission("viewRiskSummary") },
     { name: "Workday", href: "/integrations/workday", icon: Briefcase, show: showDeals },
     { name: "Architecture", href: "/architecture", icon: Layers, show: hasPermission("viewArchitecture"), dividerBefore: true },
@@ -69,6 +69,11 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
             <div key={item.href}>
               {item.dividerBefore && (
                 <div className="my-2 mx-3 border-t border-sidebar-accent" />
+              )}
+              {(item as any).sectionLabel && (
+                <div className="px-3 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-sidebar-muted/70">
+                  {(item as any).sectionLabel}
+                </div>
               )}
               <Link href={item.href}>
                 <div className={cn(
