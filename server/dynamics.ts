@@ -278,7 +278,14 @@ export function tmplKey(name: string): string | null {
   const n = (name || "").toLowerCase();
   if (n.includes("audit")) return "Annual Audit";
   if (n.includes("tax provision") || n.includes("tax outsourc")) return "Tax Provision Outsourcing";
-  if (n.includes("erp")) return "ERP Implementation";
+  if (
+    n.includes("erp") ||
+    n.includes("s/4hana") || n.includes("s4hana") || n.includes("s/4 hana") ||
+    n.includes("sap implementation") || n.includes("sap rollout") ||
+    n.includes("oracle fusion") || n.includes("oracle erp") ||
+    n.includes("workday financials") || n.includes("workday hcm") ||
+    n.includes("workday implementation")
+  ) return "ERP Implementation";
   if (n.includes("sox")) return "SOX Readiness";
   if (n.includes("cloud") || n.includes("migration")) return "Cloud Migration";
   if (n.includes("analytics") || n.includes("data warehouse") || n.includes("bi ")) return "Data Analytics Platform";

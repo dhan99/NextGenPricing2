@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useRoute } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
-import { useDeal, useUpdateDeal, useScopeCatalog, useScopeTemplates, useApplyScopeTemplate, useDealScopeItems, useAddScopeItem, useRemoveScopeItem, useRoles, useDealPricing, useUpdatePricingLine, useDealScenarios, useSelectScenario, useDealApprovals, useSubmitApproval, useUpdateApproval, useDealPrompts, useUpdatePrompt, useEngagementInputSpec, useAIDealSimilarity, useAIEffortEstimation, useAIMarginAdvisor, useAIScenarioRecommendation, useAIRiskSummary, useDealIntappScreening, useRunIntappScreening, useIntappOverride, useAddIntappMitigation, useUpdateIntappMitigation, useWorkdayLatestValidation, useWorkdayCostCenters, useRunWorkdayValidation, useLinkWorkdayCostCenter, useOverrideWorkdayValidation, usePromptSets, useCongaTemplates, useDealEngagementLetters, useGenerateEngagementLetter, useAgentApproveDeal, useAgentDiscardDeal, useAgentOpenWizard, useAgentResubmit, useDealMarginTarget } from "@/hooks/use-api";
+import { useDeal, useUpdateDeal, useScopeCatalog, useScopeTemplates, useApplyScopeTemplate, useErpRescale, useDealScopeItems, useAddScopeItem, useRemoveScopeItem, useRoles, useDealPricing, useUpdatePricingLine, useDealScenarios, useSelectScenario, useDealApprovals, useSubmitApproval, useUpdateApproval, useDealPrompts, useUpdatePrompt, useEngagementInputSpec, useAIDealSimilarity, useAIEffortEstimation, useAIMarginAdvisor, useAIScenarioRecommendation, useAIRiskSummary, useDealIntappScreening, useRunIntappScreening, useIntappOverride, useAddIntappMitigation, useUpdateIntappMitigation, useWorkdayLatestValidation, useWorkdayCostCenters, useRunWorkdayValidation, useLinkWorkdayCostCenter, useOverrideWorkdayValidation, usePromptSets, useCongaTemplates, useDealEngagementLetters, useGenerateEngagementLetter, useAgentApproveDeal, useAgentDiscardDeal, useAgentOpenWizard, useAgentResubmit, useDealMarginTarget } from "@/hooks/use-api";
 import { ResultBadge as IntappResultBadge, RiskBadge as IntappRiskBadge, SourceBadge as IntappSourceBadge } from "./Intapp";
 import { ShieldAlert, ShieldCheck, Unlock } from "lucide-react";
 import { formatCurrency, formatPercent, formatNumber, formatRelativeTime, getStatusColor, getStatusLabel, cn } from "@/lib/utils";
@@ -403,7 +403,18 @@ function ScopeStep({ deal }: { deal: any }) {
   const addItem = useAddScopeItem();
   const removeItem = useRemoveScopeItem();
   const applyTemplate = useApplyScopeTemplate();
+  const erpRescale = useErpRescale();
   const estimation = useAIEffortEstimation();
+  const isErpDeal = (deal.serviceLine || "") === "ERP Implementation";
+  const ei: Record<string, any> = (deal.engagementInputs as any) || {};
+  const erpInputsSummary = (() => {
+    if (!isErpDeal) return null;
+    const ent = ei.entities ?? "1", ctr = ei.countries ?? "1";
+    const mods = Array.isArray(ei.modules) ? ei.modules.join("/")
+      : (typeof ei.modules === "string" && ei.modules.trim()) ? ei.modules.split(/[,\s]+/).filter(Boolean).join("/")
+      : "FI/CO";
+    return `${ent} entit${Number(ent) === 1 ? "y" : "ies"} · ${ctr} countr${Number(ctr) === 1 ? "y" : "ies"} · modules: ${mods} · ${ei.integrations ?? 0} integrations · ${ei.conversions ?? 0} conversions · ${ei.ricefw ?? 0} RICEFW`;
+  })();
   const [searchTerm, setSearchTerm] = useState("");
   const [hasEstimated, setHasEstimated] = useState(false);
   const [showAllPractices, setShowAllPractices] = useState(false);
@@ -483,6 +494,27 @@ function ScopeStep({ deal }: { deal: any }) {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
       <div className="lg:col-span-2 space-y-6">
+        {isErpDeal && (
+          <div className="rounded-xl border border-amber-300 bg-amber-50/60 p-4 flex items-start gap-3">
+            <Sparkles className="w-5 h-5 text-amber-700 mt-0.5 shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-foreground">SAP Activate scaling</p>
+              <p className="text-xs text-foreground/80 mt-0.5 leading-relaxed">
+                Hours scale from engagement parameters (entities, countries, modules, integrations, conversions, RICEFW). Edit them in <span className="font-medium">Engagement Inputs</span> on the Setup step, then click below to re-apply.
+              </p>
+              <p className="text-[11px] text-muted-foreground mt-1.5 font-mono">{erpInputsSummary}</p>
+            </div>
+            <button
+              onClick={() => erpRescale.mutate({ dealId: deal.id })}
+              disabled={erpRescale.isPending}
+              className="btn-primary text-sm shrink-0"
+            >
+              {erpRescale.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+              Re-scale items
+            </button>
+          </div>
+        )}
+
         <div className="card p-6">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-semibold text-foreground">Deal Scope Items</h2>
@@ -537,6 +569,9 @@ function ScopeStep({ deal }: { deal: any }) {
                       <p className="text-sm font-medium text-foreground">{si.scopeItem?.name}</p>
                     </div>
                     <p className="text-xs text-muted-foreground mt-0.5">{si.adjustedHours || si.scopeItem?.defaultHours} hrs (x{si.complexityMultiplier} multiplier)</p>
+                    {si.notes && (
+                      <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded px-2 py-1 mt-1.5 inline-block font-mono">{si.notes}</p>
+                    )}
                   </div>
                   <button onClick={() => removeItem.mutate({ dealId: deal.id, id: si.id })} className="p-1.5 text-muted-foreground hover:text-destructive transition-colors">
                     <Trash2 className="w-4 h-4" />
@@ -965,7 +1000,43 @@ function EngagementInputsCard({ deal }: { deal: any }) {
                   </span>
                 )}
               </label>
-              {f.type === "select" ? (
+              {f.type === "multiselect" ? (
+                <div className="flex flex-wrap gap-1.5">
+                  {f.options.map((opt: string) => {
+                    const selected = (() => {
+                      const v = value;
+                      if (Array.isArray(v)) return v.includes(opt);
+                      return typeof v === "string" && v.split(/[,\s]+/).map(s => s.trim()).includes(opt);
+                    })();
+                    return (
+                      <button
+                        key={opt}
+                        type="button"
+                        onClick={() => {
+                          const cur: string[] = (() => {
+                            const v = value;
+                            if (Array.isArray(v)) return [...v];
+                            if (typeof v === "string" && v.trim()) return v.split(/[,\s]+/).map(s => s.trim()).filter(Boolean);
+                            return [];
+                          })();
+                          const next = selected ? cur.filter(x => x !== opt) : [...cur, opt];
+                          const nextStr = next.join(",");
+                          setField(f.key, nextStr);
+                          commitField(f.key, nextStr);
+                        }}
+                        className={cn(
+                          "px-2.5 py-1 text-xs font-semibold rounded-full border transition-colors",
+                          selected
+                            ? "bg-primary text-primary-foreground border-primary"
+                            : "bg-card text-muted-foreground border-border hover:border-primary"
+                        )}
+                      >
+                        {opt}
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : f.type === "select" ? (
                 <select
                   value={value}
                   onChange={(e) => {
@@ -1032,13 +1103,23 @@ function ScopeBreakdownPanel({ dealId, pricingLines }: { dealId: number; pricing
     if (!groups[prefix]) groups[prefix] = [];
     groups[prefix].push(item);
   });
-  const groupOrder = ["IMPL", "TEST", "PMO", "TRN"];
+  const groupOrder = [
+    // SAP Activate phases — render in canonical order so reviewers see
+    // Prepare → Explore → Realize → Deploy → Run for ERP deals.
+    "ERPPREP", "ERPEXPL", "ERPRLZE", "ERPDPLY", "ERPRUN",
+    "IMPL", "TEST", "PMO", "TRN",
+  ];
   const orderedGroupKeys = [
     ...groupOrder.filter((g) => groups[g]),
     ...Object.keys(groups).filter((g) => !groupOrder.includes(g)).sort(),
   ];
 
   const groupLabel: Record<string, string> = {
+    ERPPREP: "Prepare (SAP Activate)",
+    ERPEXPL: "Explore (SAP Activate)",
+    ERPRLZE: "Realize (SAP Activate)",
+    ERPDPLY: "Deploy (SAP Activate)",
+    ERPRUN: "Run (SAP Activate)",
     IMPL: "Implementation",
     TEST: "Testing & QA",
     PMO: "Project Management",
@@ -1053,6 +1134,12 @@ function ScopeBreakdownPanel({ dealId, pricingLines }: { dealId: number; pricing
     lines.reduce((sum: number, l: any) => {
       const h = allocatedHoursForCell(itemHours, parseFloat(l.hours || 0));
       return sum + h * parseFloat(l.rate || 0);
+    }, 0);
+
+  const itemRowCost = (itemHours: number) =>
+    lines.reduce((sum: number, l: any) => {
+      const h = allocatedHoursForCell(itemHours, parseFloat(l.hours || 0));
+      return sum + h * parseFloat(l.costRate || 0);
     }, 0);
 
   const itemRowHours = (itemHours: number) =>
@@ -1092,13 +1179,21 @@ function ScopeBreakdownPanel({ dealId, pricingLines }: { dealId: number; pricing
               const groupItems = groups[g];
               const groupHours = groupItems.reduce((s, i) => s + parseFloat(i.adjustedHours || 0) * parseFloat(i.complexityMultiplier || 1) * (i.quantity || 1), 0);
               const groupFee = itemRowFee(groupHours);
+              const groupCost = itemRowCost(groupHours);
+              const groupMargin = groupFee - groupCost;
+              const groupMarginPct = groupFee > 0 ? (groupMargin / groupFee) * 100 : 0;
               return (
                 <React.Fragment key={`grp-${g}`}>
                   <tr className="bg-amber-50/40">
                     <td className="px-6 py-2 text-xs font-bold text-foreground uppercase tracking-wide" colSpan={2 + lines.length + 1}>
-                      <span className="text-primary">{g}</span>
-                      <span className="text-muted-foreground ml-2 normal-case font-medium">{groupLabel[g] || g}</span>
-                      <span className="text-muted-foreground ml-3 font-normal">·  {groupItems.length} items · {formatNumber(groupHours)} hrs · {formatCurrency(groupFee)}</span>
+                      <div className="flex items-baseline flex-wrap gap-x-3 gap-y-1">
+                        <span className="text-primary">{g}</span>
+                        <span className="text-muted-foreground normal-case font-medium">{groupLabel[g] || g}</span>
+                        <span className="text-muted-foreground font-normal">· {groupItems.length} items · {formatNumber(groupHours)} hrs</span>
+                        <span className="text-muted-foreground font-normal">· Fee {formatCurrency(groupFee)}</span>
+                        <span className="text-muted-foreground font-normal">· Cost {formatCurrency(groupCost)}</span>
+                        <span className={cn("font-semibold normal-case", groupMargin >= 0 ? "text-success" : "text-destructive")}>· Margin {formatCurrency(groupMargin)} ({groupMarginPct.toFixed(1)}%)</span>
+                      </div>
                     </td>
                   </tr>
                   {groupItems.map((item: any) => {

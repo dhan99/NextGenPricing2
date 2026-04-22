@@ -1036,6 +1036,266 @@
       "sort_order": 50,
       "service_lines": "Financial Audit,Audit",
       "is_active": true
+    },
+    {
+      "id": 53,
+      "code": "ERPPREP-001",
+      "name": "Project Mobilization & Kickoff",
+      "category": "ERP - Prepare",
+      "description": "Stand up the engagement: governance charter, RACI, kickoff workshops, communication plan.",
+      "default_hours": "120",
+      "is_assembly": false,
+      "parent_id": null,
+      "sort_order": 53,
+      "service_lines": "ERP Implementation,Digital Transformation",
+      "is_active": true
+    },
+    {
+      "id": 54,
+      "code": "ERPPREP-002",
+      "name": "PMO Setup & Governance",
+      "category": "ERP - Prepare",
+      "description": "Project management office, status cadence, risk/issue/decision logs, steering committee operations.",
+      "default_hours": "200",
+      "is_assembly": false,
+      "parent_id": null,
+      "sort_order": 54,
+      "service_lines": "ERP Implementation,Digital Transformation",
+      "is_active": true
+    },
+    {
+      "id": 55,
+      "code": "ERPPREP-003",
+      "name": "Roadmap & Implementation Plan",
+      "category": "ERP - Prepare",
+      "description": "Phase plan, integrated milestones, resource ramp, executive readout deck.",
+      "default_hours": "160",
+      "is_assembly": false,
+      "parent_id": null,
+      "sort_order": 55,
+      "service_lines": "ERP Implementation,Digital Transformation",
+      "is_active": true
+    },
+    {
+      "id": 56,
+      "code": "ERPEXPL-001",
+      "name": "Fit-to-Standard \u2014 Finance (FI/CO)",
+      "category": "ERP - Explore",
+      "description": "FI/CO fit-to-standard workshops, gap log, country-localization review.",
+      "default_hours": "240",
+      "is_assembly": false,
+      "parent_id": null,
+      "sort_order": 56,
+      "service_lines": "ERP Implementation,Digital Transformation",
+      "is_active": true
+    },
+    {
+      "id": 57,
+      "code": "ERPEXPL-002",
+      "name": "Fit-to-Standard \u2014 Supply Chain (MM/SD)",
+      "category": "ERP - Explore",
+      "description": "Procure-to-pay & order-to-cash fit-to-standard workshops, gap log.",
+      "default_hours": "240",
+      "is_assembly": false,
+      "parent_id": null,
+      "sort_order": 57,
+      "service_lines": "ERP Implementation,Digital Transformation",
+      "is_active": true
+    },
+    {
+      "id": 58,
+      "code": "ERPEXPL-003",
+      "name": "Fit-to-Standard \u2014 Manufacturing (PP/WM)",
+      "category": "ERP - Explore",
+      "description": "Production planning + warehouse management workshops, shop-floor flows.",
+      "default_hours": "200",
+      "is_assembly": false,
+      "parent_id": null,
+      "sort_order": 58,
+      "service_lines": "ERP Implementation,Digital Transformation",
+      "is_active": true
+    },
+    {
+      "id": 59,
+      "code": "ERPEXPL-004",
+      "name": "Fit-to-Standard \u2014 HR & Payroll",
+      "category": "ERP - Explore",
+      "description": "Hire-to-retire workshops, payroll country localization review.",
+      "default_hours": "200",
+      "is_assembly": false,
+      "parent_id": null,
+      "sort_order": 59,
+      "service_lines": "ERP Implementation,Digital Transformation",
+      "is_active": true
+    },
+    {
+      "id": 60,
+      "code": "ERPEXPL-005",
+      "name": "Solution Architecture & RICEFW Design",
+      "category": "ERP - Explore",
+      "description": "Target architecture, integration topology, RICEFW catalog & functional designs.",
+      "default_hours": "280",
+      "is_assembly": false,
+      "parent_id": null,
+      "sort_order": 60,
+      "service_lines": "ERP Implementation,Digital Transformation",
+      "is_active": true
+    },
+    {
+      "id": 61,
+      "code": "ERPRLZE-001",
+      "name": "Configuration \u2014 Finance",
+      "category": "ERP - Realize",
+      "description": "Configure FI/CO across legal entities; intercompany, tax, COA mapping.",
+      "default_hours": "320",
+      "is_assembly": false,
+      "parent_id": null,
+      "sort_order": 61,
+      "service_lines": "ERP Implementation,Digital Transformation",
+      "is_active": true
+    },
+    {
+      "id": 62,
+      "code": "ERPRLZE-002",
+      "name": "Configuration \u2014 Supply Chain",
+      "category": "ERP - Realize",
+      "description": "Configure MM/SD across entities; pricing, output, taxation.",
+      "default_hours": "320",
+      "is_assembly": false,
+      "parent_id": null,
+      "sort_order": 62,
+      "service_lines": "ERP Implementation,Digital Transformation",
+      "is_active": true
+    },
+    {
+      "id": 63,
+      "code": "ERPRLZE-003",
+      "name": "Configuration \u2014 Manufacturing",
+      "category": "ERP - Realize",
+      "description": "Configure PP/WM across plants; routings, BOMs, warehouse strategies.",
+      "default_hours": "280",
+      "is_assembly": false,
+      "parent_id": null,
+      "sort_order": 63,
+      "service_lines": "ERP Implementation,Digital Transformation",
+      "is_active": true
+    },
+    {
+      "id": 64,
+      "code": "ERPRLZE-004",
+      "name": "Configuration \u2014 HR & Payroll",
+      "category": "ERP - Realize",
+      "description": "Configure HR/Payroll per country; absences, time, gross-to-net.",
+      "default_hours": "280",
+      "is_assembly": false,
+      "parent_id": null,
+      "sort_order": 64,
+      "service_lines": "ERP Implementation,Digital Transformation",
+      "is_active": true
+    },
+    {
+      "id": 65,
+      "code": "ERPRLZE-005",
+      "name": "Integrations Build",
+      "category": "ERP - Realize",
+      "description": "Per-integration: design, build, unit-test, monitoring. Hours scale linearly with integration count.",
+      "default_hours": "120",
+      "is_assembly": false,
+      "parent_id": null,
+      "sort_order": 65,
+      "service_lines": "ERP Implementation,Digital Transformation",
+      "is_active": true
+    },
+    {
+      "id": 66,
+      "code": "ERPRLZE-006",
+      "name": "Data Migration \u2014 Build & Conversion",
+      "category": "ERP - Realize",
+      "description": "Per data object: extract, transform, load scripts; reconciliation; mock loads.",
+      "default_hours": "100",
+      "is_assembly": false,
+      "parent_id": null,
+      "sort_order": 66,
+      "service_lines": "ERP Implementation,Digital Transformation",
+      "is_active": true
+    },
+    {
+      "id": 67,
+      "code": "ERPRLZE-007",
+      "name": "RICEFW Development",
+      "category": "ERP - Realize",
+      "description": "Reports/Interfaces/Conversions/Enhancements/Forms/Workflows. Hours scale linearly with object count.",
+      "default_hours": "80",
+      "is_assembly": false,
+      "parent_id": null,
+      "sort_order": 67,
+      "service_lines": "ERP Implementation,Digital Transformation",
+      "is_active": true
+    },
+    {
+      "id": 68,
+      "code": "ERPRLZE-008",
+      "name": "System Integration & UAT Testing",
+      "category": "ERP - Realize",
+      "description": "End-to-end test cycles (SIT 2x, UAT 2x), defect triage, regression.",
+      "default_hours": "360",
+      "is_assembly": false,
+      "parent_id": null,
+      "sort_order": 68,
+      "service_lines": "ERP Implementation,Digital Transformation",
+      "is_active": true
+    },
+    {
+      "id": 69,
+      "code": "ERPRLZE-009",
+      "name": "End-User Training & Change Enablement",
+      "category": "ERP - Realize",
+      "description": "Train-the-trainer, role-based training material, change network activation.",
+      "default_hours": "240",
+      "is_assembly": false,
+      "parent_id": null,
+      "sort_order": 69,
+      "service_lines": "ERP Implementation,Digital Transformation",
+      "is_active": true
+    },
+    {
+      "id": 70,
+      "code": "ERPDPLY-001",
+      "name": "Cutover & Production Data Load",
+      "category": "ERP - Deploy",
+      "description": "Cutover plan, mock cutovers, production load, reconciliation, financial-balance verification.",
+      "default_hours": "200",
+      "is_assembly": false,
+      "parent_id": null,
+      "sort_order": 70,
+      "service_lines": "ERP Implementation,Digital Transformation",
+      "is_active": true
+    },
+    {
+      "id": 71,
+      "code": "ERPDPLY-002",
+      "name": "Go-Live Support",
+      "category": "ERP - Deploy",
+      "description": "Go-live command center, ticket triage, daily steering for first 2 weeks live.",
+      "default_hours": "240",
+      "is_assembly": false,
+      "parent_id": null,
+      "sort_order": 71,
+      "service_lines": "ERP Implementation,Digital Transformation",
+      "is_active": true
+    },
+    {
+      "id": 72,
+      "code": "ERPRUN-001",
+      "name": "Hypercare & Knowledge Transfer",
+      "category": "ERP - Run",
+      "description": "8-week hypercare with declining intensity, transition to AMS/internal support.",
+      "default_hours": "320",
+      "is_assembly": false,
+      "parent_id": null,
+      "sort_order": 72,
+      "service_lines": "ERP Implementation,Digital Transformation",
+      "is_active": true
     }
   ],
   "scope_templates": [
@@ -1074,6 +1334,15 @@
       "is_active": true,
       "sort_order": 4,
       "created_at": "2026-04-17T05:01:17.217Z"
+    },
+    {
+      "id": 5,
+      "name": "ERP Implementation (S/4HANA)",
+      "description": "SAP Activate phased implementation: Prepare \u2192 Explore \u2192 Realize \u2192 Deploy \u2192 Run. Hours scale from engagement parameters (entities, countries, modules, integrations, data-conversion objects, RICEFW count).",
+      "service_line": "ERP Implementation",
+      "is_active": true,
+      "sort_order": 5,
+      "created_at": "2026-04-22T00:00:00.000Z"
     }
   ],
   "scope_template_items": [
@@ -1188,12 +1457,172 @@
       "default_hours": null,
       "complexity_multiplier": "1.00",
       "sort_order": 12
+    },
+    {
+      "id": 15,
+      "template_id": 5,
+      "scope_item_id": 53,
+      "default_hours": null,
+      "complexity_multiplier": "1.00",
+      "sort_order": 1
+    },
+    {
+      "id": 16,
+      "template_id": 5,
+      "scope_item_id": 54,
+      "default_hours": null,
+      "complexity_multiplier": "1.00",
+      "sort_order": 2
+    },
+    {
+      "id": 17,
+      "template_id": 5,
+      "scope_item_id": 55,
+      "default_hours": null,
+      "complexity_multiplier": "1.00",
+      "sort_order": 3
+    },
+    {
+      "id": 18,
+      "template_id": 5,
+      "scope_item_id": 56,
+      "default_hours": null,
+      "complexity_multiplier": "1.00",
+      "sort_order": 4
+    },
+    {
+      "id": 19,
+      "template_id": 5,
+      "scope_item_id": 57,
+      "default_hours": null,
+      "complexity_multiplier": "1.00",
+      "sort_order": 5
+    },
+    {
+      "id": 20,
+      "template_id": 5,
+      "scope_item_id": 58,
+      "default_hours": null,
+      "complexity_multiplier": "1.00",
+      "sort_order": 6
+    },
+    {
+      "id": 21,
+      "template_id": 5,
+      "scope_item_id": 59,
+      "default_hours": null,
+      "complexity_multiplier": "1.00",
+      "sort_order": 7
+    },
+    {
+      "id": 22,
+      "template_id": 5,
+      "scope_item_id": 60,
+      "default_hours": null,
+      "complexity_multiplier": "1.00",
+      "sort_order": 8
+    },
+    {
+      "id": 23,
+      "template_id": 5,
+      "scope_item_id": 61,
+      "default_hours": null,
+      "complexity_multiplier": "1.00",
+      "sort_order": 9
+    },
+    {
+      "id": 24,
+      "template_id": 5,
+      "scope_item_id": 62,
+      "default_hours": null,
+      "complexity_multiplier": "1.00",
+      "sort_order": 10
+    },
+    {
+      "id": 25,
+      "template_id": 5,
+      "scope_item_id": 63,
+      "default_hours": null,
+      "complexity_multiplier": "1.00",
+      "sort_order": 11
+    },
+    {
+      "id": 26,
+      "template_id": 5,
+      "scope_item_id": 64,
+      "default_hours": null,
+      "complexity_multiplier": "1.00",
+      "sort_order": 12
+    },
+    {
+      "id": 27,
+      "template_id": 5,
+      "scope_item_id": 65,
+      "default_hours": null,
+      "complexity_multiplier": "1.00",
+      "sort_order": 13
+    },
+    {
+      "id": 28,
+      "template_id": 5,
+      "scope_item_id": 66,
+      "default_hours": null,
+      "complexity_multiplier": "1.00",
+      "sort_order": 14
+    },
+    {
+      "id": 29,
+      "template_id": 5,
+      "scope_item_id": 67,
+      "default_hours": null,
+      "complexity_multiplier": "1.00",
+      "sort_order": 15
+    },
+    {
+      "id": 30,
+      "template_id": 5,
+      "scope_item_id": 68,
+      "default_hours": null,
+      "complexity_multiplier": "1.00",
+      "sort_order": 16
+    },
+    {
+      "id": 31,
+      "template_id": 5,
+      "scope_item_id": 69,
+      "default_hours": null,
+      "complexity_multiplier": "1.00",
+      "sort_order": 17
+    },
+    {
+      "id": 32,
+      "template_id": 5,
+      "scope_item_id": 70,
+      "default_hours": null,
+      "complexity_multiplier": "1.00",
+      "sort_order": 18
+    },
+    {
+      "id": 33,
+      "template_id": 5,
+      "scope_item_id": 71,
+      "default_hours": null,
+      "complexity_multiplier": "1.00",
+      "sort_order": 19
+    },
+    {
+      "id": 34,
+      "template_id": 5,
+      "scope_item_id": 72,
+      "default_hours": null,
+      "complexity_multiplier": "1.00",
+      "sort_order": 20
     }
   ],
   "prompt_sets": [
     {
       "id": 1,
-      "name": "Cross-Service Default — v1",
+      "name": "Cross-Service Default \u2014 v1",
       "business_unit": null,
       "service_line": null,
       "version": 1,
@@ -7301,7 +7730,7 @@
       "id": 11,
       "deal_id": 4,
       "action": "scenario_selected",
-      "description": "Selected \"Standard\" scenario — Fee: $73,665, Margin: 50.70%",
+      "description": "Selected \"Standard\" scenario \u2014 Fee: $73,665, Margin: 50.70%",
       "user_name": "Michael Torres",
       "metadata": null,
       "created_at": "2026-04-16T03:46:20.892Z"
@@ -7310,7 +7739,7 @@
       "id": 12,
       "deal_id": 4,
       "action": "scenario_selected",
-      "description": "Selected \"Premium Service\" scenario — Fee: $84,715, Margin: 55.00%",
+      "description": "Selected \"Premium Service\" scenario \u2014 Fee: $84,715, Margin: 55.00%",
       "user_name": "Michael Torres",
       "metadata": null,
       "created_at": "2026-04-16T03:46:24.080Z"
@@ -7319,7 +7748,7 @@
       "id": 13,
       "deal_id": 4,
       "action": "scenario_selected",
-      "description": "Selected \"Value Delivery\" scenario — Fee: $62,615, Margin: 46.60%",
+      "description": "Selected \"Value Delivery\" scenario \u2014 Fee: $62,615, Margin: 46.60%",
       "user_name": "Michael Torres",
       "metadata": null,
       "created_at": "2026-04-16T03:46:26.707Z"
@@ -7328,7 +7757,7 @@
       "id": 14,
       "deal_id": 4,
       "action": "scenario_selected",
-      "description": "Selected \"Standard\" scenario — Fee: $73,665, Margin: 50.70%",
+      "description": "Selected \"Standard\" scenario \u2014 Fee: $73,665, Margin: 50.70%",
       "user_name": "Michael Torres",
       "metadata": null,
       "created_at": "2026-04-16T03:46:31.342Z"
@@ -7337,7 +7766,7 @@
       "id": 15,
       "deal_id": 4,
       "action": "scenario_selected",
-      "description": "Selected \"Premium Service\" scenario — Fee: $84,715, Margin: 55.00%",
+      "description": "Selected \"Premium Service\" scenario \u2014 Fee: $84,715, Margin: 55.00%",
       "user_name": "Michael Torres",
       "metadata": null,
       "created_at": "2026-04-16T03:46:34.149Z"
@@ -7346,7 +7775,7 @@
       "id": 16,
       "deal_id": 4,
       "action": "scenario_selected",
-      "description": "Selected \"Value Delivery\" scenario — Fee: $62,615, Margin: 46.60%",
+      "description": "Selected \"Value Delivery\" scenario \u2014 Fee: $62,615, Margin: 46.60%",
       "user_name": "Michael Torres",
       "metadata": null,
       "created_at": "2026-04-16T03:46:36.086Z"
@@ -7355,7 +7784,7 @@
       "id": 17,
       "deal_id": 4,
       "action": "scenario_selected",
-      "description": "Selected \"Standard\" scenario — Fee: $73,665, Margin: 50.70%",
+      "description": "Selected \"Standard\" scenario \u2014 Fee: $73,665, Margin: 50.70%",
       "user_name": "Michael Torres",
       "metadata": null,
       "created_at": "2026-04-16T03:46:40.460Z"
@@ -7364,7 +7793,7 @@
       "id": 18,
       "deal_id": 4,
       "action": "scenario_selected",
-      "description": "Selected \"Premium Service\" scenario — Fee: $84,715, Margin: 55.00%",
+      "description": "Selected \"Premium Service\" scenario \u2014 Fee: $84,715, Margin: 55.00%",
       "user_name": "Michael Torres",
       "metadata": null,
       "created_at": "2026-04-16T03:46:45.094Z"
@@ -7373,7 +7802,7 @@
       "id": 19,
       "deal_id": 4,
       "action": "scenario_selected",
-      "description": "Selected \"Value Delivery\" scenario — Fee: $62,615, Margin: 46.60%",
+      "description": "Selected \"Value Delivery\" scenario \u2014 Fee: $62,615, Margin: 46.60%",
       "user_name": "Michael Torres",
       "metadata": null,
       "created_at": "2026-04-16T03:46:48.171Z"
@@ -7382,7 +7811,7 @@
       "id": 20,
       "deal_id": 4,
       "action": "scenario_selected",
-      "description": "Selected \"Premium Service\" scenario — Fee: $84,715, Margin: 55.00%",
+      "description": "Selected \"Premium Service\" scenario \u2014 Fee: $84,715, Margin: 55.00%",
       "user_name": "Michael Torres",
       "metadata": null,
       "created_at": "2026-04-16T03:46:55.132Z"
@@ -7391,7 +7820,7 @@
       "id": 21,
       "deal_id": 4,
       "action": "scenario_selected",
-      "description": "Selected \"Standard\" scenario — Fee: $73,665, Margin: 50.70%",
+      "description": "Selected \"Standard\" scenario \u2014 Fee: $73,665, Margin: 50.70%",
       "user_name": "Michael Torres",
       "metadata": null,
       "created_at": "2026-04-16T03:46:58.798Z"
@@ -7400,7 +7829,7 @@
       "id": 22,
       "deal_id": 4,
       "action": "scenario_selected",
-      "description": "Selected \"Premium Service\" scenario — Fee: $84,715, Margin: 55.00%",
+      "description": "Selected \"Premium Service\" scenario \u2014 Fee: $84,715, Margin: 55.00%",
       "user_name": "Michael Torres",
       "metadata": null,
       "created_at": "2026-04-16T03:47:02.314Z"
@@ -7409,7 +7838,7 @@
       "id": 23,
       "deal_id": 4,
       "action": "scenario_selected",
-      "description": "Selected \"Standard\" scenario — Fee: $73,665, Margin: 50.70%",
+      "description": "Selected \"Standard\" scenario \u2014 Fee: $73,665, Margin: 50.70%",
       "user_name": "Michael Torres",
       "metadata": null,
       "created_at": "2026-04-16T03:47:23.001Z"
@@ -7436,7 +7865,7 @@
       "id": 26,
       "deal_id": 8,
       "action": "scenario_selected",
-      "description": "Selected \"Value Delivery\" scenario — Fee: $87,189, Margin: 46.60%",
+      "description": "Selected \"Value Delivery\" scenario \u2014 Fee: $87,189, Margin: 46.60%",
       "user_name": "Michael Torres",
       "metadata": null,
       "created_at": "2026-04-16T04:41:13.978Z"
@@ -7454,7 +7883,7 @@
       "id": 28,
       "deal_id": 8,
       "action": "scenario_selected",
-      "description": "Selected \"Standard\" scenario — Fee: $236,140, Margin: 50.70%",
+      "description": "Selected \"Standard\" scenario \u2014 Fee: $236,140, Margin: 50.70%",
       "user_name": "Sarah Chen",
       "metadata": null,
       "created_at": "2026-04-16T05:00:08.690Z"
@@ -8036,7 +8465,7 @@
       "id": 92,
       "deal_id": null,
       "action": "scope_catalog_created",
-      "description": "Created scope item TEST-XYZ — Test Scope",
+      "description": "Created scope item TEST-XYZ \u2014 Test Scope",
       "user_name": "AgentTest",
       "metadata": {
         "scopeItemId": 16
@@ -8061,7 +8490,7 @@
       "id": 94,
       "deal_id": null,
       "action": "scope_catalog_deactivated",
-      "description": "Deactivated scope item TEST-XYZ — Test Scope Renamed",
+      "description": "Deactivated scope item TEST-XYZ \u2014 Test Scope Renamed",
       "user_name": null,
       "metadata": {
         "scopeItemId": 16
@@ -8072,7 +8501,7 @@
       "id": 95,
       "deal_id": null,
       "action": "scope_catalog_created",
-      "description": "Created scope item NEW-CHILD — Valid Child",
+      "description": "Created scope item NEW-CHILD \u2014 Valid Child",
       "user_name": "Agent",
       "metadata": {
         "scopeItemId": 17
@@ -8113,7 +8542,7 @@
       "id": 99,
       "deal_id": 16,
       "action": "scenario_selected",
-      "description": "Selected \"Option 1\" scenario — Fee: $203,158, Margin: 50.70%",
+      "description": "Selected \"Option 1\" scenario \u2014 Fee: $203,158, Margin: 50.70%",
       "user_name": "Michael Torres",
       "metadata": null,
       "created_at": "2026-04-17T08:05:56.020Z"
@@ -8122,7 +8551,7 @@
       "id": 100,
       "deal_id": 16,
       "action": "scenario_selected",
-      "description": "Selected \"Option 2\" scenario — Fee: $233,632, Margin: 55.00%",
+      "description": "Selected \"Option 2\" scenario \u2014 Fee: $233,632, Margin: 55.00%",
       "user_name": "Michael Torres",
       "metadata": null,
       "created_at": "2026-04-17T08:06:52.232Z"
@@ -8131,7 +8560,7 @@
       "id": 101,
       "deal_id": 16,
       "action": "scenario_selected",
-      "description": "Selected \"Option 3\" scenario — Fee: $172,685, Margin: 46.70%",
+      "description": "Selected \"Option 3\" scenario \u2014 Fee: $172,685, Margin: 46.70%",
       "user_name": "Michael Torres",
       "metadata": null,
       "created_at": "2026-04-17T08:17:05.253Z"
@@ -8140,7 +8569,7 @@
       "id": 102,
       "deal_id": 16,
       "action": "scenario_selected",
-      "description": "Selected \"Option 1\" scenario — Fee: $203,158, Margin: 50.70%",
+      "description": "Selected \"Option 1\" scenario \u2014 Fee: $203,158, Margin: 50.70%",
       "user_name": "Michael Torres",
       "metadata": null,
       "created_at": "2026-04-17T08:17:08.846Z"
@@ -8149,7 +8578,7 @@
       "id": 103,
       "deal_id": 16,
       "action": "scenario_selected",
-      "description": "Selected \"Option 2\" scenario — Fee: $233,632, Margin: 55.00%",
+      "description": "Selected \"Option 2\" scenario \u2014 Fee: $233,632, Margin: 55.00%",
       "user_name": "Michael Torres",
       "metadata": null,
       "created_at": "2026-04-17T08:17:12.630Z"
@@ -8158,7 +8587,7 @@
       "id": 104,
       "deal_id": 16,
       "action": "scenario_selected",
-      "description": "Selected \"Option 3\" scenario — Fee: $172,685, Margin: 46.70%",
+      "description": "Selected \"Option 3\" scenario \u2014 Fee: $172,685, Margin: 46.70%",
       "user_name": "Michael Torres",
       "metadata": null,
       "created_at": "2026-04-17T08:17:14.876Z"
@@ -8167,7 +8596,7 @@
       "id": 105,
       "deal_id": 16,
       "action": "scenario_selected",
-      "description": "Selected \"Option 2\" scenario — Fee: $233,632, Margin: 55.00%",
+      "description": "Selected \"Option 2\" scenario \u2014 Fee: $233,632, Margin: 55.00%",
       "user_name": "Michael Torres",
       "metadata": null,
       "created_at": "2026-04-17T08:17:20.904Z"
@@ -8176,7 +8605,7 @@
       "id": 106,
       "deal_id": 16,
       "action": "scenario_selected",
-      "description": "Selected \"Option 1\" scenario — Fee: $203,158, Margin: 50.70%",
+      "description": "Selected \"Option 1\" scenario \u2014 Fee: $203,158, Margin: 50.70%",
       "user_name": "Michael Torres",
       "metadata": null,
       "created_at": "2026-04-17T08:17:34.772Z"
@@ -8185,7 +8614,7 @@
       "id": 107,
       "deal_id": 16,
       "action": "scenario_selected",
-      "description": "Selected \"Option 2\" scenario — Fee: $233,632, Margin: 55.00%",
+      "description": "Selected \"Option 2\" scenario \u2014 Fee: $233,632, Margin: 55.00%",
       "user_name": "Michael Torres",
       "metadata": null,
       "created_at": "2026-04-17T08:22:51.022Z"
@@ -8194,7 +8623,7 @@
       "id": 108,
       "deal_id": 16,
       "action": "scenario_selected",
-      "description": "Selected \"Option 3\" scenario — Fee: $172,685, Margin: 46.70%",
+      "description": "Selected \"Option 3\" scenario \u2014 Fee: $172,685, Margin: 46.70%",
       "user_name": "Michael Torres",
       "metadata": null,
       "created_at": "2026-04-17T08:23:08.367Z"
@@ -8203,7 +8632,7 @@
       "id": 109,
       "deal_id": 16,
       "action": "scenario_selected",
-      "description": "Selected \"Option 2\" scenario — Fee: $233,632, Margin: 55.00%",
+      "description": "Selected \"Option 2\" scenario \u2014 Fee: $233,632, Margin: 55.00%",
       "user_name": "Michael Torres",
       "metadata": null,
       "created_at": "2026-04-17T08:23:17.887Z"
@@ -8230,7 +8659,7 @@
       "id": 112,
       "deal_id": 16,
       "action": "approval_advanced",
-      "description": "Lead review complete — advanced to BU Approver",
+      "description": "Lead review complete \u2014 advanced to BU Approver",
       "user_name": "Business Unit Approver",
       "metadata": null,
       "created_at": "2026-04-17T13:20:24.501Z"
@@ -8275,7 +8704,7 @@
       "id": 117,
       "deal_id": 16,
       "action": "approval_advanced",
-      "description": "Lead review complete — advanced to BU Approver",
+      "description": "Lead review complete \u2014 advanced to BU Approver",
       "user_name": "Business Unit Approver",
       "metadata": null,
       "created_at": "2026-04-17T13:22:32.069Z"
@@ -8284,7 +8713,7 @@
       "id": 118,
       "deal_id": 16,
       "action": "approval_advanced",
-      "description": "Lead review complete — advanced to BU Approver",
+      "description": "Lead review complete \u2014 advanced to BU Approver",
       "user_name": "Business Unit Approver",
       "metadata": null,
       "created_at": "2026-04-17T13:22:32.110Z"
@@ -8340,7 +8769,7 @@
                 "answer": "1 region",
                 "category": "Complexity",
                 "question": "How many geographic regions are involved?",
-                "rationale": "No multi-region signal in opportunity or client profile — assuming single region.",
+                "rationale": "No multi-region signal in opportunity or client profile \u2014 assuming single region.",
                 "confidence": 0.7,
                 "multiplier": 1,
                 "needsReview": false
@@ -8367,7 +8796,7 @@
                 "answer": "1-2 integrations",
                 "category": "Integration",
                 "question": "How many integrations are required?",
-                "rationale": "Medium complexity — assuming a small number of integrations.",
+                "rationale": "Medium complexity \u2014 assuming a small number of integrations.",
                 "confidence": 0.6,
                 "multiplier": 1.05,
                 "needsReview": false
@@ -8376,7 +8805,7 @@
                 "answer": "No (greenfield)",
                 "category": "Migration",
                 "question": "Is there an existing system being replaced?",
-                "rationale": "No migration/replacement signal — assuming greenfield.",
+                "rationale": "No migration/replacement signal \u2014 assuming greenfield.",
                 "confidence": 0.6,
                 "multiplier": 0.95,
                 "needsReview": false
@@ -8385,7 +8814,7 @@
                 "answer": "High maturity",
                 "category": "Client",
                 "question": "What is the client's technical maturity?",
-                "rationale": "8 prior engagements with this client — high working maturity.",
+                "rationale": "8 prior engagements with this client \u2014 high working maturity.",
                 "confidence": 0.78,
                 "multiplier": 0.9,
                 "needsReview": false
@@ -8540,7 +8969,7 @@
       "id": 125,
       "deal_id": 21,
       "action": "agent_risk",
-      "description": "[Agent] Risk narrative: Low risk · score 2.5. 0 factors identified.",
+      "description": "[Agent] Risk narrative: Low risk \u00b7 score 2.5. 0 factors identified.",
       "user_name": "Michael Torres",
       "metadata": {
         "agentRun": {
@@ -8554,7 +8983,7 @@
             "riskFactors": [],
             "approvalLikelihood": "High (89%)"
           },
-          "summary": "Low risk · score 2.5. 0 factors identified.",
+          "summary": "Low risk \u00b7 score 2.5. 0 factors identified.",
           "confidence": 0.7,
           "needsReview": false
         }
@@ -8565,7 +8994,7 @@
       "id": 126,
       "deal_id": 21,
       "action": "agent_review",
-      "description": "[Agent] Review checklist: Intapp: clear · Workday: clean · Margin: 50.7%",
+      "description": "[Agent] Review checklist: Intapp: clear \u00b7 Workday: clean \u00b7 Margin: 50.7%",
       "user_name": "Michael Torres",
       "metadata": {
         "agentRun": {
@@ -8592,7 +9021,7 @@
               "validationId": 27
             }
           },
-          "summary": "Intapp: clear · Workday: clean · Margin: 50.7%",
+          "summary": "Intapp: clear \u00b7 Workday: clean \u00b7 Margin: 50.7%",
           "confidence": 0.85,
           "needsReview": false
         }
@@ -8603,7 +9032,7 @@
       "id": 127,
       "deal_id": 21,
       "action": "agent_complete",
-      "description": "[Agent] Draft complete — ready for human review. 7 pipeline steps executed.",
+      "description": "[Agent] Draft complete \u2014 ready for human review. 7 pipeline steps executed.",
       "user_name": "Michael Torres",
       "metadata": {
         "agentRun": {
@@ -8656,7 +9085,7 @@
                 "answer": "1 region",
                 "category": "Complexity",
                 "question": "How many geographic regions are involved?",
-                "rationale": "No multi-region signal in opportunity or client profile — assuming single region.",
+                "rationale": "No multi-region signal in opportunity or client profile \u2014 assuming single region.",
                 "confidence": 0.7,
                 "multiplier": 1,
                 "needsReview": false
@@ -8665,7 +9094,7 @@
                 "answer": "Standard compliance",
                 "category": "Compliance",
                 "question": "Are there regulatory/compliance requirements?",
-                "rationale": "No heavy-regulation signal — assuming standard compliance posture.",
+                "rationale": "No heavy-regulation signal \u2014 assuming standard compliance posture.",
                 "confidence": 0.65,
                 "multiplier": 1.05,
                 "needsReview": false
@@ -8674,7 +9103,7 @@
                 "answer": "Small (<100K records)",
                 "category": "Complexity",
                 "question": "What is the expected data volume?",
-                "rationale": "Low/unknown fee — data volume needs reviewer confirmation.",
+                "rationale": "Low/unknown fee \u2014 data volume needs reviewer confirmation.",
                 "confidence": 0.55,
                 "multiplier": 0.9,
                 "needsReview": true
@@ -8683,7 +9112,7 @@
                 "answer": "1-2 integrations",
                 "category": "Integration",
                 "question": "How many integrations are required?",
-                "rationale": "Medium complexity — assuming a small number of integrations.",
+                "rationale": "Medium complexity \u2014 assuming a small number of integrations.",
                 "confidence": 0.6,
                 "multiplier": 1.05,
                 "needsReview": false
@@ -8692,7 +9121,7 @@
                 "answer": "No (greenfield)",
                 "category": "Migration",
                 "question": "Is there an existing system being replaced?",
-                "rationale": "No migration/replacement signal — assuming greenfield.",
+                "rationale": "No migration/replacement signal \u2014 assuming greenfield.",
                 "confidence": 0.6,
                 "multiplier": 0.95,
                 "needsReview": false
@@ -8701,7 +9130,7 @@
                 "answer": "High maturity",
                 "category": "Client",
                 "question": "What is the client's technical maturity?",
-                "rationale": "9 prior engagements with this client — high working maturity.",
+                "rationale": "9 prior engagements with this client \u2014 high working maturity.",
                 "confidence": 0.78,
                 "multiplier": 0.9,
                 "needsReview": false
@@ -8710,7 +9139,7 @@
                 "answer": "Preferred deadline",
                 "category": "Timeline",
                 "question": "Is there a hard deadline or external dependency?",
-                "rationale": "Close date ~89 days out — preferred deadline.",
+                "rationale": "Close date ~89 days out \u2014 preferred deadline.",
                 "confidence": 0.7,
                 "multiplier": 1,
                 "needsReview": false
@@ -8856,7 +9285,7 @@
       "id": 133,
       "deal_id": 22,
       "action": "agent_risk",
-      "description": "[Agent] Risk narrative: Low risk · score 2.5. 0 factors identified.",
+      "description": "[Agent] Risk narrative: Low risk \u00b7 score 2.5. 0 factors identified.",
       "user_name": "Michael Torres",
       "metadata": {
         "agentRun": {
@@ -8870,7 +9299,7 @@
             "riskFactors": [],
             "approvalLikelihood": "High (89%)"
           },
-          "summary": "Low risk · score 2.5. 0 factors identified.",
+          "summary": "Low risk \u00b7 score 2.5. 0 factors identified.",
           "confidence": 0.7,
           "needsReview": false
         }
@@ -8881,7 +9310,7 @@
       "id": 134,
       "deal_id": 22,
       "action": "agent_review",
-      "description": "[Agent] Review checklist: Intapp: clear · Workday: clean · Margin: 50.7%",
+      "description": "[Agent] Review checklist: Intapp: clear \u00b7 Workday: clean \u00b7 Margin: 50.7%",
       "user_name": "Michael Torres",
       "metadata": {
         "agentRun": {
@@ -8908,7 +9337,7 @@
               "validationId": 28
             }
           },
-          "summary": "Intapp: clear · Workday: clean · Margin: 50.7%",
+          "summary": "Intapp: clear \u00b7 Workday: clean \u00b7 Margin: 50.7%",
           "confidence": 0.85,
           "needsReview": false
         }
@@ -8919,7 +9348,7 @@
       "id": 135,
       "deal_id": 22,
       "action": "agent_complete",
-      "description": "[Agent] Draft complete — ready for human review. 7 pipeline steps executed.",
+      "description": "[Agent] Draft complete \u2014 ready for human review. 7 pipeline steps executed.",
       "user_name": "Michael Torres",
       "metadata": {
         "agentRun": {
@@ -8986,7 +9415,7 @@
                 "answer": "1 region",
                 "category": "Complexity",
                 "question": "How many geographic regions are involved?",
-                "rationale": "No multi-region signal in opportunity or client profile — assuming single region.",
+                "rationale": "No multi-region signal in opportunity or client profile \u2014 assuming single region.",
                 "confidence": 0.7,
                 "multiplier": 1,
                 "needsReview": false
@@ -8995,7 +9424,7 @@
                 "answer": "Standard compliance",
                 "category": "Compliance",
                 "question": "Are there regulatory/compliance requirements?",
-                "rationale": "No heavy-regulation signal — assuming standard compliance posture.",
+                "rationale": "No heavy-regulation signal \u2014 assuming standard compliance posture.",
                 "confidence": 0.65,
                 "multiplier": 1.05,
                 "needsReview": false
@@ -9004,7 +9433,7 @@
                 "answer": "Small (<100K records)",
                 "category": "Complexity",
                 "question": "What is the expected data volume?",
-                "rationale": "Low/unknown fee — data volume needs reviewer confirmation.",
+                "rationale": "Low/unknown fee \u2014 data volume needs reviewer confirmation.",
                 "confidence": 0.55,
                 "multiplier": 0.9,
                 "needsReview": true
@@ -9013,7 +9442,7 @@
                 "answer": "1-2 integrations",
                 "category": "Integration",
                 "question": "How many integrations are required?",
-                "rationale": "Medium complexity — assuming a small number of integrations.",
+                "rationale": "Medium complexity \u2014 assuming a small number of integrations.",
                 "confidence": 0.6,
                 "multiplier": 1.05,
                 "needsReview": false
@@ -9022,7 +9451,7 @@
                 "answer": "No (greenfield)",
                 "category": "Migration",
                 "question": "Is there an existing system being replaced?",
-                "rationale": "No migration/replacement signal — assuming greenfield.",
+                "rationale": "No migration/replacement signal \u2014 assuming greenfield.",
                 "confidence": 0.6,
                 "multiplier": 0.95,
                 "needsReview": false
@@ -9031,7 +9460,7 @@
                 "answer": "High maturity",
                 "category": "Client",
                 "question": "What is the client's technical maturity?",
-                "rationale": "10 prior engagements with this client — high working maturity.",
+                "rationale": "10 prior engagements with this client \u2014 high working maturity.",
                 "confidence": 0.78,
                 "multiplier": 0.9,
                 "needsReview": false
@@ -9040,7 +9469,7 @@
                 "answer": "Preferred deadline",
                 "category": "Timeline",
                 "question": "Is there a hard deadline or external dependency?",
-                "rationale": "Close date ~89 days out — preferred deadline.",
+                "rationale": "Close date ~89 days out \u2014 preferred deadline.",
                 "confidence": 0.7,
                 "multiplier": 1,
                 "needsReview": false
@@ -9186,7 +9615,7 @@
       "id": 142,
       "deal_id": 23,
       "action": "agent_risk",
-      "description": "[Agent] Risk narrative: Low risk · score 2.5. 0 factors identified.",
+      "description": "[Agent] Risk narrative: Low risk \u00b7 score 2.5. 0 factors identified.",
       "user_name": "Michael Torres",
       "metadata": {
         "agentRun": {
@@ -9200,7 +9629,7 @@
             "riskFactors": [],
             "approvalLikelihood": "High (89%)"
           },
-          "summary": "Low risk · score 2.5. 0 factors identified.",
+          "summary": "Low risk \u00b7 score 2.5. 0 factors identified.",
           "confidence": 0.7,
           "needsReview": false
         }
@@ -9211,7 +9640,7 @@
       "id": 143,
       "deal_id": 23,
       "action": "agent_review",
-      "description": "[Agent] Review checklist: Intapp: clear · Workday: clean · Margin: 50.7%",
+      "description": "[Agent] Review checklist: Intapp: clear \u00b7 Workday: clean \u00b7 Margin: 50.7%",
       "user_name": "Michael Torres",
       "metadata": {
         "agentRun": {
@@ -9238,7 +9667,7 @@
               "validationId": 29
             }
           },
-          "summary": "Intapp: clear · Workday: clean · Margin: 50.7%",
+          "summary": "Intapp: clear \u00b7 Workday: clean \u00b7 Margin: 50.7%",
           "confidence": 0.85,
           "needsReview": false
         }
@@ -9249,7 +9678,7 @@
       "id": 144,
       "deal_id": 23,
       "action": "agent_complete",
-      "description": "[Agent] Draft complete — ready for human review. 7 pipeline steps executed.",
+      "description": "[Agent] Draft complete \u2014 ready for human review. 7 pipeline steps executed.",
       "user_name": "Michael Torres",
       "metadata": {
         "agentRun": {
@@ -9386,7 +9815,7 @@
                 "answer": "1 region",
                 "category": "Complexity",
                 "question": "How many geographic regions are involved?",
-                "rationale": "No multi-region signal in opportunity or client profile — assuming single region.",
+                "rationale": "No multi-region signal in opportunity or client profile \u2014 assuming single region.",
                 "confidence": 0.7,
                 "multiplier": 1,
                 "needsReview": false
@@ -9404,7 +9833,7 @@
                 "answer": "Small (<100K records)",
                 "category": "Complexity",
                 "question": "What is the expected data volume?",
-                "rationale": "Low/unknown fee — data volume needs reviewer confirmation.",
+                "rationale": "Low/unknown fee \u2014 data volume needs reviewer confirmation.",
                 "confidence": 0.55,
                 "multiplier": 0.9,
                 "needsReview": true
@@ -9431,7 +9860,7 @@
                 "answer": "Moderate maturity",
                 "category": "Client",
                 "question": "What is the client's technical maturity?",
-                "rationale": "1 prior engagement on file — moderate working maturity.",
+                "rationale": "1 prior engagement on file \u2014 moderate working maturity.",
                 "confidence": 0.7,
                 "multiplier": 1,
                 "needsReview": false
@@ -9440,7 +9869,7 @@
                 "answer": "Preferred deadline",
                 "category": "Timeline",
                 "question": "Is there a hard deadline or external dependency?",
-                "rationale": "Close date ~89 days out — preferred deadline.",
+                "rationale": "Close date ~89 days out \u2014 preferred deadline.",
                 "confidence": 0.7,
                 "multiplier": 1,
                 "needsReview": false
@@ -9623,7 +10052,7 @@
       "id": 151,
       "deal_id": 25,
       "action": "agent_risk",
-      "description": "[Agent] Risk narrative: Low risk · score 2.5. 1 factor identified.",
+      "description": "[Agent] Risk narrative: Low risk \u00b7 score 2.5. 1 factor identified.",
       "user_name": "Michael Torres",
       "metadata": {
         "agentRun": {
@@ -9642,7 +10071,7 @@
             ],
             "approvalLikelihood": "High (89%)"
           },
-          "summary": "Low risk · score 2.5. 1 factor identified.",
+          "summary": "Low risk \u00b7 score 2.5. 1 factor identified.",
           "confidence": 0.7,
           "needsReview": false
         }
@@ -9653,7 +10082,7 @@
       "id": 152,
       "deal_id": 25,
       "action": "agent_review",
-      "description": "[Agent] Review checklist: Intapp: clear · Workday: clean · Margin: 50.7% (Practice Lead required)",
+      "description": "[Agent] Review checklist: Intapp: clear \u00b7 Workday: clean \u00b7 Margin: 50.7% (Practice Lead required)",
       "user_name": "Michael Torres",
       "metadata": {
         "agentRun": {
@@ -9680,7 +10109,7 @@
               "validationId": 33
             }
           },
-          "summary": "Intapp: clear · Workday: clean · Margin: 50.7% (Practice Lead required)",
+          "summary": "Intapp: clear \u00b7 Workday: clean \u00b7 Margin: 50.7% (Practice Lead required)",
           "confidence": 0.6,
           "needsReview": true
         }
@@ -9691,7 +10120,7 @@
       "id": 153,
       "deal_id": 25,
       "action": "agent_complete",
-      "description": "[Agent] Draft complete — ready for human review. 7 pipeline steps executed.",
+      "description": "[Agent] Draft complete \u2014 ready for human review. 7 pipeline steps executed.",
       "user_name": "Michael Torres",
       "metadata": {
         "agentRun": {
@@ -9793,7 +10222,7 @@
       "id": 159,
       "deal_id": 1,
       "action": "scenario_selected",
-      "description": "Selected \"Option 1\" scenario — Fee: $425,000, Margin: 27.00%",
+      "description": "Selected \"Option 1\" scenario \u2014 Fee: $425,000, Margin: 27.00%",
       "user_name": "System",
       "metadata": null,
       "created_at": "2026-04-20T13:36:51.313Z"
@@ -11206,7 +11635,7 @@
         "estimatedCloseDate"
       ],
       "status": "success",
-      "message": "Outbound sync (auto): ERP Modernization - Phase 1 → D365 OPP-000001 (Develop, $479,466.75)",
+      "message": "Outbound sync (auto): ERP Modernization - Phase 1 \u2192 D365 OPP-000001 (Develop, $479,466.75)",
       "actor_name": "Test",
       "trigger": "auto",
       "timestamp": "2026-04-17T02:47:19.673Z"
@@ -11226,7 +11655,7 @@
         "estimatedCloseDate"
       ],
       "status": "success",
-      "message": "Outbound sync (manual): Test 2 → D365 OPP-000008 (Propose, $236,140)",
+      "message": "Outbound sync (manual): Test 2 \u2192 D365 OPP-000008 (Propose, $236,140)",
       "actor_name": "Test Pilot",
       "trigger": "manual",
       "timestamp": "2026-04-17T02:49:31.258Z"
@@ -11246,7 +11675,7 @@
         "estimatedCloseDate"
       ],
       "status": "success",
-      "message": "Outbound sync (manual): Cloud Migration Assessment → D365 OPP-000002 (Qualify, $67,550)",
+      "message": "Outbound sync (manual): Cloud Migration Assessment \u2192 D365 OPP-000002 (Qualify, $67,550)",
       "actor_name": "Test Pilot",
       "trigger": "manual",
       "timestamp": "2026-04-17T02:49:31.271Z"
@@ -11266,7 +11695,7 @@
         "estimatedCloseDate"
       ],
       "status": "success",
-      "message": "Outbound sync (manual): Annual Audit & Advisory - FY2026 → D365 OPP-000003 (Close, $67,550)",
+      "message": "Outbound sync (manual): Annual Audit & Advisory - FY2026 \u2192 D365 OPP-000003 (Close, $67,550)",
       "actor_name": "Test Pilot",
       "trigger": "manual",
       "timestamp": "2026-04-17T02:49:31.279Z"
@@ -11286,7 +11715,7 @@
         "estimatedCloseDate"
       ],
       "status": "success",
-      "message": "Outbound sync (manual): ERP Modernization - Phase 1 (Copy) → D365 OPP-000005 (Qualify, $247,550)",
+      "message": "Outbound sync (manual): ERP Modernization - Phase 1 (Copy) \u2192 D365 OPP-000005 (Qualify, $247,550)",
       "actor_name": "Test Pilot",
       "trigger": "manual",
       "timestamp": "2026-04-17T02:49:31.286Z"
@@ -11306,7 +11735,7 @@
         "estimatedCloseDate"
       ],
       "status": "success",
-      "message": "Outbound sync (manual): ERP Modernization - Phase 1 (Copy) → D365 OPP-000006 (Qualify, $247,550)",
+      "message": "Outbound sync (manual): ERP Modernization - Phase 1 (Copy) \u2192 D365 OPP-000006 (Qualify, $247,550)",
       "actor_name": "Test Pilot",
       "trigger": "manual",
       "timestamp": "2026-04-17T02:49:31.294Z"
@@ -11326,7 +11755,7 @@
         "estimatedCloseDate"
       ],
       "status": "success",
-      "message": "Outbound sync (manual): ERP Modernization - Phase 1 (Renewal) → D365 OPP-000007 (Qualify, $247,550)",
+      "message": "Outbound sync (manual): ERP Modernization - Phase 1 (Renewal) \u2192 D365 OPP-000007 (Qualify, $247,550)",
       "actor_name": "Test Pilot",
       "trigger": "manual",
       "timestamp": "2026-04-17T02:49:31.302Z"
@@ -11346,7 +11775,7 @@
         "estimatedCloseDate"
       ],
       "status": "success",
-      "message": "Outbound sync (manual): Test 11 → D365 OPP-000009 (Qualify, $81,125)",
+      "message": "Outbound sync (manual): Test 11 \u2192 D365 OPP-000009 (Qualify, $81,125)",
       "actor_name": "Test Pilot",
       "trigger": "manual",
       "timestamp": "2026-04-17T02:49:31.310Z"
@@ -11366,7 +11795,7 @@
         "estimatedCloseDate"
       ],
       "status": "success",
-      "message": "Outbound sync (manual): ERP Modernization - Phase 1 (Renewal) → D365 OPP-000010 (Propose, $456,635)",
+      "message": "Outbound sync (manual): ERP Modernization - Phase 1 (Renewal) \u2192 D365 OPP-000010 (Propose, $456,635)",
       "actor_name": "Test Pilot",
       "trigger": "manual",
       "timestamp": "2026-04-17T02:49:31.318Z"
@@ -11386,7 +11815,7 @@
         "estimatedCloseDate"
       ],
       "status": "success",
-      "message": "Outbound sync (manual): ERP Modernization - Phase 1 (Renewal) (Renewal) → D365 OPP-000011 (Qualify, $456,635)",
+      "message": "Outbound sync (manual): ERP Modernization - Phase 1 (Renewal) (Renewal) \u2192 D365 OPP-000011 (Qualify, $456,635)",
       "actor_name": "Test Pilot",
       "trigger": "manual",
       "timestamp": "2026-04-17T02:49:31.324Z"
@@ -11406,7 +11835,7 @@
         "estimatedCloseDate"
       ],
       "status": "success",
-      "message": "Outbound sync (manual): Test 1 → D365 OPP-000004 (Qualify, $212,750)",
+      "message": "Outbound sync (manual): Test 1 \u2192 D365 OPP-000004 (Qualify, $212,750)",
       "actor_name": "Test Pilot",
       "trigger": "manual",
       "timestamp": "2026-04-17T02:49:31.331Z"
@@ -11426,7 +11855,7 @@
         "estimatedCloseDate"
       ],
       "status": "success",
-      "message": "Outbound sync (manual): ERP Modernization - Phase 1 → D365 OPP-000001 (Develop, $479,466.75)",
+      "message": "Outbound sync (manual): ERP Modernization - Phase 1 \u2192 D365 OPP-000001 (Develop, $479,466.75)",
       "actor_name": "Test Pilot",
       "trigger": "manual",
       "timestamp": "2026-04-17T02:49:31.337Z"
@@ -11437,7 +11866,7 @@
       "entity": "System",
       "entity_name": "Nightly batch",
       "entity_ref_id": null,
-      "action": "Completed nightly D365 ⇄ DealPad sync",
+      "action": "Completed nightly D365 \u21c4 DealPad sync",
       "fields": [
         "accounts",
         "opportunities",
@@ -11666,7 +12095,7 @@
         "estimatedCloseDate"
       ],
       "status": "success",
-      "message": "Outbound sync (manual): Test 2 → D365 OPP-000008 (Propose, $236,140)",
+      "message": "Outbound sync (manual): Test 2 \u2192 D365 OPP-000008 (Propose, $236,140)",
       "actor_name": "Michael Torres",
       "trigger": "manual",
       "timestamp": "2026-04-17T02:59:15.016Z"
@@ -11826,7 +12255,7 @@
         "ownerName"
       ],
       "status": "success",
-      "message": "Inbound: New D365 opp OPP-100015 (Acme Corporation - 2026 Annual Audit) seeded with Annual Audit template — eligible for DealPad scoping",
+      "message": "Inbound: New D365 opp OPP-100015 (Acme Corporation - 2026 Annual Audit) seeded with Annual Audit template \u2014 eligible for DealPad scoping",
       "actor_name": "Test",
       "trigger": "manual",
       "timestamp": "2026-04-17T03:12:30.882Z"
@@ -11847,7 +12276,7 @@
         "ownerName"
       ],
       "status": "success",
-      "message": "Inbound: New D365 opp OPP-100016 (Northwind Renewable Energy - Cloud Migration) seeded with Cloud Migration template — eligible for DealPad scoping",
+      "message": "Inbound: New D365 opp OPP-100016 (Northwind Renewable Energy - Cloud Migration) seeded with Cloud Migration template \u2014 eligible for DealPad scoping",
       "actor_name": "Michael Torres",
       "trigger": "manual",
       "timestamp": "2026-04-17T03:27:38.757Z"
@@ -11922,7 +12351,7 @@
         "estimatedCloseDate"
       ],
       "status": "success",
-      "message": "Outbound sync (manual): Pacific Logistics Co - Tax Provision Outsourcing → D365 OPP-100201 (Qualify, $285,000)",
+      "message": "Outbound sync (manual): Pacific Logistics Co - Tax Provision Outsourcing \u2192 D365 OPP-100201 (Qualify, $285,000)",
       "actor_name": "Michael Torres",
       "trigger": "manual",
       "timestamp": "2026-04-17T03:28:15.761Z"
@@ -11942,7 +12371,7 @@
         "estimatedCloseDate"
       ],
       "status": "success",
-      "message": "Outbound sync (manual): Cloud Migration Assessment → D365 OPP-000002 (Qualify, $67,550)",
+      "message": "Outbound sync (manual): Cloud Migration Assessment \u2192 D365 OPP-000002 (Qualify, $67,550)",
       "actor_name": "Michael Torres",
       "trigger": "manual",
       "timestamp": "2026-04-17T03:28:15.767Z"
@@ -11962,7 +12391,7 @@
         "estimatedCloseDate"
       ],
       "status": "success",
-      "message": "Outbound sync (manual): Annual Audit & Advisory - FY2026 → D365 OPP-000003 (Close, $67,550)",
+      "message": "Outbound sync (manual): Annual Audit & Advisory - FY2026 \u2192 D365 OPP-000003 (Close, $67,550)",
       "actor_name": "Michael Torres",
       "trigger": "manual",
       "timestamp": "2026-04-17T03:28:15.774Z"
@@ -12016,7 +12445,7 @@
         "estimatedCloseDate"
       ],
       "status": "success",
-      "message": "Outbound sync (manual): Pacific Logistics Co - Tax Provision Outsourcing → D365 OPP-100201 (Qualify, $285,000)",
+      "message": "Outbound sync (manual): Pacific Logistics Co - Tax Provision Outsourcing \u2192 D365 OPP-100201 (Qualify, $285,000)",
       "actor_name": "Michael Torres",
       "trigger": "manual",
       "timestamp": "2026-04-17T03:28:23.253Z"
@@ -12036,7 +12465,7 @@
         "estimatedCloseDate"
       ],
       "status": "success",
-      "message": "Outbound sync (manual): Cloud Migration Assessment → D365 OPP-000002 (Qualify, $67,550)",
+      "message": "Outbound sync (manual): Cloud Migration Assessment \u2192 D365 OPP-000002 (Qualify, $67,550)",
       "actor_name": "Michael Torres",
       "trigger": "manual",
       "timestamp": "2026-04-17T03:28:23.262Z"
@@ -12056,7 +12485,7 @@
         "estimatedCloseDate"
       ],
       "status": "success",
-      "message": "Outbound sync (manual): Annual Audit & Advisory - FY2026 → D365 OPP-000003 (Close, $67,550)",
+      "message": "Outbound sync (manual): Annual Audit & Advisory - FY2026 \u2192 D365 OPP-000003 (Close, $67,550)",
       "actor_name": "Michael Torres",
       "trigger": "manual",
       "timestamp": "2026-04-17T03:28:23.270Z"
@@ -12128,7 +12557,7 @@
         "estimatedCloseDate"
       ],
       "status": "success",
-      "message": "Outbound sync (auto): Northwind Renewable Energy - Cloud Migration → D365 OPP-100016 (Qualify, $236,390)",
+      "message": "Outbound sync (auto): Northwind Renewable Energy - Cloud Migration \u2192 D365 OPP-100016 (Qualify, $236,390)",
       "actor_name": "System",
       "trigger": "auto",
       "timestamp": "2026-04-17T06:33:50.193Z"
@@ -12148,7 +12577,7 @@
         "estimatedCloseDate"
       ],
       "status": "success",
-      "message": "Outbound sync (auto): Northwind Renewable Energy - Cloud Migration → D365 OPP-100016 (Qualify, $204,660)",
+      "message": "Outbound sync (auto): Northwind Renewable Energy - Cloud Migration \u2192 D365 OPP-100016 (Qualify, $204,660)",
       "actor_name": "System",
       "trigger": "auto",
       "timestamp": "2026-04-17T06:33:50.341Z"
@@ -12168,7 +12597,7 @@
         "estimatedCloseDate"
       ],
       "status": "success",
-      "message": "Outbound sync (auto): Northwind Renewable Energy - Cloud Migration → D365 OPP-100016 (Qualify, $204,660)",
+      "message": "Outbound sync (auto): Northwind Renewable Energy - Cloud Migration \u2192 D365 OPP-100016 (Qualify, $204,660)",
       "actor_name": "System",
       "trigger": "auto",
       "timestamp": "2026-04-17T06:36:11.073Z"
@@ -12188,7 +12617,7 @@
         "estimatedCloseDate"
       ],
       "status": "success",
-      "message": "Outbound sync (auto): Northwind Renewable Energy - Cloud Migration → D365 OPP-100016 (Qualify, $214,893)",
+      "message": "Outbound sync (auto): Northwind Renewable Energy - Cloud Migration \u2192 D365 OPP-100016 (Qualify, $214,893)",
       "actor_name": "System",
       "trigger": "auto",
       "timestamp": "2026-04-17T06:36:11.193Z"
@@ -12208,7 +12637,7 @@
         "estimatedCloseDate"
       ],
       "status": "success",
-      "message": "Outbound sync (auto): Northwind Renewable Energy - Cloud Migration → D365 OPP-100016 (Qualify, $225,637.65)",
+      "message": "Outbound sync (auto): Northwind Renewable Energy - Cloud Migration \u2192 D365 OPP-100016 (Qualify, $225,637.65)",
       "actor_name": "System",
       "trigger": "auto",
       "timestamp": "2026-04-17T06:36:11.307Z"
@@ -12228,7 +12657,7 @@
         "estimatedCloseDate"
       ],
       "status": "success",
-      "message": "Outbound sync (auto): Northwind Renewable Energy - Cloud Migration → D365 OPP-100016 (Qualify, $225,637.65)",
+      "message": "Outbound sync (auto): Northwind Renewable Energy - Cloud Migration \u2192 D365 OPP-100016 (Qualify, $225,637.65)",
       "actor_name": "System",
       "trigger": "auto",
       "timestamp": "2026-04-17T06:36:27.658Z"
@@ -12248,7 +12677,7 @@
         "estimatedCloseDate"
       ],
       "status": "success",
-      "message": "Outbound sync (auto): Northwind Renewable Energy - Cloud Migration → D365 OPP-100016 (Qualify, $204,660)",
+      "message": "Outbound sync (auto): Northwind Renewable Energy - Cloud Migration \u2192 D365 OPP-100016 (Qualify, $204,660)",
       "actor_name": "System",
       "trigger": "auto",
       "timestamp": "2026-04-17T06:36:27.760Z"
@@ -12268,7 +12697,7 @@
         "estimatedCloseDate"
       ],
       "status": "success",
-      "message": "Outbound sync (auto): Northwind Renewable Energy - Cloud Migration → D365 OPP-100016 (Qualify, $204,721.4)",
+      "message": "Outbound sync (auto): Northwind Renewable Energy - Cloud Migration \u2192 D365 OPP-100016 (Qualify, $204,721.4)",
       "actor_name": "System",
       "trigger": "auto",
       "timestamp": "2026-04-17T06:41:04.507Z"
@@ -12288,7 +12717,7 @@
         "estimatedCloseDate"
       ],
       "status": "success",
-      "message": "Outbound sync (auto): Northwind Renewable Energy - Cloud Migration → D365 OPP-100016 (Qualify, $204,823.76)",
+      "message": "Outbound sync (auto): Northwind Renewable Energy - Cloud Migration \u2192 D365 OPP-100016 (Qualify, $204,823.76)",
       "actor_name": "System",
       "trigger": "auto",
       "timestamp": "2026-04-17T06:41:12.382Z"
@@ -12308,7 +12737,7 @@
         "estimatedCloseDate"
       ],
       "status": "success",
-      "message": "Outbound sync (auto): Northwind Renewable Energy - Cloud Migration → D365 OPP-100016 (Qualify, $204,823.76)",
+      "message": "Outbound sync (auto): Northwind Renewable Energy - Cloud Migration \u2192 D365 OPP-100016 (Qualify, $204,823.76)",
       "actor_name": "System",
       "trigger": "auto",
       "timestamp": "2026-04-17T06:41:12.563Z"
@@ -12328,7 +12757,7 @@
         "estimatedCloseDate"
       ],
       "status": "success",
-      "message": "Outbound sync (auto): Northwind Renewable Energy - Cloud Migration → D365 OPP-100016 (Qualify, $204,823.76)",
+      "message": "Outbound sync (auto): Northwind Renewable Energy - Cloud Migration \u2192 D365 OPP-100016 (Qualify, $204,823.76)",
       "actor_name": "System",
       "trigger": "auto",
       "timestamp": "2026-04-17T06:41:15.228Z"
@@ -12348,7 +12777,7 @@
         "estimatedCloseDate"
       ],
       "status": "success",
-      "message": "Outbound sync (auto): Northwind Renewable Energy - Cloud Migration → D365 OPP-100016 (Qualify, $203,158.28)",
+      "message": "Outbound sync (auto): Northwind Renewable Energy - Cloud Migration \u2192 D365 OPP-100016 (Qualify, $203,158.28)",
       "actor_name": "System",
       "trigger": "auto",
       "timestamp": "2026-04-17T06:41:45.280Z"
@@ -12368,7 +12797,7 @@
         "estimatedCloseDate"
       ],
       "status": "success",
-      "message": "Outbound sync (auto): Northwind Renewable Energy - Cloud Migration → D365 OPP-100016 (Qualify, $203,158.28)",
+      "message": "Outbound sync (auto): Northwind Renewable Energy - Cloud Migration \u2192 D365 OPP-100016 (Qualify, $203,158.28)",
       "actor_name": "System",
       "trigger": "auto",
       "timestamp": "2026-04-17T06:41:48.693Z"
@@ -12388,7 +12817,7 @@
         "estimatedCloseDate"
       ],
       "status": "success",
-      "message": "Outbound sync (auto): Northwind Renewable Energy - Cloud Migration → D365 OPP-100016 (Qualify, $203,158.28)",
+      "message": "Outbound sync (auto): Northwind Renewable Energy - Cloud Migration \u2192 D365 OPP-100016 (Qualify, $203,158.28)",
       "actor_name": "System",
       "trigger": "auto",
       "timestamp": "2026-04-17T06:42:01.398Z"
@@ -12408,7 +12837,7 @@
         "estimatedCloseDate"
       ],
       "status": "success",
-      "message": "Outbound sync (auto): Northwind Renewable Energy - Cloud Migration → D365 OPP-100016 (Qualify, $203,158.28)",
+      "message": "Outbound sync (auto): Northwind Renewable Energy - Cloud Migration \u2192 D365 OPP-100016 (Qualify, $203,158.28)",
       "actor_name": "System",
       "trigger": "auto",
       "timestamp": "2026-04-17T06:42:05.811Z"
@@ -12428,7 +12857,7 @@
         "estimatedCloseDate"
       ],
       "status": "success",
-      "message": "Outbound sync (auto): Northwind Renewable Energy - Cloud Migration → D365 OPP-100016 (Qualify, $203,219.19)",
+      "message": "Outbound sync (auto): Northwind Renewable Energy - Cloud Migration \u2192 D365 OPP-100016 (Qualify, $203,219.19)",
       "actor_name": "System",
       "trigger": "auto",
       "timestamp": "2026-04-17T06:42:08.450Z"
@@ -12448,7 +12877,7 @@
         "estimatedCloseDate"
       ],
       "status": "success",
-      "message": "Outbound sync (auto): Northwind Renewable Energy - Cloud Migration → D365 OPP-100016 (Qualify, $203,219.19)",
+      "message": "Outbound sync (auto): Northwind Renewable Energy - Cloud Migration \u2192 D365 OPP-100016 (Qualify, $203,219.19)",
       "actor_name": "System",
       "trigger": "auto",
       "timestamp": "2026-04-17T06:42:12.432Z"
@@ -12468,7 +12897,7 @@
         "estimatedCloseDate"
       ],
       "status": "success",
-      "message": "Outbound sync (auto): Northwind Renewable Energy - Cloud Migration → D365 OPP-100016 (Qualify, $203,219.19)",
+      "message": "Outbound sync (auto): Northwind Renewable Energy - Cloud Migration \u2192 D365 OPP-100016 (Qualify, $203,219.19)",
       "actor_name": "System",
       "trigger": "auto",
       "timestamp": "2026-04-17T06:42:23.188Z"
@@ -12488,7 +12917,7 @@
         "estimatedCloseDate"
       ],
       "status": "success",
-      "message": "Outbound sync (auto): Northwind Renewable Energy - Cloud Migration → D365 OPP-100016 (Qualify, $203,239.5)",
+      "message": "Outbound sync (auto): Northwind Renewable Energy - Cloud Migration \u2192 D365 OPP-100016 (Qualify, $203,239.5)",
       "actor_name": "System",
       "trigger": "auto",
       "timestamp": "2026-04-17T06:42:23.204Z"
@@ -12508,7 +12937,7 @@
         "estimatedCloseDate"
       ],
       "status": "success",
-      "message": "Outbound sync (auto): Northwind Renewable Energy - Cloud Migration → D365 OPP-100016 (Qualify, $203,259.82)",
+      "message": "Outbound sync (auto): Northwind Renewable Energy - Cloud Migration \u2192 D365 OPP-100016 (Qualify, $203,259.82)",
       "actor_name": "System",
       "trigger": "auto",
       "timestamp": "2026-04-17T06:42:25.419Z"
@@ -12528,7 +12957,7 @@
         "estimatedCloseDate"
       ],
       "status": "success",
-      "message": "Outbound sync (auto): Northwind Renewable Energy - Cloud Migration → D365 OPP-100016 (Qualify, $203,259.82)",
+      "message": "Outbound sync (auto): Northwind Renewable Energy - Cloud Migration \u2192 D365 OPP-100016 (Qualify, $203,259.82)",
       "actor_name": "System",
       "trigger": "auto",
       "timestamp": "2026-04-17T06:42:25.426Z"
@@ -12548,7 +12977,7 @@
         "estimatedCloseDate"
       ],
       "status": "success",
-      "message": "Outbound sync (auto): Northwind Renewable Energy - Cloud Migration → D365 OPP-100016 (Qualify, $203,259.82)",
+      "message": "Outbound sync (auto): Northwind Renewable Energy - Cloud Migration \u2192 D365 OPP-100016 (Qualify, $203,259.82)",
       "actor_name": "System",
       "trigger": "auto",
       "timestamp": "2026-04-17T06:42:27.772Z"
@@ -12568,7 +12997,7 @@
         "estimatedCloseDate"
       ],
       "status": "success",
-      "message": "Outbound sync (auto): Northwind Renewable Energy - Cloud Migration → D365 OPP-100016 (Qualify, $203,259.85)",
+      "message": "Outbound sync (auto): Northwind Renewable Energy - Cloud Migration \u2192 D365 OPP-100016 (Qualify, $203,259.85)",
       "actor_name": "System",
       "trigger": "auto",
       "timestamp": "2026-04-17T06:42:30.311Z"
@@ -12588,7 +13017,7 @@
         "estimatedCloseDate"
       ],
       "status": "success",
-      "message": "Outbound sync (auto): Northwind Renewable Energy - Cloud Migration → D365 OPP-100016 (Qualify, $259,957.94)",
+      "message": "Outbound sync (auto): Northwind Renewable Energy - Cloud Migration \u2192 D365 OPP-100016 (Qualify, $259,957.94)",
       "actor_name": "System",
       "trigger": "auto",
       "timestamp": "2026-04-17T12:19:00.457Z"
@@ -12608,7 +13037,7 @@
         "estimatedCloseDate"
       ],
       "status": "success",
-      "message": "Outbound sync (auto): Northwind Renewable Energy - Cloud Migration → D365 OPP-100016 (Qualify, $259,957.94)",
+      "message": "Outbound sync (auto): Northwind Renewable Energy - Cloud Migration \u2192 D365 OPP-100016 (Qualify, $259,957.94)",
       "actor_name": "System",
       "trigger": "auto",
       "timestamp": "2026-04-17T12:19:56.864Z"
@@ -12628,7 +13057,7 @@
         "estimatedCloseDate"
       ],
       "status": "success",
-      "message": "Outbound sync (auto): Northwind Renewable Energy - Cloud Migration → D365 OPP-100016 (Propose, $259,828.03)",
+      "message": "Outbound sync (auto): Northwind Renewable Energy - Cloud Migration \u2192 D365 OPP-100016 (Propose, $259,828.03)",
       "actor_name": "Test",
       "trigger": "auto",
       "timestamp": "2026-04-17T13:20:24.335Z"
@@ -12648,7 +13077,7 @@
         "estimatedCloseDate"
       ],
       "status": "success",
-      "message": "Outbound sync (auto): Northwind Renewable Energy - Cloud Migration → D365 OPP-100016 (Close, $259,828.03)",
+      "message": "Outbound sync (auto): Northwind Renewable Energy - Cloud Migration \u2192 D365 OPP-100016 (Close, $259,828.03)",
       "actor_name": "Business Unit Approver",
       "trigger": "auto",
       "timestamp": "2026-04-17T13:20:24.559Z"
@@ -12668,7 +13097,7 @@
         "estimatedCloseDate"
       ],
       "status": "success",
-      "message": "Outbound sync (auto): Northwind Renewable Energy - Cloud Migration → D365 OPP-100016 (Propose, $259,828.03)",
+      "message": "Outbound sync (auto): Northwind Renewable Energy - Cloud Migration \u2192 D365 OPP-100016 (Propose, $259,828.03)",
       "actor_name": "T",
       "trigger": "auto",
       "timestamp": "2026-04-17T13:22:31.672Z"
@@ -12688,7 +13117,7 @@
         "estimatedCloseDate"
       ],
       "status": "success",
-      "message": "Outbound sync (auto): Northwind Renewable Energy - Cloud Migration → D365 OPP-100016 (Close, $259,828.03)",
+      "message": "Outbound sync (auto): Northwind Renewable Energy - Cloud Migration \u2192 D365 OPP-100016 (Close, $259,828.03)",
       "actor_name": "X",
       "trigger": "auto",
       "timestamp": "2026-04-17T13:22:31.826Z"
@@ -12708,7 +13137,7 @@
         "estimatedCloseDate"
       ],
       "status": "success",
-      "message": "Outbound sync (auto): Northwind Renewable Energy - Cloud Migration → D365 OPP-100016 (Propose, $259,828.03)",
+      "message": "Outbound sync (auto): Northwind Renewable Energy - Cloud Migration \u2192 D365 OPP-100016 (Propose, $259,828.03)",
       "actor_name": "T",
       "trigger": "auto",
       "timestamp": "2026-04-17T13:22:31.934Z"
@@ -12728,7 +13157,7 @@
         "estimatedCloseDate"
       ],
       "status": "success",
-      "message": "Outbound sync (auto): Northwind Renewable Energy - Cloud Migration → D365 OPP-100016 (Propose, $259,828.03)",
+      "message": "Outbound sync (auto): Northwind Renewable Energy - Cloud Migration \u2192 D365 OPP-100016 (Propose, $259,828.03)",
       "actor_name": "Michael Torres",
       "trigger": "auto",
       "timestamp": "2026-04-17T13:26:42.376Z"
@@ -12798,7 +13227,7 @@
         "estimatedCloseDate"
       ],
       "status": "success",
-      "message": "Outbound sync (manual): Pacific Logistics Co - Tax Provision Outsourcing → D365 OPP-100201 (Qualify, $285,000)",
+      "message": "Outbound sync (manual): Pacific Logistics Co - Tax Provision Outsourcing \u2192 D365 OPP-100201 (Qualify, $285,000)",
       "actor_name": "Michael Torres",
       "trigger": "manual",
       "timestamp": "2026-04-17T17:26:02.111Z"
@@ -12818,7 +13247,7 @@
         "estimatedCloseDate"
       ],
       "status": "success",
-      "message": "Outbound sync (manual): Cloud Migration Assessment → D365 OPP-000002 (Qualify, $67,550)",
+      "message": "Outbound sync (manual): Cloud Migration Assessment \u2192 D365 OPP-000002 (Qualify, $67,550)",
       "actor_name": "Michael Torres",
       "trigger": "manual",
       "timestamp": "2026-04-17T17:26:02.118Z"
@@ -12838,7 +13267,7 @@
         "estimatedCloseDate"
       ],
       "status": "success",
-      "message": "Outbound sync (manual): Annual Audit & Advisory - FY2026 → D365 OPP-000003 (Close, $67,550)",
+      "message": "Outbound sync (manual): Annual Audit & Advisory - FY2026 \u2192 D365 OPP-000003 (Close, $67,550)",
       "actor_name": "Michael Torres",
       "trigger": "manual",
       "timestamp": "2026-04-17T17:26:02.124Z"
@@ -12859,7 +13288,7 @@
         "ownerName"
       ],
       "status": "success",
-      "message": "Inbound: New D365 opp OPP-100022 (Acme Corporation - Tax Provision Outsourcing) seeded with Tax Provision Outsourcing template — eligible for DealPad scoping",
+      "message": "Inbound: New D365 opp OPP-100022 (Acme Corporation - Tax Provision Outsourcing) seeded with Tax Provision Outsourcing template \u2014 eligible for DealPad scoping",
       "actor_name": "Michael Torres",
       "trigger": "manual",
       "timestamp": "2026-04-17T17:26:26.633Z"
@@ -12970,7 +13399,7 @@
         "ownerName"
       ],
       "status": "success",
-      "message": "Inbound: New D365 opp OPP-100025 (Meridian Financial - Cloud Migration) seeded with Cloud Migration template — eligible for DealPad scoping",
+      "message": "Inbound: New D365 opp OPP-100025 (Meridian Financial - Cloud Migration) seeded with Cloud Migration template \u2014 eligible for DealPad scoping",
       "actor_name": "Michael Torres",
       "trigger": "manual",
       "timestamp": "2026-04-17T18:46:52.227Z"
@@ -13006,7 +13435,7 @@
         "estimatedCloseDate"
       ],
       "status": "success",
-      "message": "Outbound sync (auto): Meridian Financial - Cloud Migration → D365 OPP-100025 (Propose, $253,985)",
+      "message": "Outbound sync (auto): Meridian Financial - Cloud Migration \u2192 D365 OPP-100025 (Propose, $253,985)",
       "actor_name": "Michael Torres",
       "trigger": "auto",
       "timestamp": "2026-04-17T18:46:59.685Z"
@@ -13060,7 +13489,7 @@
         "estimatedCloseDate"
       ],
       "status": "success",
-      "message": "Outbound sync (manual): Pacific Logistics Co - Tax Provision Outsourcing → D365 OPP-100201 (Qualify, $285,000)",
+      "message": "Outbound sync (manual): Pacific Logistics Co - Tax Provision Outsourcing \u2192 D365 OPP-100201 (Qualify, $285,000)",
       "actor_name": "Michael Torres",
       "trigger": "manual",
       "timestamp": "2026-04-20T13:40:25.803Z"
@@ -13080,7 +13509,7 @@
         "estimatedCloseDate"
       ],
       "status": "success",
-      "message": "Outbound sync (manual): Cloud Migration Assessment → D365 OPP-000002 (Qualify, $67,550)",
+      "message": "Outbound sync (manual): Cloud Migration Assessment \u2192 D365 OPP-000002 (Qualify, $67,550)",
       "actor_name": "Michael Torres",
       "trigger": "manual",
       "timestamp": "2026-04-20T13:40:25.811Z"
@@ -13100,7 +13529,7 @@
         "estimatedCloseDate"
       ],
       "status": "success",
-      "message": "Outbound sync (manual): Annual Audit & Advisory - FY2026 → D365 OPP-000003 (Close, $67,550)",
+      "message": "Outbound sync (manual): Annual Audit & Advisory - FY2026 \u2192 D365 OPP-000003 (Close, $67,550)",
       "actor_name": "Michael Torres",
       "trigger": "manual",
       "timestamp": "2026-04-20T13:40:25.820Z"
@@ -13154,7 +13583,7 @@
         "estimatedCloseDate"
       ],
       "status": "success",
-      "message": "Outbound sync (manual): Annual Audit & Advisory - FY2026 → D365 OPP-000003 (Close, $67,550)",
+      "message": "Outbound sync (manual): Annual Audit & Advisory - FY2026 \u2192 D365 OPP-000003 (Close, $67,550)",
       "actor_name": "Michael Torres",
       "trigger": "manual",
       "timestamp": "2026-04-20T14:33:05.745Z"
@@ -13174,7 +13603,7 @@
         "estimatedCloseDate"
       ],
       "status": "success",
-      "message": "Outbound sync (manual): Pacific Logistics Co - Tax Provision Outsourcing → D365 OPP-100201 (Qualify, $285,000)",
+      "message": "Outbound sync (manual): Pacific Logistics Co - Tax Provision Outsourcing \u2192 D365 OPP-100201 (Qualify, $285,000)",
       "actor_name": "Michael Torres",
       "trigger": "manual",
       "timestamp": "2026-04-20T14:33:05.753Z"
@@ -13194,7 +13623,7 @@
         "estimatedCloseDate"
       ],
       "status": "success",
-      "message": "Outbound sync (manual): Cloud Migration Assessment → D365 OPP-000002 (Qualify, $67,550)",
+      "message": "Outbound sync (manual): Cloud Migration Assessment \u2192 D365 OPP-000002 (Qualify, $67,550)",
       "actor_name": "Michael Torres",
       "trigger": "manual",
       "timestamp": "2026-04-20T14:33:05.760Z"
@@ -13214,7 +13643,7 @@
         "estimatedCloseDate"
       ],
       "status": "success",
-      "message": "Outbound sync (auto): ERP Modernization - Phase 1 → D365 OPP-000001 (Develop, $77,168.42)",
+      "message": "Outbound sync (auto): ERP Modernization - Phase 1 \u2192 D365 OPP-000001 (Develop, $77,168.42)",
       "actor_name": "System",
       "trigger": "auto",
       "timestamp": "2026-04-20T15:07:24.257Z"
@@ -13234,7 +13663,7 @@
         "estimatedCloseDate"
       ],
       "status": "success",
-      "message": "Outbound sync (auto): ERP Modernization - Phase 1 → D365 OPP-000001 (Develop, $77,168.42)",
+      "message": "Outbound sync (auto): ERP Modernization - Phase 1 \u2192 D365 OPP-000001 (Develop, $77,168.42)",
       "actor_name": "System",
       "trigger": "auto",
       "timestamp": "2026-04-20T15:08:17.723Z"
@@ -13254,7 +13683,7 @@
         "estimatedCloseDate"
       ],
       "status": "success",
-      "message": "Outbound sync (auto): ERP Modernization - Phase 1 → D365 OPP-000001 (Develop, $77,168.42)",
+      "message": "Outbound sync (auto): ERP Modernization - Phase 1 \u2192 D365 OPP-000001 (Develop, $77,168.42)",
       "actor_name": "System",
       "trigger": "auto",
       "timestamp": "2026-04-20T15:08:23.668Z"
@@ -13274,7 +13703,7 @@
         "estimatedCloseDate"
       ],
       "status": "success",
-      "message": "Outbound sync (auto): ERP Modernization - Phase 1 → D365 OPP-000001 (Develop, $77,168.42)",
+      "message": "Outbound sync (auto): ERP Modernization - Phase 1 \u2192 D365 OPP-000001 (Develop, $77,168.42)",
       "actor_name": "System",
       "trigger": "auto",
       "timestamp": "2026-04-20T15:08:28.410Z"
@@ -13294,7 +13723,7 @@
         "estimatedCloseDate"
       ],
       "status": "success",
-      "message": "Outbound sync (auto): ERP Modernization - Phase 1 → D365 OPP-000001 (Develop, $84,885.26)",
+      "message": "Outbound sync (auto): ERP Modernization - Phase 1 \u2192 D365 OPP-000001 (Develop, $84,885.26)",
       "actor_name": "System",
       "trigger": "auto",
       "timestamp": "2026-04-20T15:08:35.450Z"
@@ -13314,7 +13743,7 @@
         "estimatedCloseDate"
       ],
       "status": "success",
-      "message": "Outbound sync (auto): ERP Modernization - Phase 1 → D365 OPP-000001 (Develop, $93,373.8)",
+      "message": "Outbound sync (auto): ERP Modernization - Phase 1 \u2192 D365 OPP-000001 (Develop, $93,373.8)",
       "actor_name": "System",
       "trigger": "auto",
       "timestamp": "2026-04-20T15:08:53.212Z"
@@ -13335,7 +13764,7 @@
         "ownerName"
       ],
       "status": "success",
-      "message": "Inbound: New D365 opp OPP-100026 (Apex Biotech Solutions - Annual Audit) seeded with Tax Provision Outsourcing template — eligible for DealPad scoping",
+      "message": "Inbound: New D365 opp OPP-100026 (Apex Biotech Solutions - Annual Audit) seeded with Tax Provision Outsourcing template \u2014 eligible for DealPad scoping",
       "actor_name": "James Wright",
       "trigger": "manual",
       "timestamp": "2026-04-20T16:07:17.298Z"
@@ -13430,7 +13859,7 @@
         "estimatedCloseDate"
       ],
       "status": "success",
-      "message": "Outbound sync (manual): Annual Audit & Advisory - FY2026 → D365 OPP-000003 (Close, $67,550)",
+      "message": "Outbound sync (manual): Annual Audit & Advisory - FY2026 \u2192 D365 OPP-000003 (Close, $67,550)",
       "actor_name": "Michael Torres",
       "trigger": "manual",
       "timestamp": "2026-04-20T16:08:24.913Z"
@@ -13450,7 +13879,7 @@
         "estimatedCloseDate"
       ],
       "status": "success",
-      "message": "Outbound sync (manual): Pacific Logistics Co - Tax Provision Outsourcing → D365 OPP-100201 (Qualify, $285,000)",
+      "message": "Outbound sync (manual): Pacific Logistics Co - Tax Provision Outsourcing \u2192 D365 OPP-100201 (Qualify, $285,000)",
       "actor_name": "Michael Torres",
       "trigger": "manual",
       "timestamp": "2026-04-20T16:08:24.921Z"
@@ -13470,7 +13899,7 @@
         "estimatedCloseDate"
       ],
       "status": "success",
-      "message": "Outbound sync (manual): Cloud Migration Assessment → D365 OPP-000002 (Qualify, $67,550)",
+      "message": "Outbound sync (manual): Cloud Migration Assessment \u2192 D365 OPP-000002 (Qualify, $67,550)",
       "actor_name": "Michael Torres",
       "trigger": "manual",
       "timestamp": "2026-04-20T16:08:24.929Z"
@@ -13522,7 +13951,7 @@
         "estimatedCloseDate"
       ],
       "status": "success",
-      "message": "Outbound sync (auto): Apex Biotech Solutions - Annual Audit → D365 OPP-100026 (Qualify, $0)",
+      "message": "Outbound sync (auto): Apex Biotech Solutions - Annual Audit \u2192 D365 OPP-100026 (Qualify, $0)",
       "actor_name": "System",
       "trigger": "auto",
       "timestamp": "2026-04-20T16:12:48.249Z"
@@ -13542,7 +13971,7 @@
         "estimatedCloseDate"
       ],
       "status": "success",
-      "message": "Outbound sync (auto): Apex Biotech Solutions - Annual Audit → D365 OPP-100026 (Qualify, $0)",
+      "message": "Outbound sync (auto): Apex Biotech Solutions - Annual Audit \u2192 D365 OPP-100026 (Qualify, $0)",
       "actor_name": "System",
       "trigger": "auto",
       "timestamp": "2026-04-20T16:15:28.960Z"
@@ -13562,7 +13991,7 @@
         "estimatedCloseDate"
       ],
       "status": "success",
-      "message": "Outbound sync (auto): Apex Biotech Solutions - Annual Audit → D365 OPP-100026 (Qualify, $0)",
+      "message": "Outbound sync (auto): Apex Biotech Solutions - Annual Audit \u2192 D365 OPP-100026 (Qualify, $0)",
       "actor_name": "System",
       "trigger": "auto",
       "timestamp": "2026-04-20T16:15:28.974Z"
@@ -13582,7 +14011,7 @@
         "estimatedCloseDate"
       ],
       "status": "success",
-      "message": "Outbound sync (auto): Apex Biotech Solutions - Annual Audit → D365 OPP-100026 (Qualify, $0)",
+      "message": "Outbound sync (auto): Apex Biotech Solutions - Annual Audit \u2192 D365 OPP-100026 (Qualify, $0)",
       "actor_name": "System",
       "trigger": "auto",
       "timestamp": "2026-04-20T16:15:34.670Z"
@@ -13608,7 +14037,7 @@
       "id": 1,
       "workday_id": "WD-a37ba7ff--5c8--5c8-000-5c84e6f0",
       "code": "CC-AUDIT-100",
-      "name": "Audit & Assurance — National",
+      "name": "Audit & Assurance \u2014 National",
       "fiscal_year": "FY2026",
       "total_budget": "5500000.00",
       "committed": "1850000.00",
@@ -13622,7 +14051,7 @@
       "id": 2,
       "workday_id": "WD-31ac2b90-31ac-31ac-000031ac957f",
       "code": "CC-TAX-200",
-      "name": "Tax Services — National",
+      "name": "Tax Services \u2014 National",
       "fiscal_year": "FY2026",
       "total_budget": "3800000.00",
       "committed": "1620000.00",
@@ -14608,7 +15037,7 @@
       "workday_cost_rate": null,
       "variance_pct": null,
       "amount": null,
-      "message": "Partner: 49h required vs 600h available — covered."
+      "message": "Partner: 49h required vs 600h available \u2014 covered."
     },
     {
       "id": 3,
@@ -14623,7 +15052,7 @@
       "workday_cost_rate": null,
       "variance_pct": null,
       "amount": null,
-      "message": "Managing Director: 70h required vs 660h available — covered."
+      "message": "Managing Director: 70h required vs 660h available \u2014 covered."
     },
     {
       "id": 4,
@@ -14638,7 +15067,7 @@
       "workday_cost_rate": null,
       "variance_pct": null,
       "amount": null,
-      "message": "Senior Manager: 119h required vs 900h available — covered."
+      "message": "Senior Manager: 119h required vs 900h available \u2014 covered."
     },
     {
       "id": 5,
@@ -14653,7 +15082,7 @@
       "workday_cost_rate": null,
       "variance_pct": null,
       "amount": null,
-      "message": "Manager: 140h required vs 1380h available — covered."
+      "message": "Manager: 140h required vs 1380h available \u2014 covered."
     },
     {
       "id": 6,
@@ -14668,7 +15097,7 @@
       "workday_cost_rate": null,
       "variance_pct": null,
       "amount": null,
-      "message": "Senior Consultant: 181h required vs 400h available — covered."
+      "message": "Senior Consultant: 181h required vs 400h available \u2014 covered."
     },
     {
       "id": 7,
@@ -14683,7 +15112,7 @@
       "workday_cost_rate": null,
       "variance_pct": null,
       "amount": null,
-      "message": "Consultant: 91h required vs 1740h available — covered."
+      "message": "Consultant: 91h required vs 1740h available \u2014 covered."
     },
     {
       "id": 8,
@@ -14698,7 +15127,7 @@
       "workday_cost_rate": null,
       "variance_pct": null,
       "amount": null,
-      "message": "Analyst: 49h required vs 1360h available — covered."
+      "message": "Analyst: 49h required vs 1360h available \u2014 covered."
     },
     {
       "id": 9,
@@ -14728,7 +15157,7 @@
       "workday_cost_rate": null,
       "variance_pct": null,
       "amount": null,
-      "message": "Partner: 14h required vs 600h available — covered."
+      "message": "Partner: 14h required vs 600h available \u2014 covered."
     },
     {
       "id": 11,
@@ -14743,7 +15172,7 @@
       "workday_cost_rate": null,
       "variance_pct": null,
       "amount": null,
-      "message": "Managing Director: 20h required vs 660h available — covered."
+      "message": "Managing Director: 20h required vs 660h available \u2014 covered."
     },
     {
       "id": 12,
@@ -14758,7 +15187,7 @@
       "workday_cost_rate": null,
       "variance_pct": null,
       "amount": null,
-      "message": "Senior Manager: 34h required vs 900h available — covered."
+      "message": "Senior Manager: 34h required vs 900h available \u2014 covered."
     },
     {
       "id": 13,
@@ -14773,7 +15202,7 @@
       "workday_cost_rate": null,
       "variance_pct": null,
       "amount": null,
-      "message": "Manager: 40h required vs 1380h available — covered."
+      "message": "Manager: 40h required vs 1380h available \u2014 covered."
     },
     {
       "id": 14,
@@ -14788,7 +15217,7 @@
       "workday_cost_rate": null,
       "variance_pct": null,
       "amount": null,
-      "message": "Senior Consultant: 52h required vs 400h available — covered."
+      "message": "Senior Consultant: 52h required vs 400h available \u2014 covered."
     },
     {
       "id": 15,
@@ -14803,7 +15232,7 @@
       "workday_cost_rate": null,
       "variance_pct": null,
       "amount": null,
-      "message": "Consultant: 26h required vs 1740h available — covered."
+      "message": "Consultant: 26h required vs 1740h available \u2014 covered."
     },
     {
       "id": 16,
@@ -14818,7 +15247,7 @@
       "workday_cost_rate": null,
       "variance_pct": null,
       "amount": null,
-      "message": "Analyst: 14h required vs 1360h available — covered."
+      "message": "Analyst: 14h required vs 1360h available \u2014 covered."
     },
     {
       "id": 17,
@@ -14848,7 +15277,7 @@
       "workday_cost_rate": null,
       "variance_pct": null,
       "amount": null,
-      "message": "Partner: 14h required vs 600h available — covered."
+      "message": "Partner: 14h required vs 600h available \u2014 covered."
     },
     {
       "id": 19,
@@ -14863,7 +15292,7 @@
       "workday_cost_rate": null,
       "variance_pct": null,
       "amount": null,
-      "message": "Managing Director: 20h required vs 660h available — covered."
+      "message": "Managing Director: 20h required vs 660h available \u2014 covered."
     },
     {
       "id": 20,
@@ -14878,7 +15307,7 @@
       "workday_cost_rate": null,
       "variance_pct": null,
       "amount": null,
-      "message": "Senior Manager: 34h required vs 900h available — covered."
+      "message": "Senior Manager: 34h required vs 900h available \u2014 covered."
     },
     {
       "id": 21,
@@ -14893,7 +15322,7 @@
       "workday_cost_rate": null,
       "variance_pct": null,
       "amount": null,
-      "message": "Manager: 40h required vs 1380h available — covered."
+      "message": "Manager: 40h required vs 1380h available \u2014 covered."
     },
     {
       "id": 22,
@@ -14908,7 +15337,7 @@
       "workday_cost_rate": null,
       "variance_pct": null,
       "amount": null,
-      "message": "Senior Consultant: 52h required vs 400h available — covered."
+      "message": "Senior Consultant: 52h required vs 400h available \u2014 covered."
     },
     {
       "id": 23,
@@ -14923,7 +15352,7 @@
       "workday_cost_rate": null,
       "variance_pct": null,
       "amount": null,
-      "message": "Consultant: 26h required vs 1740h available — covered."
+      "message": "Consultant: 26h required vs 1740h available \u2014 covered."
     },
     {
       "id": 24,
@@ -14938,7 +15367,7 @@
       "workday_cost_rate": null,
       "variance_pct": null,
       "amount": null,
-      "message": "Analyst: 14h required vs 1360h available — covered."
+      "message": "Analyst: 14h required vs 1360h available \u2014 covered."
     },
     {
       "id": 25,
@@ -14968,7 +15397,7 @@
       "workday_cost_rate": null,
       "variance_pct": null,
       "amount": null,
-      "message": "Partner: 51h required vs 600h available — covered."
+      "message": "Partner: 51h required vs 600h available \u2014 covered."
     },
     {
       "id": 27,
@@ -14983,7 +15412,7 @@
       "workday_cost_rate": null,
       "variance_pct": null,
       "amount": null,
-      "message": "Managing Director: 73h required vs 660h available — covered."
+      "message": "Managing Director: 73h required vs 660h available \u2014 covered."
     },
     {
       "id": 28,
@@ -14998,7 +15427,7 @@
       "workday_cost_rate": null,
       "variance_pct": null,
       "amount": null,
-      "message": "Senior Manager: 125h required vs 900h available — covered."
+      "message": "Senior Manager: 125h required vs 900h available \u2014 covered."
     },
     {
       "id": 29,
@@ -15013,7 +15442,7 @@
       "workday_cost_rate": null,
       "variance_pct": null,
       "amount": null,
-      "message": "Manager: 147h required vs 1380h available — covered."
+      "message": "Manager: 147h required vs 1380h available \u2014 covered."
     },
     {
       "id": 30,
@@ -15028,7 +15457,7 @@
       "workday_cost_rate": null,
       "variance_pct": null,
       "amount": null,
-      "message": "Senior Consultant: 191h required vs 400h available — covered."
+      "message": "Senior Consultant: 191h required vs 400h available \u2014 covered."
     },
     {
       "id": 31,
@@ -15043,7 +15472,7 @@
       "workday_cost_rate": null,
       "variance_pct": null,
       "amount": null,
-      "message": "Consultant: 95h required vs 1740h available — covered."
+      "message": "Consultant: 95h required vs 1740h available \u2014 covered."
     },
     {
       "id": 32,
@@ -15058,7 +15487,7 @@
       "workday_cost_rate": null,
       "variance_pct": null,
       "amount": null,
-      "message": "Analyst: 51h required vs 1360h available — covered."
+      "message": "Analyst: 51h required vs 1360h available \u2014 covered."
     },
     {
       "id": 33,
@@ -15088,7 +15517,7 @@
       "workday_cost_rate": null,
       "variance_pct": null,
       "amount": null,
-      "message": "Partner: 51h required vs 600h available — covered."
+      "message": "Partner: 51h required vs 600h available \u2014 covered."
     },
     {
       "id": 35,
@@ -15103,7 +15532,7 @@
       "workday_cost_rate": null,
       "variance_pct": null,
       "amount": null,
-      "message": "Managing Director: 73h required vs 660h available — covered."
+      "message": "Managing Director: 73h required vs 660h available \u2014 covered."
     },
     {
       "id": 36,
@@ -15118,7 +15547,7 @@
       "workday_cost_rate": null,
       "variance_pct": null,
       "amount": null,
-      "message": "Senior Manager: 125h required vs 900h available — covered."
+      "message": "Senior Manager: 125h required vs 900h available \u2014 covered."
     },
     {
       "id": 37,
@@ -15133,7 +15562,7 @@
       "workday_cost_rate": null,
       "variance_pct": null,
       "amount": null,
-      "message": "Manager: 147h required vs 1380h available — covered."
+      "message": "Manager: 147h required vs 1380h available \u2014 covered."
     },
     {
       "id": 38,
@@ -15148,7 +15577,7 @@
       "workday_cost_rate": null,
       "variance_pct": null,
       "amount": null,
-      "message": "Senior Consultant: 191h required vs 400h available — covered."
+      "message": "Senior Consultant: 191h required vs 400h available \u2014 covered."
     },
     {
       "id": 39,
@@ -15163,7 +15592,7 @@
       "workday_cost_rate": null,
       "variance_pct": null,
       "amount": null,
-      "message": "Consultant: 95h required vs 1740h available — covered."
+      "message": "Consultant: 95h required vs 1740h available \u2014 covered."
     },
     {
       "id": 40,
@@ -15178,7 +15607,7 @@
       "workday_cost_rate": null,
       "variance_pct": null,
       "amount": null,
-      "message": "Analyst: 51h required vs 1360h available — covered."
+      "message": "Analyst: 51h required vs 1360h available \u2014 covered."
     },
     {
       "id": 41,
@@ -15208,7 +15637,7 @@
       "workday_cost_rate": null,
       "variance_pct": null,
       "amount": null,
-      "message": "Partner: 51h required vs 600h available — covered."
+      "message": "Partner: 51h required vs 600h available \u2014 covered."
     },
     {
       "id": 43,
@@ -15223,7 +15652,7 @@
       "workday_cost_rate": null,
       "variance_pct": null,
       "amount": null,
-      "message": "Managing Director: 73h required vs 660h available — covered."
+      "message": "Managing Director: 73h required vs 660h available \u2014 covered."
     },
     {
       "id": 44,
@@ -15238,7 +15667,7 @@
       "workday_cost_rate": null,
       "variance_pct": null,
       "amount": null,
-      "message": "Senior Manager: 125h required vs 900h available — covered."
+      "message": "Senior Manager: 125h required vs 900h available \u2014 covered."
     },
     {
       "id": 45,
@@ -15253,7 +15682,7 @@
       "workday_cost_rate": null,
       "variance_pct": null,
       "amount": null,
-      "message": "Manager: 147h required vs 1380h available — covered."
+      "message": "Manager: 147h required vs 1380h available \u2014 covered."
     },
     {
       "id": 46,
@@ -15268,7 +15697,7 @@
       "workday_cost_rate": null,
       "variance_pct": null,
       "amount": null,
-      "message": "Senior Consultant: 191h required vs 400h available — covered."
+      "message": "Senior Consultant: 191h required vs 400h available \u2014 covered."
     },
     {
       "id": 47,
@@ -15283,7 +15712,7 @@
       "workday_cost_rate": null,
       "variance_pct": null,
       "amount": null,
-      "message": "Consultant: 95h required vs 1740h available — covered."
+      "message": "Consultant: 95h required vs 1740h available \u2014 covered."
     },
     {
       "id": 48,
@@ -15298,7 +15727,7 @@
       "workday_cost_rate": null,
       "variance_pct": null,
       "amount": null,
-      "message": "Analyst: 51h required vs 1360h available — covered."
+      "message": "Analyst: 51h required vs 1360h available \u2014 covered."
     },
     {
       "id": 49,
@@ -15328,7 +15757,7 @@
       "workday_cost_rate": null,
       "variance_pct": null,
       "amount": null,
-      "message": "Partner: 17h required vs 600h available — covered."
+      "message": "Partner: 17h required vs 600h available \u2014 covered."
     },
     {
       "id": 51,
@@ -15343,7 +15772,7 @@
       "workday_cost_rate": null,
       "variance_pct": null,
       "amount": null,
-      "message": "Managing Director: 24h required vs 660h available — covered."
+      "message": "Managing Director: 24h required vs 660h available \u2014 covered."
     },
     {
       "id": 52,
@@ -15358,7 +15787,7 @@
       "workday_cost_rate": null,
       "variance_pct": null,
       "amount": null,
-      "message": "Senior Manager: 41h required vs 900h available — covered."
+      "message": "Senior Manager: 41h required vs 900h available \u2014 covered."
     },
     {
       "id": 53,
@@ -15373,7 +15802,7 @@
       "workday_cost_rate": null,
       "variance_pct": null,
       "amount": null,
-      "message": "Manager: 48h required vs 1380h available — covered."
+      "message": "Manager: 48h required vs 1380h available \u2014 covered."
     },
     {
       "id": 54,
@@ -15388,7 +15817,7 @@
       "workday_cost_rate": null,
       "variance_pct": null,
       "amount": null,
-      "message": "Senior Consultant: 62h required vs 400h available — covered."
+      "message": "Senior Consultant: 62h required vs 400h available \u2014 covered."
     },
     {
       "id": 55,
@@ -15403,7 +15832,7 @@
       "workday_cost_rate": null,
       "variance_pct": null,
       "amount": null,
-      "message": "Consultant: 31h required vs 1740h available — covered."
+      "message": "Consultant: 31h required vs 1740h available \u2014 covered."
     },
     {
       "id": 56,
@@ -15418,7 +15847,7 @@
       "workday_cost_rate": null,
       "variance_pct": null,
       "amount": null,
-      "message": "Analyst: 17h required vs 1360h available — covered."
+      "message": "Analyst: 17h required vs 1360h available \u2014 covered."
     },
     {
       "id": 57,
@@ -15448,7 +15877,7 @@
       "workday_cost_rate": null,
       "variance_pct": null,
       "amount": null,
-      "message": "Senior Manager: 230h required vs 900h available — covered."
+      "message": "Senior Manager: 230h required vs 900h available \u2014 covered."
     },
     {
       "id": 59,
@@ -15463,7 +15892,7 @@
       "workday_cost_rate": null,
       "variance_pct": null,
       "amount": null,
-      "message": "Manager: 270h required vs 1380h available — covered."
+      "message": "Manager: 270h required vs 1380h available \u2014 covered."
     },
     {
       "id": 60,
@@ -15478,7 +15907,7 @@
       "workday_cost_rate": null,
       "variance_pct": null,
       "amount": null,
-      "message": "Senior Consultant: 351h required vs 400h available — covered."
+      "message": "Senior Consultant: 351h required vs 400h available \u2014 covered."
     },
     {
       "id": 61,
@@ -15493,7 +15922,7 @@
       "workday_cost_rate": null,
       "variance_pct": null,
       "amount": null,
-      "message": "Consultant: 176h required vs 1740h available — covered."
+      "message": "Consultant: 176h required vs 1740h available \u2014 covered."
     },
     {
       "id": 62,
@@ -15508,7 +15937,7 @@
       "workday_cost_rate": null,
       "variance_pct": null,
       "amount": null,
-      "message": "Analyst: 95h required vs 1360h available — covered."
+      "message": "Analyst: 95h required vs 1360h available \u2014 covered."
     },
     {
       "id": 63,
@@ -15523,7 +15952,7 @@
       "workday_cost_rate": null,
       "variance_pct": null,
       "amount": null,
-      "message": "Partner: 95h required vs 600h available — covered."
+      "message": "Partner: 95h required vs 600h available \u2014 covered."
     },
     {
       "id": 64,
@@ -15538,7 +15967,7 @@
       "workday_cost_rate": null,
       "variance_pct": null,
       "amount": null,
-      "message": "Managing Director: 135h required vs 660h available — covered."
+      "message": "Managing Director: 135h required vs 660h available \u2014 covered."
     },
     {
       "id": 65,
@@ -15568,7 +15997,7 @@
       "workday_cost_rate": null,
       "variance_pct": null,
       "amount": null,
-      "message": "Senior Manager: 230h required vs 900h available — covered."
+      "message": "Senior Manager: 230h required vs 900h available \u2014 covered."
     },
     {
       "id": 67,
@@ -15583,7 +16012,7 @@
       "workday_cost_rate": null,
       "variance_pct": null,
       "amount": null,
-      "message": "Manager: 270h required vs 1380h available — covered."
+      "message": "Manager: 270h required vs 1380h available \u2014 covered."
     },
     {
       "id": 68,
@@ -15598,7 +16027,7 @@
       "workday_cost_rate": null,
       "variance_pct": null,
       "amount": null,
-      "message": "Senior Consultant: 351h required vs 400h available — covered."
+      "message": "Senior Consultant: 351h required vs 400h available \u2014 covered."
     },
     {
       "id": 69,
@@ -15613,7 +16042,7 @@
       "workday_cost_rate": null,
       "variance_pct": null,
       "amount": null,
-      "message": "Consultant: 176h required vs 1740h available — covered."
+      "message": "Consultant: 176h required vs 1740h available \u2014 covered."
     },
     {
       "id": 70,
@@ -15628,7 +16057,7 @@
       "workday_cost_rate": null,
       "variance_pct": null,
       "amount": null,
-      "message": "Analyst: 95h required vs 1360h available — covered."
+      "message": "Analyst: 95h required vs 1360h available \u2014 covered."
     },
     {
       "id": 71,
@@ -15643,7 +16072,7 @@
       "workday_cost_rate": null,
       "variance_pct": null,
       "amount": null,
-      "message": "Partner: 95h required vs 600h available — covered."
+      "message": "Partner: 95h required vs 600h available \u2014 covered."
     },
     {
       "id": 72,
@@ -15658,7 +16087,7 @@
       "workday_cost_rate": null,
       "variance_pct": null,
       "amount": null,
-      "message": "Managing Director: 135h required vs 660h available — covered."
+      "message": "Managing Director: 135h required vs 660h available \u2014 covered."
     },
     {
       "id": 73,
@@ -15688,7 +16117,7 @@
       "workday_cost_rate": null,
       "variance_pct": null,
       "amount": null,
-      "message": "Analyst: 95h required vs 1360h available — covered."
+      "message": "Analyst: 95h required vs 1360h available \u2014 covered."
     },
     {
       "id": 75,
@@ -15703,7 +16132,7 @@
       "workday_cost_rate": null,
       "variance_pct": null,
       "amount": null,
-      "message": "Partner: 95h required vs 600h available — covered."
+      "message": "Partner: 95h required vs 600h available \u2014 covered."
     },
     {
       "id": 76,
@@ -15718,7 +16147,7 @@
       "workday_cost_rate": null,
       "variance_pct": null,
       "amount": null,
-      "message": "Managing Director: 135h required vs 660h available — covered."
+      "message": "Managing Director: 135h required vs 660h available \u2014 covered."
     },
     {
       "id": 77,
@@ -15733,7 +16162,7 @@
       "workday_cost_rate": null,
       "variance_pct": null,
       "amount": null,
-      "message": "Senior Manager: 230h required vs 900h available — covered."
+      "message": "Senior Manager: 230h required vs 900h available \u2014 covered."
     },
     {
       "id": 78,
@@ -15748,7 +16177,7 @@
       "workday_cost_rate": null,
       "variance_pct": null,
       "amount": null,
-      "message": "Manager: 270h required vs 1380h available — covered."
+      "message": "Manager: 270h required vs 1380h available \u2014 covered."
     },
     {
       "id": 79,
@@ -15763,7 +16192,7 @@
       "workday_cost_rate": null,
       "variance_pct": null,
       "amount": null,
-      "message": "Senior Consultant: 351h required vs 400h available — covered."
+      "message": "Senior Consultant: 351h required vs 400h available \u2014 covered."
     },
     {
       "id": 80,
@@ -15778,7 +16207,7 @@
       "workday_cost_rate": null,
       "variance_pct": null,
       "amount": null,
-      "message": "Consultant: 176h required vs 1740h available — covered."
+      "message": "Consultant: 176h required vs 1740h available \u2014 covered."
     },
     {
       "id": 81,
@@ -15838,7 +16267,7 @@
       "workday_cost_rate": null,
       "variance_pct": null,
       "amount": null,
-      "message": "Analyst: 44h required vs 1360h available — covered."
+      "message": "Analyst: 44h required vs 1360h available \u2014 covered."
     },
     {
       "id": 85,
@@ -15853,7 +16282,7 @@
       "workday_cost_rate": null,
       "variance_pct": null,
       "amount": null,
-      "message": "Partner: 44h required vs 600h available — covered."
+      "message": "Partner: 44h required vs 600h available \u2014 covered."
     },
     {
       "id": 86,
@@ -15868,7 +16297,7 @@
       "workday_cost_rate": null,
       "variance_pct": null,
       "amount": null,
-      "message": "Managing Director: 63h required vs 660h available — covered."
+      "message": "Managing Director: 63h required vs 660h available \u2014 covered."
     },
     {
       "id": 87,
@@ -15883,7 +16312,7 @@
       "workday_cost_rate": null,
       "variance_pct": null,
       "amount": null,
-      "message": "Senior Manager: 107h required vs 900h available — covered."
+      "message": "Senior Manager: 107h required vs 900h available \u2014 covered."
     },
     {
       "id": 88,
@@ -15898,7 +16327,7 @@
       "workday_cost_rate": null,
       "variance_pct": null,
       "amount": null,
-      "message": "Manager: 126h required vs 1380h available — covered."
+      "message": "Manager: 126h required vs 1380h available \u2014 covered."
     },
     {
       "id": 89,
@@ -15913,7 +16342,7 @@
       "workday_cost_rate": null,
       "variance_pct": null,
       "amount": null,
-      "message": "Senior Consultant: 164h required vs 400h available — covered."
+      "message": "Senior Consultant: 164h required vs 400h available \u2014 covered."
     },
     {
       "id": 90,
@@ -15928,7 +16357,7 @@
       "workday_cost_rate": null,
       "variance_pct": null,
       "amount": null,
-      "message": "Consultant: 82h required vs 1740h available — covered."
+      "message": "Consultant: 82h required vs 1740h available \u2014 covered."
     },
     {
       "id": 91,
@@ -15973,7 +16402,7 @@
       "workday_cost_rate": null,
       "variance_pct": null,
       "amount": null,
-      "message": "Partner: 14h required vs 600h available — covered."
+      "message": "Partner: 14h required vs 600h available \u2014 covered."
     },
     {
       "id": 94,
@@ -15988,7 +16417,7 @@
       "workday_cost_rate": null,
       "variance_pct": null,
       "amount": null,
-      "message": "Managing Director: 20h required vs 660h available — covered."
+      "message": "Managing Director: 20h required vs 660h available \u2014 covered."
     },
     {
       "id": 95,
@@ -16003,7 +16432,7 @@
       "workday_cost_rate": null,
       "variance_pct": null,
       "amount": null,
-      "message": "Senior Manager: 34h required vs 900h available — covered."
+      "message": "Senior Manager: 34h required vs 900h available \u2014 covered."
     },
     {
       "id": 96,
@@ -16018,7 +16447,7 @@
       "workday_cost_rate": null,
       "variance_pct": null,
       "amount": null,
-      "message": "Manager: 40h required vs 1380h available — covered."
+      "message": "Manager: 40h required vs 1380h available \u2014 covered."
     },
     {
       "id": 97,
@@ -16033,7 +16462,7 @@
       "workday_cost_rate": null,
       "variance_pct": null,
       "amount": null,
-      "message": "Senior Consultant: 52h required vs 400h available — covered."
+      "message": "Senior Consultant: 52h required vs 400h available \u2014 covered."
     },
     {
       "id": 98,
@@ -16048,7 +16477,7 @@
       "workday_cost_rate": null,
       "variance_pct": null,
       "amount": null,
-      "message": "Consultant: 26h required vs 1740h available — covered."
+      "message": "Consultant: 26h required vs 1740h available \u2014 covered."
     },
     {
       "id": 99,
@@ -16063,7 +16492,7 @@
       "workday_cost_rate": null,
       "variance_pct": null,
       "amount": null,
-      "message": "Analyst: 14h required vs 1360h available — covered."
+      "message": "Analyst: 14h required vs 1360h available \u2014 covered."
     },
     {
       "id": 100,
@@ -16108,7 +16537,7 @@
       "workday_cost_rate": null,
       "variance_pct": null,
       "amount": null,
-      "message": "Manager: 180h required vs 1380h available — covered."
+      "message": "Manager: 180h required vs 1380h available \u2014 covered."
     },
     {
       "id": 103,
@@ -16138,7 +16567,7 @@
       "workday_cost_rate": null,
       "variance_pct": null,
       "amount": null,
-      "message": "Senior Consultant: requires 640h, Workday shows 400h available — short 240h."
+      "message": "Senior Consultant: requires 640h, Workday shows 400h available \u2014 short 240h."
     },
     {
       "id": 105,
@@ -16153,7 +16582,7 @@
       "workday_cost_rate": "200.00",
       "variance_pct": "18.50",
       "amount": null,
-      "message": "Senior Manager: deal cost rate $237.00 vs Workday $200.00 (+18.5%) — exceeds 10% tolerance."
+      "message": "Senior Manager: deal cost rate $237.00 vs Workday $200.00 (+18.5%) \u2014 exceeds 10% tolerance."
     },
     {
       "id": 106,
@@ -16168,7 +16597,7 @@
       "workday_cost_rate": "175.00",
       "variance_pct": "11.40",
       "amount": null,
-      "message": "Manager: deal cost rate $195.00 vs Workday $175.00 (+11.4%) — exceeds 10% tolerance."
+      "message": "Manager: deal cost rate $195.00 vs Workday $175.00 (+11.4%) \u2014 exceeds 10% tolerance."
     },
     {
       "id": 107,
@@ -16273,7 +16702,7 @@
       "workday_cost_rate": null,
       "variance_pct": null,
       "amount": null,
-      "message": "Manager: 180h required vs 1380h available — covered."
+      "message": "Manager: 180h required vs 1380h available \u2014 covered."
     },
     {
       "id": 114,
@@ -16303,7 +16732,7 @@
       "workday_cost_rate": null,
       "variance_pct": null,
       "amount": null,
-      "message": "Senior Consultant: requires 640h, Workday shows 400h available — short 240h."
+      "message": "Senior Consultant: requires 640h, Workday shows 400h available \u2014 short 240h."
     },
     {
       "id": 116,
@@ -16318,7 +16747,7 @@
       "workday_cost_rate": "200.00",
       "variance_pct": "18.50",
       "amount": null,
-      "message": "Senior Manager: deal cost rate $237.00 vs Workday $200.00 (+18.5%) — exceeds 10% tolerance."
+      "message": "Senior Manager: deal cost rate $237.00 vs Workday $200.00 (+18.5%) \u2014 exceeds 10% tolerance."
     },
     {
       "id": 117,
@@ -16333,7 +16762,7 @@
       "workday_cost_rate": "175.00",
       "variance_pct": "11.40",
       "amount": null,
-      "message": "Manager: deal cost rate $195.00 vs Workday $175.00 (+11.4%) — exceeds 10% tolerance."
+      "message": "Manager: deal cost rate $195.00 vs Workday $175.00 (+11.4%) \u2014 exceeds 10% tolerance."
     },
     {
       "id": 118,
@@ -16378,7 +16807,7 @@
       "workday_cost_rate": null,
       "variance_pct": null,
       "amount": null,
-      "message": "Managing Director: 27h required vs 660h available — covered."
+      "message": "Managing Director: 27h required vs 660h available \u2014 covered."
     },
     {
       "id": 121,
@@ -16393,7 +16822,7 @@
       "workday_cost_rate": null,
       "variance_pct": null,
       "amount": null,
-      "message": "Partner: 19h required vs 600h available — covered."
+      "message": "Partner: 19h required vs 600h available \u2014 covered."
     },
     {
       "id": 122,
@@ -16408,7 +16837,7 @@
       "workday_cost_rate": null,
       "variance_pct": null,
       "amount": null,
-      "message": "Senior Manager: 46h required vs 900h available — covered."
+      "message": "Senior Manager: 46h required vs 900h available \u2014 covered."
     },
     {
       "id": 123,
@@ -16423,7 +16852,7 @@
       "workday_cost_rate": null,
       "variance_pct": null,
       "amount": null,
-      "message": "Manager: 55h required vs 1380h available — covered."
+      "message": "Manager: 55h required vs 1380h available \u2014 covered."
     },
     {
       "id": 124,
@@ -16438,7 +16867,7 @@
       "workday_cost_rate": null,
       "variance_pct": null,
       "amount": null,
-      "message": "Senior Consultant: 71h required vs 400h available — covered."
+      "message": "Senior Consultant: 71h required vs 400h available \u2014 covered."
     },
     {
       "id": 125,
@@ -16453,7 +16882,7 @@
       "workday_cost_rate": null,
       "variance_pct": null,
       "amount": null,
-      "message": "Consultant: 35h required vs 1740h available — covered."
+      "message": "Consultant: 35h required vs 1740h available \u2014 covered."
     },
     {
       "id": 126,
@@ -16468,7 +16897,7 @@
       "workday_cost_rate": null,
       "variance_pct": null,
       "amount": null,
-      "message": "Analyst: 19h required vs 1360h available — covered."
+      "message": "Analyst: 19h required vs 1360h available \u2014 covered."
     },
     {
       "id": 127,
@@ -16498,7 +16927,7 @@
       "workday_cost_rate": null,
       "variance_pct": null,
       "amount": null,
-      "message": "Partner: 12h required vs 600h available — covered."
+      "message": "Partner: 12h required vs 600h available \u2014 covered."
     },
     {
       "id": 129,
@@ -16513,7 +16942,7 @@
       "workday_cost_rate": null,
       "variance_pct": null,
       "amount": null,
-      "message": "Managing Director: 17h required vs 660h available — covered."
+      "message": "Managing Director: 17h required vs 660h available \u2014 covered."
     },
     {
       "id": 130,
@@ -16528,7 +16957,7 @@
       "workday_cost_rate": null,
       "variance_pct": null,
       "amount": null,
-      "message": "Senior Manager: 29h required vs 900h available — covered."
+      "message": "Senior Manager: 29h required vs 900h available \u2014 covered."
     },
     {
       "id": 131,
@@ -16543,7 +16972,7 @@
       "workday_cost_rate": null,
       "variance_pct": null,
       "amount": null,
-      "message": "Manager: 34h required vs 1380h available — covered."
+      "message": "Manager: 34h required vs 1380h available \u2014 covered."
     },
     {
       "id": 132,
@@ -16558,7 +16987,7 @@
       "workday_cost_rate": null,
       "variance_pct": null,
       "amount": null,
-      "message": "Senior Consultant: 44h required vs 400h available — covered."
+      "message": "Senior Consultant: 44h required vs 400h available \u2014 covered."
     },
     {
       "id": 133,
@@ -16573,7 +17002,7 @@
       "workday_cost_rate": null,
       "variance_pct": null,
       "amount": null,
-      "message": "Consultant: 22h required vs 1740h available — covered."
+      "message": "Consultant: 22h required vs 1740h available \u2014 covered."
     },
     {
       "id": 134,
@@ -16588,7 +17017,7 @@
       "workday_cost_rate": null,
       "variance_pct": null,
       "amount": null,
-      "message": "Analyst: 12h required vs 1360h available — covered."
+      "message": "Analyst: 12h required vs 1360h available \u2014 covered."
     },
     {
       "id": 135,
@@ -16618,7 +17047,7 @@
       "workday_cost_rate": null,
       "variance_pct": null,
       "amount": null,
-      "message": "Partner: 12h required vs 600h available — covered."
+      "message": "Partner: 12h required vs 600h available \u2014 covered."
     },
     {
       "id": 137,
@@ -16633,7 +17062,7 @@
       "workday_cost_rate": null,
       "variance_pct": null,
       "amount": null,
-      "message": "Managing Director: 17h required vs 660h available — covered."
+      "message": "Managing Director: 17h required vs 660h available \u2014 covered."
     },
     {
       "id": 138,
@@ -16648,7 +17077,7 @@
       "workday_cost_rate": null,
       "variance_pct": null,
       "amount": null,
-      "message": "Senior Manager: 29h required vs 900h available — covered."
+      "message": "Senior Manager: 29h required vs 900h available \u2014 covered."
     },
     {
       "id": 139,
@@ -16663,7 +17092,7 @@
       "workday_cost_rate": null,
       "variance_pct": null,
       "amount": null,
-      "message": "Manager: 34h required vs 1380h available — covered."
+      "message": "Manager: 34h required vs 1380h available \u2014 covered."
     },
     {
       "id": 140,
@@ -16678,7 +17107,7 @@
       "workday_cost_rate": null,
       "variance_pct": null,
       "amount": null,
-      "message": "Senior Consultant: 44h required vs 400h available — covered."
+      "message": "Senior Consultant: 44h required vs 400h available \u2014 covered."
     },
     {
       "id": 141,
@@ -16693,7 +17122,7 @@
       "workday_cost_rate": null,
       "variance_pct": null,
       "amount": null,
-      "message": "Consultant: 22h required vs 1740h available — covered."
+      "message": "Consultant: 22h required vs 1740h available \u2014 covered."
     },
     {
       "id": 142,
@@ -16708,7 +17137,7 @@
       "workday_cost_rate": null,
       "variance_pct": null,
       "amount": null,
-      "message": "Analyst: 12h required vs 1360h available — covered."
+      "message": "Analyst: 12h required vs 1360h available \u2014 covered."
     },
     {
       "id": 143,
@@ -16723,7 +17152,7 @@
       "workday_cost_rate": "200.00",
       "variance_pct": "18.50",
       "amount": null,
-      "message": "Senior Manager: deal cost rate $237.00 vs Workday $200.00 (+18.5%) — exceeds 10% tolerance."
+      "message": "Senior Manager: deal cost rate $237.00 vs Workday $200.00 (+18.5%) \u2014 exceeds 10% tolerance."
     },
     {
       "id": 144,
@@ -16738,7 +17167,7 @@
       "workday_cost_rate": "175.00",
       "variance_pct": "11.40",
       "amount": null,
-      "message": "Manager: deal cost rate $195.00 vs Workday $175.00 (+11.4%) — exceeds 10% tolerance."
+      "message": "Manager: deal cost rate $195.00 vs Workday $175.00 (+11.4%) \u2014 exceeds 10% tolerance."
     },
     {
       "id": 145,
@@ -16783,7 +17212,7 @@
       "workday_cost_rate": "200.00",
       "variance_pct": "18.50",
       "amount": null,
-      "message": "Senior Manager: deal cost rate $237.00 vs Workday $200.00 (+18.5%) — exceeds 10% tolerance."
+      "message": "Senior Manager: deal cost rate $237.00 vs Workday $200.00 (+18.5%) \u2014 exceeds 10% tolerance."
     },
     {
       "id": 148,
@@ -16798,7 +17227,7 @@
       "workday_cost_rate": "175.00",
       "variance_pct": "11.40",
       "amount": null,
-      "message": "Manager: deal cost rate $195.00 vs Workday $175.00 (+11.4%) — exceeds 10% tolerance."
+      "message": "Manager: deal cost rate $195.00 vs Workday $175.00 (+11.4%) \u2014 exceeds 10% tolerance."
     },
     {
       "id": 149,
@@ -16843,7 +17272,7 @@
       "workday_cost_rate": null,
       "variance_pct": null,
       "amount": null,
-      "message": "Partner: 53h required vs 600h available — covered."
+      "message": "Partner: 53h required vs 600h available \u2014 covered."
     },
     {
       "id": 152,
@@ -16858,7 +17287,7 @@
       "workday_cost_rate": null,
       "variance_pct": null,
       "amount": null,
-      "message": "Managing Director: 75h required vs 660h available — covered."
+      "message": "Managing Director: 75h required vs 660h available \u2014 covered."
     },
     {
       "id": 153,
@@ -16873,7 +17302,7 @@
       "workday_cost_rate": null,
       "variance_pct": null,
       "amount": null,
-      "message": "Senior Manager: 128h required vs 900h available — covered."
+      "message": "Senior Manager: 128h required vs 900h available \u2014 covered."
     },
     {
       "id": 154,
@@ -16888,7 +17317,7 @@
       "workday_cost_rate": null,
       "variance_pct": null,
       "amount": null,
-      "message": "Manager: 150h required vs 1380h available — covered."
+      "message": "Manager: 150h required vs 1380h available \u2014 covered."
     },
     {
       "id": 155,
@@ -16903,7 +17332,7 @@
       "workday_cost_rate": null,
       "variance_pct": null,
       "amount": null,
-      "message": "Senior Consultant: 195h required vs 400h available — covered."
+      "message": "Senior Consultant: 195h required vs 400h available \u2014 covered."
     },
     {
       "id": 156,
@@ -16918,7 +17347,7 @@
       "workday_cost_rate": null,
       "variance_pct": null,
       "amount": null,
-      "message": "Consultant: 98h required vs 1740h available — covered."
+      "message": "Consultant: 98h required vs 1740h available \u2014 covered."
     },
     {
       "id": 157,
@@ -16933,7 +17362,7 @@
       "workday_cost_rate": null,
       "variance_pct": null,
       "amount": null,
-      "message": "Analyst: 53h required vs 1360h available — covered."
+      "message": "Analyst: 53h required vs 1360h available \u2014 covered."
     }
   ],
   "workday_events": [
@@ -16947,7 +17376,7 @@
       "status": "success",
       "source": "simulated",
       "trigger": "nightly",
-      "message": "Workday validation #1 → CLEAN: All Workday checks passed.",
+      "message": "Workday validation #1 \u2192 CLEAN: All Workday checks passed.",
       "fields": null,
       "actor_name": "Workday Seed",
       "timestamp": "2026-04-17T05:01:17.405Z"
@@ -16962,7 +17391,7 @@
       "status": "success",
       "source": "simulated",
       "trigger": "nightly",
-      "message": "Workday validation #2 → CLEAN: All Workday checks passed.",
+      "message": "Workday validation #2 \u2192 CLEAN: All Workday checks passed.",
       "fields": null,
       "actor_name": "Workday Seed",
       "timestamp": "2026-04-17T05:01:17.425Z"
@@ -16977,7 +17406,7 @@
       "status": "success",
       "source": "simulated",
       "trigger": "nightly",
-      "message": "Workday validation #3 → CLEAN: All Workday checks passed.",
+      "message": "Workday validation #3 \u2192 CLEAN: All Workday checks passed.",
       "fields": null,
       "actor_name": "Workday Seed",
       "timestamp": "2026-04-17T05:01:17.443Z"
@@ -16992,7 +17421,7 @@
       "status": "success",
       "source": "simulated",
       "trigger": "nightly",
-      "message": "Workday validation #4 → CLEAN: All Workday checks passed.",
+      "message": "Workday validation #4 \u2192 CLEAN: All Workday checks passed.",
       "fields": null,
       "actor_name": "Workday Seed",
       "timestamp": "2026-04-17T05:01:17.465Z"
@@ -17007,7 +17436,7 @@
       "status": "success",
       "source": "simulated",
       "trigger": "nightly",
-      "message": "Workday validation #5 → CLEAN: All Workday checks passed.",
+      "message": "Workday validation #5 \u2192 CLEAN: All Workday checks passed.",
       "fields": null,
       "actor_name": "Workday Seed",
       "timestamp": "2026-04-17T05:01:17.494Z"
@@ -17022,7 +17451,7 @@
       "status": "success",
       "source": "simulated",
       "trigger": "nightly",
-      "message": "Workday validation #6 → CLEAN: All Workday checks passed.",
+      "message": "Workday validation #6 \u2192 CLEAN: All Workday checks passed.",
       "fields": null,
       "actor_name": "Workday Seed",
       "timestamp": "2026-04-17T05:01:17.516Z"
@@ -17037,7 +17466,7 @@
       "status": "success",
       "source": "simulated",
       "trigger": "nightly",
-      "message": "Workday validation #7 → CLEAN: All Workday checks passed.",
+      "message": "Workday validation #7 \u2192 CLEAN: All Workday checks passed.",
       "fields": null,
       "actor_name": "Workday Seed",
       "timestamp": "2026-04-17T05:01:17.537Z"
@@ -17052,7 +17481,7 @@
       "status": "success",
       "source": "simulated",
       "trigger": "nightly",
-      "message": "Workday validation #8 → CLEAN: All Workday checks passed.",
+      "message": "Workday validation #8 \u2192 CLEAN: All Workday checks passed.",
       "fields": null,
       "actor_name": "Workday Seed",
       "timestamp": "2026-04-17T05:01:17.554Z"
@@ -17067,7 +17496,7 @@
       "status": "success",
       "source": "simulated",
       "trigger": "nightly",
-      "message": "Workday validation #9 → CLEAN: All Workday checks passed.",
+      "message": "Workday validation #9 \u2192 CLEAN: All Workday checks passed.",
       "fields": null,
       "actor_name": "Workday Seed",
       "timestamp": "2026-04-17T05:01:17.568Z"
@@ -17082,7 +17511,7 @@
       "status": "success",
       "source": "simulated",
       "trigger": "nightly",
-      "message": "Workday validation #10 → CLEAN: All Workday checks passed.",
+      "message": "Workday validation #10 \u2192 CLEAN: All Workday checks passed.",
       "fields": null,
       "actor_name": "Workday Seed",
       "timestamp": "2026-04-17T05:01:17.585Z"
@@ -17097,7 +17526,7 @@
       "status": "success",
       "source": "simulated",
       "trigger": "nightly",
-      "message": "Workday validation #11 → CLEAN: All Workday checks passed.",
+      "message": "Workday validation #11 \u2192 CLEAN: All Workday checks passed.",
       "fields": null,
       "actor_name": "Workday Seed",
       "timestamp": "2026-04-17T05:01:17.603Z"
@@ -17112,7 +17541,7 @@
       "status": "success",
       "source": "simulated",
       "trigger": "nightly",
-      "message": "Workday validation #12 → CLEAN: All Workday checks passed.",
+      "message": "Workday validation #12 \u2192 CLEAN: All Workday checks passed.",
       "fields": null,
       "actor_name": "Workday Seed",
       "timestamp": "2026-04-17T05:01:17.620Z"
@@ -17127,7 +17556,7 @@
       "status": "success",
       "source": "simulated",
       "trigger": "nightly",
-      "message": "Workday validation #13 → CLEAN: All Workday checks passed.",
+      "message": "Workday validation #13 \u2192 CLEAN: All Workday checks passed.",
       "fields": null,
       "actor_name": "Workday Seed",
       "timestamp": "2026-04-17T05:01:17.638Z"
@@ -17142,7 +17571,7 @@
       "status": "success",
       "source": "simulated",
       "trigger": "nightly",
-      "message": "Workday validation #14 → CLEAN: All Workday checks passed.",
+      "message": "Workday validation #14 \u2192 CLEAN: All Workday checks passed.",
       "fields": null,
       "actor_name": "Workday Seed",
       "timestamp": "2026-04-17T05:01:17.656Z"
@@ -17157,7 +17586,7 @@
       "status": "success",
       "source": "simulated",
       "trigger": "nightly",
-      "message": "Workday validation #15 → CLEAN: All Workday checks passed.",
+      "message": "Workday validation #15 \u2192 CLEAN: All Workday checks passed.",
       "fields": null,
       "actor_name": "Workday Seed",
       "timestamp": "2026-04-17T05:01:17.674Z"
@@ -17172,7 +17601,7 @@
       "status": "success",
       "source": "simulated",
       "trigger": "nightly",
-      "message": "Workday validation #16 → CLEAN: All Workday checks passed.",
+      "message": "Workday validation #16 \u2192 CLEAN: All Workday checks passed.",
       "fields": null,
       "actor_name": "Workday Seed",
       "timestamp": "2026-04-17T05:01:17.693Z"
@@ -17187,7 +17616,7 @@
       "status": "failure",
       "source": "simulated",
       "trigger": "nightly",
-      "message": "Workday validation #17 → OVER_BUDGET: Deal cost $385,000 exceeds remaining budget on CC-CONS-300 (Technology Consulting) by $135,000.",
+      "message": "Workday validation #17 \u2192 OVER_BUDGET: Deal cost $385,000 exceeds remaining budget on CC-CONS-300 (Technology Consulting) by $135,000.",
       "fields": null,
       "actor_name": "Workday Seed",
       "timestamp": "2026-04-17T05:01:17.705Z"
@@ -17202,7 +17631,7 @@
       "status": "failure",
       "source": "simulated",
       "trigger": "nightly",
-      "message": "Workday validation #18 → STAFFING_SHORTFALL: Staffing shortfall: 240h across roles.",
+      "message": "Workday validation #18 \u2192 STAFFING_SHORTFALL: Staffing shortfall: 240h across roles.",
       "fields": null,
       "actor_name": "Workday Seed",
       "timestamp": "2026-04-17T05:01:17.714Z"
@@ -17217,7 +17646,7 @@
       "status": "warning",
       "source": "simulated",
       "trigger": "nightly",
-      "message": "Workday validation #19 → RATE_VARIANCE: Rate variance up to 18.4% vs Workday standard (tolerance 10%).",
+      "message": "Workday validation #19 \u2192 RATE_VARIANCE: Rate variance up to 18.4% vs Workday standard (tolerance 10%).",
       "fields": null,
       "actor_name": "Workday Seed",
       "timestamp": "2026-04-17T05:01:17.724Z"
@@ -17325,7 +17754,7 @@
       "status": "success",
       "source": "simulated",
       "trigger": "nightly",
-      "message": "Workday validation #20 → CLEAN: All Workday checks passed.",
+      "message": "Workday validation #20 \u2192 CLEAN: All Workday checks passed.",
       "fields": null,
       "actor_name": "Workday Seed",
       "timestamp": "2026-04-17T17:23:45.248Z"
@@ -17340,7 +17769,7 @@
       "status": "success",
       "source": "simulated",
       "trigger": "nightly",
-      "message": "Workday validation #21 → CLEAN: All Workday checks passed.",
+      "message": "Workday validation #21 \u2192 CLEAN: All Workday checks passed.",
       "fields": null,
       "actor_name": "Workday Seed",
       "timestamp": "2026-04-17T17:23:45.263Z"
@@ -17355,7 +17784,7 @@
       "status": "success",
       "source": "simulated",
       "trigger": "nightly",
-      "message": "Workday validation #22 → CLEAN: All Workday checks passed.",
+      "message": "Workday validation #22 \u2192 CLEAN: All Workday checks passed.",
       "fields": null,
       "actor_name": "Workday Seed",
       "timestamp": "2026-04-17T17:23:45.279Z"
@@ -17370,7 +17799,7 @@
       "status": "success",
       "source": "simulated",
       "trigger": "nightly",
-      "message": "Workday validation #23 → CLEAN: All Workday checks passed.",
+      "message": "Workday validation #23 \u2192 CLEAN: All Workday checks passed.",
       "fields": null,
       "actor_name": "Workday Seed",
       "timestamp": "2026-04-17T17:23:45.297Z"
@@ -17385,7 +17814,7 @@
       "status": "failure",
       "source": "simulated",
       "trigger": "nightly",
-      "message": "Workday validation #24 → OVER_BUDGET: Deal cost $385,000 exceeds remaining budget on CC-CONS-300 (Technology Consulting) by $135,000.",
+      "message": "Workday validation #24 \u2192 OVER_BUDGET: Deal cost $385,000 exceeds remaining budget on CC-CONS-300 (Technology Consulting) by $135,000.",
       "fields": null,
       "actor_name": "Workday Seed",
       "timestamp": "2026-04-17T17:23:45.310Z"
@@ -17400,7 +17829,7 @@
       "status": "failure",
       "source": "simulated",
       "trigger": "nightly",
-      "message": "Workday validation #25 → STAFFING_SHORTFALL: Staffing shortfall: 240h across roles.",
+      "message": "Workday validation #25 \u2192 STAFFING_SHORTFALL: Staffing shortfall: 240h across roles.",
       "fields": null,
       "actor_name": "Workday Seed",
       "timestamp": "2026-04-17T17:23:45.318Z"
@@ -17415,7 +17844,7 @@
       "status": "warning",
       "source": "simulated",
       "trigger": "nightly",
-      "message": "Workday validation #26 → RATE_VARIANCE: Rate variance up to 18.4% vs Workday standard (tolerance 10%).",
+      "message": "Workday validation #26 \u2192 RATE_VARIANCE: Rate variance up to 18.4% vs Workday standard (tolerance 10%).",
       "fields": null,
       "actor_name": "Workday Seed",
       "timestamp": "2026-04-17T17:23:45.326Z"
@@ -17430,7 +17859,7 @@
       "status": "success",
       "source": "simulated",
       "trigger": "manual",
-      "message": "Workday validation #27 → CLEAN: All Workday checks passed.",
+      "message": "Workday validation #27 \u2192 CLEAN: All Workday checks passed.",
       "fields": null,
       "actor_name": "Michael Torres",
       "timestamp": "2026-04-17T17:23:52.810Z"
@@ -17445,7 +17874,7 @@
       "status": "success",
       "source": "simulated",
       "trigger": "manual",
-      "message": "Workday validation #28 → CLEAN: All Workday checks passed.",
+      "message": "Workday validation #28 \u2192 CLEAN: All Workday checks passed.",
       "fields": null,
       "actor_name": "Michael Torres",
       "timestamp": "2026-04-17T17:26:30.111Z"
@@ -17460,7 +17889,7 @@
       "status": "success",
       "source": "simulated",
       "trigger": "manual",
-      "message": "Workday validation #29 → CLEAN: All Workday checks passed.",
+      "message": "Workday validation #29 \u2192 CLEAN: All Workday checks passed.",
       "fields": null,
       "actor_name": "Michael Torres",
       "timestamp": "2026-04-17T17:27:35.828Z"
@@ -17475,7 +17904,7 @@
       "status": "warning",
       "source": "simulated",
       "trigger": "nightly",
-      "message": "Workday validation #30 → RATE_VARIANCE: Rate variance up to 18.4% vs Workday standard (tolerance 10%).",
+      "message": "Workday validation #30 \u2192 RATE_VARIANCE: Rate variance up to 18.4% vs Workday standard (tolerance 10%).",
       "fields": null,
       "actor_name": "Workday Seed",
       "timestamp": "2026-04-17T17:29:16.854Z"
@@ -17490,7 +17919,7 @@
       "status": "success",
       "source": "simulated",
       "trigger": "nightly",
-      "message": "Workday validation #31 → CLEAN: All Workday checks passed.",
+      "message": "Workday validation #31 \u2192 CLEAN: All Workday checks passed.",
       "fields": null,
       "actor_name": "Workday Seed",
       "timestamp": "2026-04-17T18:13:40.488Z"
@@ -17505,7 +17934,7 @@
       "status": "warning",
       "source": "simulated",
       "trigger": "nightly",
-      "message": "Workday validation #32 → RATE_VARIANCE: Rate variance up to 18.4% vs Workday standard (tolerance 10%).",
+      "message": "Workday validation #32 \u2192 RATE_VARIANCE: Rate variance up to 18.4% vs Workday standard (tolerance 10%).",
       "fields": null,
       "actor_name": "Workday Seed",
       "timestamp": "2026-04-17T18:13:40.499Z"
@@ -17520,7 +17949,7 @@
       "status": "success",
       "source": "simulated",
       "trigger": "manual",
-      "message": "Workday validation #33 → CLEAN: All Workday checks passed.",
+      "message": "Workday validation #33 \u2192 CLEAN: All Workday checks passed.",
       "fields": null,
       "actor_name": "Michael Torres",
       "timestamp": "2026-04-17T18:46:54.835Z"
@@ -18124,7 +18553,7 @@
       "screening_id": 4,
       "hit_type": "conflict_of_interest",
       "severity": "medium",
-      "matched_entity": "Acme Corporation ↔ existing client #3122",
+      "matched_entity": "Acme Corporation \u2194 existing client #3122",
       "description": "Adverse-party overlap with an existing engagement detected in relationship graph.",
       "recommendation": "Obtain conflict waiver letters from both clients.",
       "external_ref": null
@@ -18134,7 +18563,7 @@
       "screening_id": 5,
       "hit_type": "conflict_of_interest",
       "severity": "medium",
-      "matched_entity": "Acme Corporation ↔ existing client #3122",
+      "matched_entity": "Acme Corporation \u2194 existing client #3122",
       "description": "Adverse-party overlap with an existing engagement detected in relationship graph.",
       "recommendation": "Obtain conflict waiver letters from both clients.",
       "external_ref": null
@@ -18144,7 +18573,7 @@
       "screening_id": 15,
       "hit_type": "conflict_of_interest",
       "severity": "medium",
-      "matched_entity": "Acme Corporation ↔ existing client #3122",
+      "matched_entity": "Acme Corporation \u2194 existing client #3122",
       "description": "Adverse-party overlap with an existing engagement detected in relationship graph.",
       "recommendation": "Obtain conflict waiver letters from both clients.",
       "external_ref": null
@@ -18195,7 +18624,7 @@
       "metadata": {
         "channel": "in_app",
         "skipped": [],
-        "subject": "[Intapp CONFLICT · HIGH] GreenLeaf Cannabis Holdings — INT-DEMO-146245-86",
+        "subject": "[Intapp CONFLICT \u00b7 HIGH] GreenLeaf Cannabis Holdings \u2014 INT-DEMO-146245-86",
         "dealLink": "https://bf12eced-1d8a-40ea-bb6a-2c14f015c791-00-3a8e4ilaajcjx.picard.replit.dev/deals/17",
         "dispatched": [],
         "recipients": [],

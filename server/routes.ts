@@ -530,6 +530,7 @@ async function recalcPricingFromScope(dealId: number) {
 }
 
 import { registerDynamicsRoutes, autoPushDeal, pickTemplateForName, tmplKey, linkDealToOpportunity, unlinkOpportunity } from "./dynamics";
+import { ERP_TEMPLATE_NAME, ERP_SERVICE_LINE, scaleErpItems, summarizeErpInputs, parseErpInputs } from "./erp-scaling";
 import { autoPushWorkdayProject, getProvider as getWorkdayProvider } from "./workday";
 import { autoPushIntappOutcome, runScreeningForDeal, getLatestScreening } from "./intapp";
 import {
@@ -1304,6 +1305,36 @@ export function registerRoutes(app: Express) {
         { key: "comparisonProject", label: "Comparison Project (renewal history)", type: "select", options: ["No", "Yes"], help: "Pulls prior-year actuals from Project Profitability dashboard." },
       ],
     },
+    "ERP Implementation": {
+      label: "ERP Implementation — S/4HANA",
+      sourceWorkbook: null,
+      defaults: {
+        rateYear: "2026",
+        tmRateAdjustmentPct: "0",
+        techAdminFeePct: "5",
+        grossMarginBenchmarkPct: "35",
+        lineItemRounding: "100",
+        entities: "1",
+        countries: "1",
+        modules: "FI,CO",
+        integrations: "0",
+        conversions: "0",
+        ricefw: "0",
+      },
+      fields: [
+        { key: "rateYear", label: "Rate Year", type: "select", options: ["2025", "2026"] },
+        { key: "tmRateAdjustmentPct", label: "Rate Adjustment (%)", type: "number", suffix: "%" },
+        { key: "techAdminFeePct", label: "Tech & Admin Fee (%)", type: "number", suffix: "%" },
+        { key: "grossMarginBenchmarkPct", label: "Gross Margin Benchmark (%)", type: "number", suffix: "%" },
+        { key: "lineItemRounding", label: "Line Item Rounding ($)", type: "number", prefix: "$" },
+        { key: "entities", label: "Legal Entities", type: "number", help: "Number of in-scope legal entities. Drives configuration and cutover effort.", group: "ERP scaling" },
+        { key: "countries", label: "Countries / Locales", type: "number", help: "Number of country localizations (tax, payroll, statutory). Drives Explore & Realize effort.", group: "ERP scaling" },
+        { key: "modules", label: "Modules in Scope", type: "multiselect", options: ["FI", "CO", "MM", "SD", "PP", "WM", "HR"], help: "Select all in-scope SAP modules. Module-specific Explore/Realize items are only added when the module is selected.", group: "ERP scaling" },
+        { key: "integrations", label: "Integrations", type: "number", help: "Count of in-scope integration interfaces. Realize hours scale linearly.", group: "ERP scaling" },
+        { key: "conversions", label: "Data Conversion Objects", type: "number", help: "Count of master/transactional data objects to migrate. Realize hours scale linearly.", group: "ERP scaling" },
+        { key: "ricefw", label: "RICEFW Objects", type: "number", help: "Count of custom Reports/Interfaces/Conversions/Enhancements/Forms/Workflows.", group: "ERP scaling" },
+      ],
+    },
     "_generic": {
       label: "Generic Engagement Inputs",
       sourceWorkbook: null,
@@ -1607,11 +1638,31 @@ export function registerRoutes(app: Express) {
     const templateId = parseInt(req.params.templateId);
     const items = await db.select().from(scopeTemplateItems).where(eq(scopeTemplateItems.templateId, templateId));
     if (items.length === 0) return res.status(404).json({ error: "Template has no items" });
+    const [tplPre] = await db.select().from(scopeTemplates).where(eq(scopeTemplates.id, templateId));
+    const isErpTemplate = tplPre?.name === ERP_TEMPLATE_NAME;
+
+    // For ERP, pre-scale hours from the deal's engagement_inputs and gate
+    // module-specific items by the modules checklist.
+    let erpResultByItemId = new Map<number, ReturnType<typeof scaleErpItems>[number]>();
+    if (isErpTemplate) {
+      const [dealRow] = await db.select().from(deals).where(eq(deals.id, dealId));
+      const itemIds = items.map(i => i.scopeItemId);
+      const cats = itemIds.length > 0
+        ? await db.select().from(scopeCatalog).where(inArray(scopeCatalog.id, itemIds))
+        : [];
+      const scaled = scaleErpItems(
+        cats.map(c => ({ id: c.id, code: c.code, defaultHours: c.defaultHours })),
+        dealRow?.engagementInputs || {}
+      );
+      for (const s of scaled) erpResultByItemId.set(s.scopeItemId, s);
+    }
+
     const existing = await db.select({ scopeItemId: dealScopeItems.scopeItemId })
       .from(dealScopeItems).where(eq(dealScopeItems.dealId, dealId));
     const existingIds = new Set(existing.map(e => e.scopeItemId));
     const inserted: any[] = [];
     const skippedInactive: string[] = [];
+    const skippedByModule: string[] = [];
     for (const ti of items) {
       if (existingIds.has(ti.scopeItemId)) continue;
       const [catalogItem] = await db.select().from(scopeCatalog).where(eq(scopeCatalog.id, ti.scopeItemId));
@@ -1619,12 +1670,22 @@ export function registerRoutes(app: Express) {
         if (catalogItem) skippedInactive.push(catalogItem.code);
         continue;
       }
+      // ERP module gating: skip module-specific items the user did not select.
+      const erp = erpResultByItemId.get(ti.scopeItemId);
+      if (isErpTemplate && erp && !erp.included) {
+        skippedByModule.push(catalogItem.code);
+        continue;
+      }
+      const adjustedHours = erp ? String(erp.adjustedHours)
+        : (ti.defaultHours || catalogItem?.defaultHours);
+      const notes = erp ? erp.notes : undefined;
       const [row] = await db.insert(dealScopeItems).values({
         dealId,
         scopeItemId: ti.scopeItemId,
         quantity: 1,
-        adjustedHours: ti.defaultHours || catalogItem?.defaultHours,
+        adjustedHours,
         complexityMultiplier: ti.complexityMultiplier || "1.0",
+        notes: notes ?? null,
       }).onConflictDoNothing({ target: [dealScopeItems.dealId, dealScopeItems.scopeItemId] }).returning();
       if (row) {
         inserted.push(row);
@@ -1655,7 +1716,82 @@ export function registerRoutes(app: Express) {
       userName: req.body?.userName || null,
       metadata: { templateId, itemsAdded: inserted.length },
     }).catch(() => {});
-    res.status(201).json({ insertedCount: inserted.length, items: inserted, skippedInactive });
+    res.status(201).json({ insertedCount: inserted.length, items: inserted, skippedInactive, skippedByModule });
+  });
+
+  // Re-apply ERP scaling to existing dealScopeItems for an ERP deal. Reads
+  // current engagement_inputs and rewrites each ERP item's adjustedHours +
+  // notes (rationale). Module-deselected items are removed; module-selected
+  // items missing from the deal are added back. Pricing is then recalculated.
+  app.post("/api/deals/:dealId/erp-rescale", requirePerm("editDeals"), async (req: Request, res: Response) => {
+    const dealId = parseInt(req.params.dealId);
+    if (isNaN(dealId)) return res.status(400).json({ error: "Invalid id" });
+    const [deal] = await db.select().from(deals).where(eq(deals.id, dealId));
+    if (!deal) return res.status(404).json({ error: "Deal not found" });
+    if (deal.serviceLine !== ERP_SERVICE_LINE) {
+      return res.status(400).json({
+        error: "Not an ERP deal",
+        detail: `ERP scaling only applies to deals with service line "${ERP_SERVICE_LINE}". This deal is "${deal.serviceLine || "unset"}".`,
+      });
+    }
+
+    // Pull all ERP catalog items (those with codes prefixed ERPPREP/ERPEXPL/...).
+    const allCats = await db.select().from(scopeCatalog);
+    const erpCats = allCats.filter(c =>
+      typeof c.code === "string" && /^ERP(PREP|EXPL|RLZE|DPLY|RUN)-/.test(c.code)
+    );
+    const scaled = scaleErpItems(
+      erpCats.map(c => ({ id: c.id, code: c.code, defaultHours: c.defaultHours })),
+      deal.engagementInputs || {}
+    );
+    const erpItemIds = new Set(erpCats.map(c => c.id));
+    const existing = await db.select().from(dealScopeItems)
+      .where(eq(dealScopeItems.dealId, dealId));
+    const existingByItemId = new Map(existing.map(r => [r.scopeItemId, r]));
+
+    let updated = 0, added = 0, removed = 0;
+    for (const s of scaled) {
+      const cur = existingByItemId.get(s.scopeItemId);
+      if (!s.included) {
+        if (cur) {
+          await db.delete(dealScopeItems).where(eq(dealScopeItems.id, cur.id));
+          removed++;
+        }
+        continue;
+      }
+      if (cur) {
+        await db.update(dealScopeItems).set({
+          adjustedHours: String(s.adjustedHours),
+          notes: s.notes,
+        }).where(eq(dealScopeItems.id, cur.id));
+        updated++;
+      } else {
+        await db.insert(dealScopeItems).values({
+          dealId,
+          scopeItemId: s.scopeItemId,
+          quantity: 1,
+          adjustedHours: String(s.adjustedHours),
+          complexityMultiplier: "1.0",
+          notes: s.notes,
+        }).onConflictDoNothing({ target: [dealScopeItems.dealId, dealScopeItems.scopeItemId] });
+        added++;
+      }
+    }
+
+    await recalcPricingFromScope(dealId);
+    await db.insert(activityLog).values({
+      dealId,
+      action: "erp_rescaled",
+      description: `ERP scaling re-applied (${summarizeErpInputs(deal.engagementInputs || {})}). +${added} / Δ${updated} / −${removed} items.`,
+      userName: req.header("x-user-name") || req.body?.userName || null,
+      metadata: { added, updated, removed, inputs: parseErpInputs(deal.engagementInputs || {}) },
+    }).catch(() => {});
+
+    res.json({
+      ok: true, added, updated, removed,
+      inputsSummary: summarizeErpInputs(deal.engagementInputs || {}),
+      scaled: scaled.filter(s => s.included).map(s => ({ code: s.code, hours: s.adjustedHours, multiplier: s.multiplier, notes: s.notes })),
+    });
   });
 
   app.delete("/api/deals/:dealId/scope-items/:id", requirePerm("editDeals"), async (req: Request, res: Response) => {
@@ -3060,16 +3196,38 @@ export function registerRoutes(app: Express) {
       candidateScope = allCatalog.filter((c) => !c.isAssembly).slice(0, 5);
     }
 
+    // For ERP-flavoured deals, pre-compute the scaled hours / module gating
+    // from sensible default engagement inputs so the agent's draft already
+    // reflects the parametric model. Reviewers can re-scale once they tweak
+    // the inputs.
+    let erpScaleByItemId = new Map<number, ReturnType<typeof scaleErpItems>[number]>();
+    if (serviceLine === ERP_SERVICE_LINE) {
+      const scaled = scaleErpItems(
+        candidateScope.map(c => ({ id: c.id, code: c.code, defaultHours: c.defaultHours })),
+        {} // defaults — reviewer can edit on Scope step then click "Re-scale"
+      );
+      for (const s of scaled) erpScaleByItemId.set(s.scopeItemId, s);
+      // Drop module-gated items the defaults excluded.
+      candidateScope = candidateScope.filter(c => {
+        const s = erpScaleByItemId.get(c.id);
+        return !s || s.included;
+      });
+    }
+
     const insertedScope: any[] = [];
     for (const item of candidateScope) {
+      const erp = erpScaleByItemId.get(item.id);
+      const adjusted = erp ? String(erp.adjustedHours) : item.defaultHours;
+      const notes = erp ? erp.notes : null;
       const [row] = await db.insert(dealScopeItems).values({
         dealId,
         scopeItemId: item.id,
         quantity: 1,
-        adjustedHours: item.defaultHours,
+        adjustedHours: adjusted,
         complexityMultiplier: "1.0",
+        notes,
       }).onConflictDoNothing({ target: [dealScopeItems.dealId, dealScopeItems.scopeItemId] }).returning();
-      if (row) insertedScope.push({ id: row.id, code: item.code, name: item.name, defaultHours: item.defaultHours });
+      if (row) insertedScope.push({ id: row.id, code: item.code, name: item.name, defaultHours: adjusted });
     }
     const sourceSummary =
       `template:${sources.template.length} tag:${sources.tag.length} universal:${sources.universal.length}`;

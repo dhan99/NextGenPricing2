@@ -160,6 +160,20 @@ export function useApplyScopeTemplate() {
   });
 }
 
+export function useErpRescale() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ dealId, userName }: { dealId: number; userName?: string }) =>
+      fetchApi(`/api/deals/${dealId}/erp-rescale`, { method: "POST", body: JSON.stringify({ userName }) }),
+    onSuccess: (_, { dealId }) => {
+      qc.invalidateQueries({ queryKey: ["deal-scope", dealId] });
+      qc.invalidateQueries({ queryKey: ["deal-pricing", dealId] });
+      qc.invalidateQueries({ queryKey: ["deal", dealId] });
+      qc.invalidateQueries({ queryKey: ["activity"] });
+    },
+  });
+}
+
 export function useDealScopeItems(dealId: number) {
   return useQuery({ queryKey: ["deal-scope", dealId], queryFn: () => fetchApi(`/api/deals/${dealId}/scope-items`), enabled: !!dealId });
 }
