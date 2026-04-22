@@ -13,9 +13,10 @@ export function DealsList() {
     includeArchived: archiveView === "all",
     onlyArchived: archiveView === "archived",
   });
-  const [search, setSearch] = useState("");
   const urlParams = new URLSearchParams(window.location.search);
   const initialFilter = urlParams.get("status") || "all";
+  const initialSearch = urlParams.get("search") || "";
+  const [search, setSearch] = useState(initialSearch);
   const [statusFilter, setStatusFilter] = useState(initialFilter);
   const [linkFilter, setLinkFilter] = useState<"all" | "linked" | "standalone">("all");
   const [viewMode, setViewMode] = useState<"table" | "card">(() =>
@@ -67,8 +68,9 @@ export function DealsList() {
         </div>
       </div>
 
-      <div className="card mb-6">
-        <div className="px-4 py-3 flex items-center gap-4 flex-wrap">
+      <div className="card mb-4 sm:mb-6">
+        {/* Desktop / tablet: full filter bar with in-card search */}
+        <div className="hidden sm:flex px-4 py-3 items-center gap-4 flex-wrap">
           <div className="relative flex-1 min-w-[240px]">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <input
@@ -125,6 +127,48 @@ export function DealsList() {
             >
               <LayoutGrid className="w-4 h-4" />
             </button>
+          </div>
+        </div>
+
+        {/* Mobile: compact single-row scroll of filter chips. Search lives in the topbar. */}
+        <div className="sm:hidden px-2 py-2">
+          {search && (
+            <div className="flex items-center gap-1.5 mb-2 px-1 text-[11px] text-muted-foreground">
+              <Search className="w-3 h-3" />
+              <span className="truncate">Filtering by "{search}"</span>
+              <button onClick={() => setSearch("")} className="ml-auto text-primary font-medium">Clear</button>
+            </div>
+          )}
+          <div className="flex items-center gap-1.5 overflow-x-auto -mx-1 px-1 pb-1">
+            {statuses.map((s) => (
+              <button
+                key={s}
+                onClick={() => setStatusFilter(s)}
+                className={`shrink-0 px-2.5 py-1 rounded-full text-[11px] font-medium border transition-colors ${
+                  statusFilter === s ? "bg-primary text-primary-foreground border-primary" : "bg-card text-muted-foreground border-border"
+                }`}
+              >
+                {s === "all" ? "All" : getStatusLabel(s)}
+              </button>
+            ))}
+            <span className="shrink-0 w-px h-4 bg-border mx-1" aria-hidden="true" />
+            {(["all", "linked", "standalone"] as const).map((f) => (
+              <button key={f} onClick={() => setLinkFilter(f)}
+                className={`shrink-0 px-2.5 py-1 rounded-full text-[11px] font-medium border transition-colors ${
+                  linkFilter === f ? "bg-primary text-primary-foreground border-primary" : "bg-card text-muted-foreground border-border"
+                }`}>
+                {f === "all" ? "All deals" : f === "linked" ? "D365" : "Standalone"}
+              </button>
+            ))}
+            <span className="shrink-0 w-px h-4 bg-border mx-1" aria-hidden="true" />
+            {(["active", "archived", "all"] as const).map((v) => (
+              <button key={v} onClick={() => setArchiveView(v)}
+                className={`shrink-0 px-2.5 py-1 rounded-full text-[11px] font-medium border transition-colors ${
+                  archiveView === v ? "bg-primary text-primary-foreground border-primary" : "bg-card text-muted-foreground border-border"
+                }`}>
+                {v === "active" ? "Active" : v === "archived" ? "Archived" : "All states"}
+              </button>
+            ))}
           </div>
         </div>
       </div>
