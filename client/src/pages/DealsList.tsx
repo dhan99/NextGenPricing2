@@ -139,7 +139,7 @@ export function DealsList() {
               <button onClick={() => setSearch("")} className="ml-auto text-primary font-medium">Clear</button>
             </div>
           )}
-          <div className="flex items-center gap-1.5 overflow-x-auto -mx-1 px-1 pb-1">
+          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar -mx-1 px-1 pb-1">
             {statuses.map((s) => (
               <button
                 key={s}
