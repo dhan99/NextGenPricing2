@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect } from "react";
 import { useDashboardSummary, useDeals, useWorkdayDashboard } from "@/hooks/use-api";
 import { formatCurrency, formatPercent, getStatusColor, getStatusLabel } from "@/lib/utils";
 import { Link } from "wouter";
-import { TrendingUp, DollarSign, AlertCircle, ArrowRight, FileText, ShieldCheck, Layers, Network, BarChart3, Shield, CheckCircle, Search, Sparkles, Lightbulb, RefreshCw, Briefcase, Settings2, ChevronDown } from "lucide-react";
+import { TrendingUp, DollarSign, AlertCircle, ArrowRight, FileText, ShieldCheck, Layers, Network, BarChart3, Shield, CheckCircle, Search, Sparkles, Lightbulb, RefreshCw, Briefcase, Settings2, ChevronDown, ChevronUp, ChevronsUpDown } from "lucide-react";
 import { useAuth, type PersonaRole } from "@/context/AuthContext";
 import { useQuery } from "@tanstack/react-query";
 import { AskDealPadAI } from "@/components/AskDealPadAI";
@@ -74,16 +74,50 @@ export function Dashboard() {
   const [expandedDealId, setExpandedDealId] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState("all");
 
+  type SortKey = "client" | "serviceLine" | "status" | "margin" | "totalFee" | "dealNumber";
+  type SortDir = "asc" | "desc";
+  const [sortBy, setSortBy] = useState<SortKey>("totalFee");
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
+  const toggleSort = (key: SortKey) => {
+    if (key === sortBy) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortBy(key);
+      setSortDir(key === "client" || key === "serviceLine" || key === "status" || key === "dealNumber" ? "asc" : "desc");
+    }
+  };
+
   const filteredDeals = useMemo(() => {
     if (!deals) return [];
     const term = searchTerm.trim().toLowerCase();
-    return deals.filter((d: any) => {
+    const list = deals.filter((d: any) => {
       const matchStatus = statusFilter === "all" || d.status === statusFilter;
       const haystack = `${d.title || ""} ${d.dealNumber || ""} ${d.client?.name || ""} ${d.serviceLine || ""}`.toLowerCase();
       const matchSearch = !term || haystack.includes(term);
       return matchStatus && matchSearch;
     });
-  }, [deals, searchTerm, statusFilter]);
+    const accessor = (d: any): string | number => {
+      switch (sortBy) {
+        case "client": return (d.client?.name || d.title || "").toLowerCase();
+        case "serviceLine": return (d.serviceLine || "").toLowerCase();
+        case "status": return d.status || "";
+        case "margin": return parseFloat(d.marginPercent || "0");
+        case "totalFee": return parseFloat(d.totalFee || "0");
+        case "dealNumber": return d.dealNumber || "";
+      }
+    };
+    const sorted = [...list].sort((a, b) => {
+      const av = accessor(a);
+      const bv = accessor(b);
+      if (typeof av === "number" && typeof bv === "number") {
+        return sortDir === "asc" ? av - bv : bv - av;
+      }
+      const as = String(av);
+      const bs = String(bv);
+      return sortDir === "asc" ? as.localeCompare(bs) : bs.localeCompare(as);
+    });
+    return sorted;
+  }, [deals, searchTerm, statusFilter, sortBy, sortDir]);
 
   // Intapp Risk dashboard data (QRM cockpit tile)
   const { data: intappDash } = useQuery<any>({
@@ -386,35 +420,87 @@ export function Dashboard() {
                 ))}
               </div>
             </div>
-            <div className="divide-y divide-border max-h-[640px] overflow-y-auto">
+            <div role="grid" aria-label="Deals" className="max-h-[640px] overflow-y-auto">
+              {/* Desktop sortable column headers — sticky inside scroll container */}
+              <div
+                role="row"
+                className="hidden sm:grid sticky top-0 z-10 px-5 py-2 border-b border-border bg-muted/40 backdrop-blur text-[10px] font-semibold uppercase tracking-wider text-muted-foreground gap-3"
+                style={{ gridTemplateColumns: "minmax(0,2.4fr) minmax(0,1.2fr) minmax(0,1fr) minmax(0,0.8fr) minmax(0,1fr) minmax(0,1fr)" }}
+              >
+                {([
+                  { key: "client" as const, label: "Client / Title", align: "left" as const },
+                  { key: "serviceLine" as const, label: "Service Line", align: "left" as const },
+                  { key: "status" as const, label: "Status", align: "left" as const },
+                  { key: "margin" as const, label: "Margin", align: "right" as const },
+                  { key: "totalFee" as const, label: "Total Fee", align: "right" as const },
+                  { key: "dealNumber" as const, label: "Deal #", align: "right" as const },
+                ]).map((col) => {
+                  const active = sortBy === col.key;
+                  const Arrow = active ? (sortDir === "asc" ? ChevronUp : ChevronDown) : ChevronsUpDown;
+                  return (
+                    <div
+                      key={col.key}
+                      role="columnheader"
+                      aria-sort={active ? (sortDir === "asc" ? "ascending" : "descending") : "none"}
+                      className={col.align === "right" ? "text-right" : "text-left"}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => toggleSort(col.key)}
+                        aria-label={`Sort by ${col.label}${active ? `, currently ${sortDir === "asc" ? "ascending" : "descending"}` : ""}`}
+                        className={`inline-flex items-center gap-1 hover:text-foreground transition-colors ${
+                          col.align === "right" ? "flex-row-reverse" : ""
+                        } ${active ? "text-foreground" : ""}`}
+                      >
+                        <span className="truncate">{col.label}</span>
+                        <Arrow className={`w-3 h-3 flex-shrink-0 ${active ? "text-primary" : "text-stone-400"}`} />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="divide-y divide-border">
               {filteredDeals.map((deal: any) => {
                 const isExpanded = expandedDealId === deal.id;
                 const marginNum = parseFloat(deal.marginPercent || "0");
                 return (
                   <div key={deal.id}>
-                    {/* Desktop: full row, click to navigate */}
+                    {/* Desktop: full row, click to navigate. Grid columns mirror the header. */}
                     <Link href={`/deals/${deal.id}`}>
-                      <div className="hidden sm:block px-5 py-4 hover:bg-muted/50 transition-colors cursor-pointer">
-                        <div className="flex items-start justify-between gap-4">
-                          <div className="flex-1 min-w-0">
-                            <p className="font-semibold text-foreground text-sm truncate">{deal.client?.name || deal.title}</p>
-                            <p className="text-xs text-muted-foreground mt-0.5 truncate">
-                              {deal.serviceLine || "—"} • {deal.dealType || "New"} • {deal.title}
-                            </p>
-                            <div className="flex items-center gap-1.5 mt-2 flex-wrap">
-                              <span className={`badge ${getStatusColor(deal.status)}`}>{getStatusLabel(deal.status)}</span>
-                              {marginNum > 0 && (
-                                <span className={`badge ${marginNum < 25 ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700"}`}>
-                                  {formatPercent(deal.marginPercent)} margin
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                          <div className="text-right shrink-0">
-                            <p className="font-semibold text-foreground text-sm whitespace-nowrap">{formatCurrency(deal.totalFee || 0)}</p>
-                            <p className="text-xs text-muted-foreground mt-0.5">{deal.dealNumber}</p>
-                          </div>
+                      <div
+                        role="row"
+                        className="hidden sm:grid items-center px-5 py-3 gap-3 hover:bg-muted/50 transition-colors cursor-pointer"
+                        style={{ gridTemplateColumns: "minmax(0,2.4fr) minmax(0,1.2fr) minmax(0,1fr) minmax(0,0.8fr) minmax(0,1fr) minmax(0,1fr)" }}
+                      >
+                        {/* Client / Title */}
+                        <div className="min-w-0">
+                          <p className="font-semibold text-foreground text-sm truncate">{deal.client?.name || deal.title}</p>
+                          <p className="text-[11px] text-muted-foreground mt-0.5 truncate">
+                            {deal.dealType || "New"} • {deal.title}
+                          </p>
                         </div>
+                        {/* Service Line */}
+                        <div className="min-w-0 text-xs text-foreground truncate">{deal.serviceLine || "—"}</div>
+                        {/* Status */}
+                        <div className="min-w-0">
+                          <span className={`badge ${getStatusColor(deal.status)}`}>{getStatusLabel(deal.status)}</span>
+                        </div>
+                        {/* Margin */}
+                        <div className="min-w-0 text-right">
+                          {marginNum > 0 ? (
+                            <span className={`badge ${marginNum < 25 ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700"}`}>
+                              {formatPercent(deal.marginPercent)}
+                            </span>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">—</span>
+                          )}
+                        </div>
+                        {/* Total Fee */}
+                        <div className="min-w-0 text-right font-semibold text-foreground text-sm whitespace-nowrap">
+                          {formatCurrency(deal.totalFee || 0)}
+                        </div>
+                        {/* Deal # */}
+                        <div className="min-w-0 text-right text-xs text-muted-foreground truncate">{deal.dealNumber}</div>
                       </div>
                     </Link>
 
@@ -492,6 +578,7 @@ export function Dashboard() {
                   {searchTerm || statusFilter !== "all" ? "No deals match your filters." : "No deals yet."}
                 </div>
               )}
+              </div>
             </div>
         </div>
       )}
