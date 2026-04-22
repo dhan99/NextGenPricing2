@@ -1875,11 +1875,97 @@ function DealBanner({ deal, currentStep, navigateToStep, summaryUnlocked }: { de
 
   const stepProgress = ((currentStep - 1) / (STEPS.length - 1)) * 100;
 
+  const activeStep = STEPS.find(s => s.num === currentStep);
+
   return (
     <div className="border-b border-border bg-gradient-to-b from-card to-background">
-      <div className="px-4 sm:px-6 lg:px-8 pt-4 sm:pt-5 pb-3">
-        {/* Title row */}
-        <div className="flex items-start gap-3 sm:gap-4">
+      {/* === MOBILE HEADER (compact) === */}
+      <div className="sm:hidden px-3 pt-3 pb-2">
+        {/* Row 1: back · title · more */}
+        <div className="flex items-center gap-1.5">
+          <Link href="/deals">
+            <button className="shrink-0 w-8 h-8 -ml-1 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors" title="Back to engagements">
+              <ArrowLeft className="w-4 h-4" />
+            </button>
+          </Link>
+          <h1 className="flex-1 min-w-0 text-[15px] font-bold text-foreground truncate leading-tight">{deal.title}</h1>
+          <div className="relative shrink-0">
+            <button
+              onClick={() => setMoreOpen((v) => !v)}
+              onBlur={() => setTimeout(() => setMoreOpen(false), 150)}
+              className="w-8 h-8 -mr-1 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+              title="More actions"
+            >
+              <MoreHorizontal className="w-4 h-4" />
+            </button>
+            {moreOpen && (
+              <div className="absolute right-0 top-10 w-52 rounded-xl border border-border bg-card shadow-xl overflow-hidden z-30">
+                <button className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-foreground hover:bg-muted/40 transition-colors" onClick={() => window.print()}>
+                  <Download className="w-3.5 h-3.5 text-muted-foreground" />
+                  Export PDF
+                </button>
+                <button disabled className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-muted-foreground/60 cursor-not-allowed" title="Coming soon">
+                  <Copy className="w-3.5 h-3.5" />
+                  Duplicate deal
+                </button>
+                <button disabled className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-muted-foreground/60 cursor-not-allowed border-t border-border" title="Coming soon">
+                  <Archive className="w-3.5 h-3.5" />
+                  Archive
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Row 2: deal# · client · service line — single truncated line */}
+        <div className="ml-7 mt-0.5 text-[11px] text-muted-foreground truncate">
+          <span className="font-medium text-foreground/70">{deal.dealNumber}</span>
+          {deal.client?.name && <> · {deal.client.name}</>}
+          {deal.serviceLine && <> · {deal.serviceLine}</>}
+        </div>
+
+        {/* Row 3: horizontal-scroll badges (status, margin, CRM, approvals) */}
+        <div className="ml-7 mt-2 flex items-center gap-1.5 overflow-x-auto pb-0.5 -mr-3 pr-3">
+          <span className={cn("shrink-0 inline-flex items-center text-[10px] font-semibold px-2 py-0.5 rounded-full", getStatusColor(deal.status))}>
+            {getStatusLabel(deal.status)}
+          </span>
+          {marginVal > 0 && (
+            <span className={cn(
+              "shrink-0 inline-flex items-center gap-0.5 text-[10px] font-semibold px-2 py-0.5 rounded-full",
+              marginGood ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-rose-50 text-rose-700 border border-rose-200"
+            )}>
+              {marginGood ? <ArrowUpRight className="w-2.5 h-2.5" /> : <ArrowDownRight className="w-2.5 h-2.5" />}
+              {marginVal.toFixed(1)}% vs {targetMargin}%
+            </span>
+          )}
+          {dynamics ? (
+            <Link href="/integrations/dynamics">
+              <span className="shrink-0 inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
+                <Database className="w-2.5 h-2.5" />
+                {dynamics.opportunityNumber}
+              </span>
+            </Link>
+          ) : (
+            <span className="shrink-0 inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground border border-border">
+              <Database className="w-2.5 h-2.5" />
+              No CRM
+            </span>
+          )}
+          {pendingApprovals > 0 && (
+            <button
+              onClick={() => navigateToStep(6)}
+              className="shrink-0 inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200"
+            >
+              <Clock className="w-2.5 h-2.5" />
+              {pendingApprovals} pending
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* === DESKTOP HEADER (original layout) === */}
+      <div className="hidden sm:block px-6 lg:px-8 pt-5 pb-3">
+        <div className="flex items-start gap-4">
           <Link href="/deals">
             <button className="mt-1 w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors" title="Back to engagements">
               <ArrowLeft className="w-4 h-4" />
@@ -1890,8 +1976,8 @@ function DealBanner({ deal, currentStep, navigateToStep, summaryUnlocked }: { de
           <div className="self-stretch w-1 rounded-full bg-gradient-to-b from-primary to-primary/40" />
 
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 sm:gap-2.5 flex-wrap">
-              <h1 className="text-lg sm:text-xl font-bold text-foreground truncate">{deal.title}</h1>
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <h1 className="text-xl font-bold text-foreground truncate">{deal.title}</h1>
               <span className={cn("inline-flex items-center text-[11px] font-semibold px-2 py-0.5 rounded-full", getStatusColor(deal.status))}>
                 {getStatusLabel(deal.status)}
               </span>
@@ -1987,10 +2073,56 @@ function DealBanner({ deal, currentStep, navigateToStep, summaryUnlocked }: { de
         </div>
       </div>
 
-      {/* Slim wizard rail — sticky on mobile so users see current step while scrolling */}
-      <div className="sticky top-0 z-20 bg-background border-b border-border sm:static sm:border-0 px-4 sm:px-6 lg:px-8 pt-2 sm:pt-0 pb-3 overflow-x-auto">
-        <div className="relative min-w-[480px] sm:min-w-0">
-          {/* Baseline */}
+      {/* === Wizard step rail === */}
+      {/* Mobile: sticky compact rail with current-step label inline */}
+      <div className="sm:hidden sticky top-0 z-20 bg-background border-b border-border px-3 py-2">
+        <div className="flex items-center justify-between mb-1.5">
+          <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+            Step {currentStep} of {STEPS.length}
+          </span>
+          <span className="text-[11px] font-semibold text-primary truncate ml-2">
+            {activeStep?.label}
+          </span>
+        </div>
+        <div className="relative">
+          <div className="absolute left-2.5 right-2.5 top-1/2 h-0.5 bg-border -translate-y-1/2" />
+          <div
+            className="absolute left-2.5 top-1/2 h-0.5 bg-primary -translate-y-1/2 transition-all duration-300"
+            style={{ width: `calc(${stepProgress}% * (100% - 20px) / 100%)` }}
+          />
+          <div className="relative flex items-center justify-between">
+            {STEPS.map((step) => {
+              const isDone = step.num < currentStep;
+              const isActive = step.num === currentStep;
+              const isLocked = step.num === 7 && !summaryUnlocked;
+              return (
+                <button
+                  key={step.num}
+                  onClick={() => { if (!isLocked) navigateToStep(step.num); }}
+                  disabled={isLocked}
+                  className={cn("relative", isLocked && "cursor-not-allowed opacity-50")}
+                  title={isLocked ? "Submit for Approval first to unlock the Summary" : `Step ${step.num}: ${step.label}`}
+                >
+                  <span
+                    className={cn(
+                      "block w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold transition-all border-2 bg-background",
+                      isActive && "border-primary text-primary scale-110 shadow-sm",
+                      isDone && "border-primary bg-primary text-primary-foreground",
+                      !isActive && !isDone && "border-border text-muted-foreground"
+                    )}
+                  >
+                    {isDone ? <Check className="w-2.5 h-2.5" /> : step.num}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* Desktop: full rail with labels */}
+      <div className="hidden sm:block px-6 lg:px-8 pb-3">
+        <div className="relative">
           <div className="absolute left-3 right-3 top-1/2 h-0.5 bg-border -translate-y-1/2" />
           <div
             className="absolute left-3 top-1/2 h-0.5 bg-primary -translate-y-1/2 transition-all duration-300"
@@ -2021,17 +2153,12 @@ function DealBanner({ deal, currentStep, navigateToStep, summaryUnlocked }: { de
                   </span>
                   <span
                     className={cn(
-                      "hidden sm:block text-[11px] font-medium whitespace-nowrap transition-colors",
+                      "text-[11px] font-medium whitespace-nowrap transition-colors",
                       isActive ? "text-primary" : isDone ? "text-foreground/70" : "text-muted-foreground group-hover:text-foreground"
                     )}
                   >
                     {step.label}
                   </span>
-                  {isActive && (
-                    <span className="sm:hidden text-[10px] font-medium text-primary whitespace-nowrap">
-                      {step.label}
-                    </span>
-                  )}
                 </button>
               );
             })}
