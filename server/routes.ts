@@ -539,7 +539,7 @@ async function recalcPricingFromScope(dealId: number) {
 }
 
 import { registerDynamicsRoutes, autoPushDeal, pickTemplateForName, tmplKey, linkDealToOpportunity, unlinkOpportunity } from "./dynamics";
-import { ERP_TEMPLATE_NAME, ERP_SERVICE_LINE, scaleErpItems, summarizeErpInputs, parseErpInputs } from "./erp-scaling";
+import { ERP_TEMPLATE_NAME, ERP_SERVICE_LINE, scaleErpItems, summarizeErpInputs, parseErpInputs, validateErpInputs } from "./erp-scaling";
 import {
   COMPLEX_TAX_TEMPLATE_NAME,
   COMPLEX_TAX_SERVICE_LINE,
@@ -1780,6 +1780,17 @@ export function registerRoutes(app: Express) {
     let erpResultByItemId = new Map<number, ReturnType<typeof scaleErpItems>[number]>();
     if (isErpTemplate) {
       const [dealRow] = await db.select().from(deals).where(eq(deals.id, dealId));
+      // Validate engagement inputs BEFORE applying — refusing to silently
+      // coerce missing/blank fields to defaults that would understate hours.
+      const validationErrors = validateErpInputs(dealRow?.engagementInputs || {});
+      if (validationErrors.length > 0) {
+        return res.status(400).json({
+          error: "Engagement inputs are required for the ERP template.",
+          detail: "Fill in the engagement inputs on the Assumptions step before applying this template.",
+          code: "erp_inputs_invalid",
+          errors: validationErrors,
+        });
+      }
       const itemIds = items.map(i => i.scopeItemId);
       const cats = itemIds.length > 0
         ? await db.select().from(scopeCatalog).where(inArray(scopeCatalog.id, itemIds))
@@ -1866,6 +1877,19 @@ export function registerRoutes(app: Express) {
       return res.status(400).json({
         error: "Not an ERP deal",
         detail: `ERP scaling only applies to deals with service line "${ERP_SERVICE_LINE}". This deal is "${deal.serviceLine || "unset"}".`,
+      });
+    }
+
+    // Same input validation we apply at template-apply time — refuses to
+    // re-scale against blank/out-of-range engagement inputs that would
+    // silently fall back to defaults and produce misleading hours.
+    const validationErrors = validateErpInputs(deal.engagementInputs || {});
+    if (validationErrors.length > 0) {
+      return res.status(400).json({
+        error: "Engagement inputs are required to re-scale ERP hours.",
+        detail: "Fill in the engagement inputs on the Assumptions step before re-scaling.",
+        code: "erp_inputs_invalid",
+        errors: validationErrors,
       });
     }
 

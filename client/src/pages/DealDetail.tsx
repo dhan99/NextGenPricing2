@@ -407,6 +407,45 @@ function ScopeStep({ deal }: { deal: any }) {
   const estimation = useAIEffortEstimation();
   const isErpDeal = (deal.serviceLine || "") === "ERP Implementation";
   const ei: Record<string, any> = (deal.engagementInputs as any) || {};
+  // Mirror server/erp-scaling.ts validateErpInputs so the Scope step can warn
+  // BEFORE the user clicks Apply. Numeric fields must be present, integer,
+  // and within range; modules must be a non-empty subset of the allowed set.
+  const erpInputErrors: { field: string; message: string }[] = (() => {
+    if (!isErpDeal) return [];
+    const out: { field: string; message: string }[] = [];
+    const ranges: Record<string, { min: number; max: number; label: string }> = {
+      entities: { min: 1, max: 50, label: "Entities" },
+      countries: { min: 1, max: 50, label: "Countries" },
+      integrations: { min: 0, max: 100, label: "Integrations" },
+      conversions: { min: 0, max: 200, label: "Data-conversion objects" },
+      ricefw: { min: 0, max: 500, label: "RICEFW objects" },
+    };
+    for (const [k, r] of Object.entries(ranges)) {
+      const v = ei[k];
+      if (v === undefined || v === null || (typeof v === "string" && v.trim() === "")) {
+        out.push({ field: k, message: `${r.label} is required.` }); continue;
+      }
+      const n = typeof v === "number" ? v : parseFloat(String(v));
+      if (!Number.isFinite(n) || !Number.isInteger(n)) {
+        out.push({ field: k, message: `${r.label} must be a whole number.` }); continue;
+      }
+      if (n < r.min || n > r.max) {
+        out.push({ field: k, message: `${r.label} must be between ${r.min} and ${r.max}.` });
+      }
+    }
+    const allowedMods = ["FI", "CO", "MM", "SD", "PP", "WM", "HR"];
+    let mods: string[] = [];
+    if (Array.isArray(ei.modules)) mods = ei.modules.map((x: any) => String(x).toUpperCase());
+    else if (typeof ei.modules === "string" && ei.modules.trim() !== "")
+      mods = ei.modules.split(/[,\s]+/).map((s: string) => s.trim().toUpperCase()).filter(Boolean);
+    if (mods.length === 0) out.push({ field: "modules", message: "Select at least one ERP module." });
+    else {
+      const bad = mods.filter((x) => !allowedMods.includes(x));
+      if (bad.length) out.push({ field: "modules", message: `Unknown ERP module(s): ${bad.join(", ")}.` });
+    }
+    return out;
+  })();
+  const erpInputsValid = erpInputErrors.length === 0;
   const erpInputsSummary = (() => {
     if (!isErpDeal) return null;
     const ent = ei.entities ?? "1", ctr = ei.countries ?? "1";
@@ -494,15 +533,34 @@ function ScopeStep({ deal }: { deal: any }) {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
       <div className="lg:col-span-2 space-y-6">
-        {isErpDeal && (
+        {isErpDeal && !erpInputsValid && (
+          <div className="rounded-xl border border-red-300 bg-red-50/70 p-4 flex items-start gap-3">
+            <AlertTriangle className="w-5 h-5 text-red-700 mt-0.5 shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-red-900">Engagement inputs needed for ERP scaling</p>
+              <p className="text-xs text-red-900/90 mt-0.5 leading-relaxed">
+                Fill in the engagement inputs on the <span className="font-medium">Assumptions</span> step before applying the ERP template. Defaults are not used — applying without these would silently understate hours.
+              </p>
+              <ul className="mt-2 text-xs text-red-900/90 list-disc pl-5 space-y-0.5">
+                {erpInputErrors.map((e) => (
+                  <li key={e.field}>{e.message}</li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        )}
+        {isErpDeal && erpInputsValid && (
           <div className="rounded-xl border border-amber-300 bg-amber-50/60 p-4 flex items-start gap-3">
             <Sparkles className="w-5 h-5 text-amber-700 mt-0.5 shrink-0" />
             <div className="flex-1 min-w-0">
               <p className="text-sm font-semibold text-foreground">SAP Activate scaling</p>
               <p className="text-xs text-foreground/80 mt-0.5 leading-relaxed">
-                Hours scale from engagement parameters (entities, countries, modules, integrations, conversions, RICEFW). Edit them in <span className="font-medium">Engagement Inputs</span> on the Setup step, then click below to re-apply.
+                Hours scale from engagement parameters (entities, countries, modules, integrations, conversions, RICEFW). Edit them in <span className="font-medium">Engagement Inputs</span> on the Assumptions step, then click below to re-apply.
               </p>
               <p className="text-[11px] text-muted-foreground mt-1.5 font-mono">{erpInputsSummary}</p>
+              {erpRescale.isError && (
+                <p className="text-[11px] text-red-700 mt-1.5">{(erpRescale.error as any)?.body?.detail || (erpRescale.error as any)?.message || "Re-scale failed."}</p>
+              )}
             </div>
             <button
               onClick={() => erpRescale.mutate({ dealId: deal.id })}
@@ -593,25 +651,51 @@ function ScopeStep({ deal }: { deal: any }) {
               </div>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {(templates || []).map((tpl: any) => (
-                <button
-                  key={tpl.id}
-                  disabled={applyTemplate.isPending}
-                  onClick={() => {
-                    if ((scopeItems || []).length > 0 && !confirm(`Add ${tpl.items?.length || 0} items from "${tpl.name}" to your scope?\n\nExisting items are kept; duplicates are skipped.`)) return;
-                    applyTemplate.mutate({ dealId: deal.id, templateId: tpl.id });
-                  }}
-                  className="text-left p-3 border border-border rounded-lg hover:border-primary hover:bg-primary/5 transition-colors disabled:opacity-50"
-                >
-                  <div className="flex items-center justify-between mb-1">
-                    <p className="text-sm font-medium text-foreground">{tpl.name}</p>
-                    <span className="text-xs text-muted-foreground">{tpl.items?.length || 0} items</span>
-                  </div>
-                  {tpl.description && <p className="text-xs text-muted-foreground line-clamp-2">{tpl.description}</p>}
-                  {tpl.serviceLine && <span className="badge bg-secondary text-secondary-foreground mt-2">{tpl.serviceLine}</span>}
-                </button>
-              ))}
+              {(templates || []).map((tpl: any) => {
+                const isErpTpl = tpl.name === "ERP Implementation (S/4HANA)";
+                const blockedByInputs = isErpTpl && !erpInputsValid;
+                const disabled = applyTemplate.isPending || blockedByInputs;
+                return (
+                  <button
+                    key={tpl.id}
+                    disabled={disabled}
+                    title={blockedByInputs ? "Fill in engagement inputs on the Assumptions step before applying the ERP template." : undefined}
+                    onClick={() => {
+                      if ((scopeItems || []).length > 0 && !confirm(`Add ${tpl.items?.length || 0} items from "${tpl.name}" to your scope?\n\nExisting items are kept; duplicates are skipped.`)) return;
+                      applyTemplate.mutate({ dealId: deal.id, templateId: tpl.id });
+                    }}
+                    className="text-left p-3 border border-border rounded-lg hover:border-primary hover:bg-primary/5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <p className="text-sm font-medium text-foreground">{tpl.name}</p>
+                      <span className="text-xs text-muted-foreground">{tpl.items?.length || 0} items</span>
+                    </div>
+                    {tpl.description && <p className="text-xs text-muted-foreground line-clamp-2">{tpl.description}</p>}
+                    {tpl.serviceLine && <span className="badge bg-secondary text-secondary-foreground mt-2">{tpl.serviceLine}</span>}
+                    {blockedByInputs && (
+                      <p className="text-[11px] text-red-700 mt-2 inline-flex items-center gap-1">
+                        <AlertTriangle className="w-3 h-3" /> Fill engagement inputs first
+                      </p>
+                    )}
+                  </button>
+                );
+              })}
             </div>
+            {applyTemplate.isError && (
+              <div className="mt-3 rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-800">
+                <p className="font-semibold">{(applyTemplate.error as any)?.body?.error || "Could not apply template."}</p>
+                {(applyTemplate.error as any)?.body?.detail && (
+                  <p className="mt-0.5">{(applyTemplate.error as any).body.detail}</p>
+                )}
+                {Array.isArray((applyTemplate.error as any)?.body?.errors) && (
+                  <ul className="mt-1.5 list-disc pl-5 space-y-0.5">
+                    {(applyTemplate.error as any).body.errors.map((e: any, i: number) => (
+                      <li key={i}>{e.message}</li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
           </div>
         )}
 

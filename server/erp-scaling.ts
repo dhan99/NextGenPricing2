@@ -38,6 +38,90 @@ export const DEFAULT_ERP_INPUTS: ErpInputs = {
   ricefw: 0,
 };
 
+export type ErpInputValidationError = {
+  field: keyof ErpInputs;
+  message: string;
+  reason: "missing" | "invalid" | "out_of_range";
+};
+
+const ERP_INPUT_RANGES = {
+  entities: { min: 1, max: 50 },
+  countries: { min: 1, max: 50 },
+  integrations: { min: 0, max: 100 },
+  conversions: { min: 0, max: 200 },
+  ricefw: { min: 0, max: 500 },
+} as const;
+
+// Validate raw engagement-input payload for ERP deals. Unlike parseErpInputs,
+// this DOES NOT silently coerce missing/invalid values to defaults — it
+// returns a list of human-readable errors so callers can fail fast and tell
+// the user exactly which input is wrong. Numeric fields must be present
+// (non-blank), finite, and within the documented range. Modules must be a
+// non-empty subset of ERP_MODULE_KEYS.
+export function validateErpInputs(raw: any): ErpInputValidationError[] {
+  const errors: ErpInputValidationError[] = [];
+  const e = raw || {};
+
+  const checkNumeric = (key: keyof typeof ERP_INPUT_RANGES, label: string) => {
+    const v = e[key];
+    if (v === undefined || v === null || (typeof v === "string" && v.trim() === "")) {
+      errors.push({ field: key, message: `${label} is required.`, reason: "missing" });
+      return;
+    }
+    const n = typeof v === "number" ? v : parseFloat(String(v));
+    if (!Number.isFinite(n)) {
+      errors.push({ field: key, message: `${label} must be a number.`, reason: "invalid" });
+      return;
+    }
+    if (!Number.isInteger(n)) {
+      errors.push({ field: key, message: `${label} must be a whole number.`, reason: "invalid" });
+      return;
+    }
+    const { min, max } = ERP_INPUT_RANGES[key];
+    if (n < min || n > max) {
+      errors.push({
+        field: key,
+        message: `${label} must be between ${min} and ${max} (got ${n}).`,
+        reason: "out_of_range",
+      });
+    }
+  };
+
+  checkNumeric("entities", "Entities");
+  checkNumeric("countries", "Countries");
+  checkNumeric("integrations", "Integrations");
+  checkNumeric("conversions", "Data-conversion objects");
+  checkNumeric("ricefw", "RICEFW objects");
+
+  // Modules: must be present with at least one valid module key.
+  const m = e.modules;
+  let mods: string[] = [];
+  let hasModulesField = false;
+  if (Array.isArray(m)) {
+    hasModulesField = true;
+    mods = m.map((x: any) => String(x).toUpperCase());
+  } else if (typeof m === "string") {
+    if (m.trim() !== "") {
+      hasModulesField = true;
+      mods = m.split(/[,\s]+/).map(s => s.trim().toUpperCase()).filter(Boolean);
+    }
+  }
+  if (!hasModulesField || mods.length === 0) {
+    errors.push({ field: "modules", message: "Select at least one ERP module.", reason: "missing" });
+  } else {
+    const invalid = mods.filter(x => !(ERP_MODULE_KEYS as readonly string[]).includes(x));
+    if (invalid.length > 0) {
+      errors.push({
+        field: "modules",
+        message: `Unknown ERP module(s): ${invalid.join(", ")}. Allowed: ${ERP_MODULE_KEYS.join(", ")}.`,
+        reason: "invalid",
+      });
+    }
+  }
+
+  return errors;
+}
+
 export function parseErpInputs(raw: any): ErpInputs {
   const e = raw || {};
   const num = (v: any, d: number) => {
