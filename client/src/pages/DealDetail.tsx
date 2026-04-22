@@ -1743,7 +1743,7 @@ function PricingStep({ deal }: { deal: any }) {
           ))}
         </div>
         <ScopeBreakdownPanel dealId={deal.id} pricingLines={pricingLines || []} />
-        <div className="card overflow-hidden">
+        <div className="card">
           <div className="px-6 py-4 border-b border-border flex items-center justify-between gap-4">
             <div className="flex items-center gap-3">
               <h2 className="text-lg font-semibold text-foreground">Pricing Grid</h2>
@@ -1778,20 +1778,19 @@ function PricingStep({ deal }: { deal: any }) {
               </p>
             </div>
           )}
-          <div className="overflow-auto max-h-[520px] relative">
-            <table className="w-full border-separate border-spacing-0">
-              <thead>
-                <tr>
-                  <th className="sticky top-0 z-20 bg-muted text-left px-6 py-3 text-xs font-semibold text-muted-foreground uppercase border-b border-border">Role</th>
-                  <th className="sticky top-0 z-20 bg-muted text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase border-b border-border">Level</th>
-                  <th className="sticky top-0 z-20 bg-muted text-right px-4 py-3 text-xs font-semibold text-muted-foreground uppercase border-b border-border">Hours</th>
-                  <th className="sticky top-0 z-20 bg-muted text-right px-4 py-3 text-xs font-semibold text-muted-foreground uppercase border-b border-border">Rate</th>
-                  <th className="sticky top-0 z-20 bg-muted text-right px-4 py-3 text-xs font-semibold text-muted-foreground uppercase border-b border-border">Cost Rate</th>
-                  <th className="sticky top-0 z-20 bg-muted text-right px-4 py-3 text-xs font-semibold text-muted-foreground uppercase border-b border-border">Fee</th>
-                  <th className="sticky top-0 z-20 bg-muted text-right px-4 py-3 text-xs font-semibold text-muted-foreground uppercase border-b border-border">Cost</th>
-                  <th className="sticky top-0 z-20 bg-muted text-right px-6 py-3 text-xs font-semibold text-muted-foreground uppercase border-b border-border">Margin</th>
-                </tr>
-              </thead>
+          <table className="w-full border-separate border-spacing-0">
+            <thead>
+              <tr>
+                <th className="sticky top-14 z-20 bg-muted text-left px-6 py-3 text-xs font-semibold text-muted-foreground uppercase border-b border-border">Role</th>
+                <th className="sticky top-14 z-20 bg-muted text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase border-b border-border">Level</th>
+                <th className="sticky top-14 z-20 bg-muted text-right px-4 py-3 text-xs font-semibold text-muted-foreground uppercase border-b border-border">Hours</th>
+                <th className="sticky top-14 z-20 bg-muted text-right px-4 py-3 text-xs font-semibold text-muted-foreground uppercase border-b border-border">Rate</th>
+                <th className="sticky top-14 z-20 bg-muted text-right px-4 py-3 text-xs font-semibold text-muted-foreground uppercase border-b border-border">Cost Rate</th>
+                <th className="sticky top-14 z-20 bg-muted text-right px-4 py-3 text-xs font-semibold text-muted-foreground uppercase border-b border-border">Fee</th>
+                <th className="sticky top-14 z-20 bg-muted text-right px-4 py-3 text-xs font-semibold text-muted-foreground uppercase border-b border-border">Cost</th>
+                <th className="sticky top-14 z-20 bg-muted text-right px-6 py-3 text-xs font-semibold text-muted-foreground uppercase border-b border-border">Margin</th>
+              </tr>
+            </thead>
               <tbody className="divide-y divide-border">
                 {(pricingLines || []).map((line: any) => (
                   <tr key={line.id} className={cn("hover:bg-muted/30", line.rateOverridden && "bg-amber-50/40")}>
