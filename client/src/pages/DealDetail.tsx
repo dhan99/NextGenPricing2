@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useRoute } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
-import { useDeal, useUpdateDeal, useScopeCatalog, useScopeTemplates, useApplyScopeTemplate, useErpRescale, useDealScopeItems, useAddScopeItem, useRemoveScopeItem, useRoles, useDealPricing, useUpdatePricingLine, useDealScenarios, useSelectScenario, useDealApprovals, useSubmitApproval, useUpdateApproval, useDealPrompts, useUpdatePrompt, useEngagementInputSpec, useAIDealSimilarity, useAIEffortEstimation, useAIMarginAdvisor, useAIScenarioRecommendation, useAIRiskSummary, useDealIntappScreening, useRunIntappScreening, useIntappOverride, useAddIntappMitigation, useUpdateIntappMitigation, useWorkdayLatestValidation, useWorkdayCostCenters, useRunWorkdayValidation, useLinkWorkdayCostCenter, useOverrideWorkdayValidation, usePromptSets, useCongaTemplates, useDealEngagementLetters, useGenerateEngagementLetter, useAgentApproveDeal, useAgentDiscardDeal, useAgentOpenWizard, useAgentResubmit, useDealMarginTarget } from "@/hooks/use-api";
+import { useDeal, useUpdateDeal, useScopeCatalog, useScopeTemplates, useApplyScopeTemplate, useErpRescale, useDealScopeItems, useAddScopeItem, useRemoveScopeItem, useRoles, useDealPricing, useUpdatePricingLine, useDealScenarios, useSelectScenario, useDealApprovals, useSubmitApproval, useUpdateApproval, useDealPrompts, useUpdatePrompt, useEngagementInputSpec, useAIDealSimilarity, useAIEffortEstimation, useAIMarginAdvisor, useAIScenarioRecommendation, useAIRiskSummary, useDealIntappScreening, useRunIntappScreening, useIntappOverride, useAddIntappMitigation, useUpdateIntappMitigation, useWorkdayLatestValidation, useWorkdayCostCenters, useRunWorkdayValidation, useLinkWorkdayCostCenter, useOverrideWorkdayValidation, usePromptSets, useCongaTemplates, useDealEngagementLetters, useGenerateEngagementLetter, useAgentApproveDeal, useAgentDiscardDeal, useAgentOpenWizard, useAgentResubmit, useDealMarginTarget, openProtectedDoc } from "@/hooks/use-api";
 import { ResultBadge as IntappResultBadge, RiskBadge as IntappRiskBadge, SourceBadge as IntappSourceBadge } from "./Intapp";
 import { ShieldAlert, ShieldCheck, Unlock } from "lucide-react";
 import { formatCurrency, formatPercent, formatNumber, formatRelativeTime, getStatusColor, getStatusLabel, cn } from "@/lib/utils";
@@ -2594,16 +2594,15 @@ function ReviewStep({ deal, navigateToStep, onReadiness, override, setOverride }
               {blockers} blocker{blockers > 1 ? "s" : ""}
             </span>
           )}
-          <a
-            href={`/api/deals/${deal.id}/proposal`}
-            target="_blank"
-            rel="noopener noreferrer"
+          <button
+            type="button"
+            onClick={() => openProtectedDoc(`/api/deals/${deal.id}/proposal`).catch((err) => alert(err?.message || "Failed to open proposal"))}
             title="Opens a printable summary — use your browser's Print dialog to save as PDF."
             className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border border-stone-200 hover:bg-stone-50 transition-colors"
           >
             <FileText className="w-3.5 h-3.5" />
             Download PDF Summary
-          </a>
+          </button>
         </div>
       </div>
 
@@ -3003,15 +3002,14 @@ function SummaryStep({ deal }: { deal: any }) {
     <div className="max-w-4xl mx-auto space-y-4 sm:space-y-6">
       {/* Action buttons — full-width stacked on mobile, inline on desktop */}
       <div className="grid grid-cols-1 sm:flex sm:gap-3 sm:justify-end sm:flex-wrap gap-2">
-        <a
-          href={`/api/deals/${deal.id}/proposal`}
-          target="_blank"
-          rel="noopener noreferrer"
+        <button
+          type="button"
+          onClick={() => openProtectedDoc(`/api/deals/${deal.id}/proposal`).catch((err) => alert(err?.message || "Failed to open proposal"))}
           className="btn-primary flex items-center justify-center gap-2 w-full sm:w-auto"
         >
           <FileText className="w-4 h-4" />
           Generate Proposal
-        </a>
+        </button>
         <button
           onClick={() => setLetterModalOpen(true)}
           className="px-4 py-2 rounded-lg bg-primary/10 text-primary text-sm font-medium hover:bg-primary/20 transition-all flex items-center justify-center gap-2 w-full sm:w-auto"

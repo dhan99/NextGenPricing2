@@ -35,6 +35,43 @@ export async function fetchApi(url: string, options?: RequestInit) {
   return res.json();
 }
 
+/**
+ * Opens an authenticated GET endpoint that returns a document (HTML, PDF,
+ * etc.) in a new tab. Plain `<a href>` cannot send the persona headers, so we
+ * fetch the response, wrap it in a blob URL, and pop it open.
+ */
+export async function openProtectedDoc(url: string) {
+  const headers: Record<string, string> = {};
+  try {
+    const personaRaw = typeof window !== "undefined" ? localStorage.getItem("dealpad_persona") : null;
+    if (personaRaw) {
+      const role = String(personaRaw).toLowerCase();
+      const personaNames: Record<string, string> = {
+        pdl: "Michael Torres", sll: "Sarah Chen", po: "James Wright",
+        fin: "Lisa Park", qrm: "David Kim", it: "Alex Rivera",
+      };
+      headers["x-user-role"] = role;
+      headers["x-user-name"] = personaNames[role] || role.toUpperCase();
+    }
+  } catch {}
+  const res = await fetch(url, { headers });
+  if (!res.ok) {
+    let body: any = null;
+    try { body = await res.json(); } catch {}
+    const msg = body?.error || body?.detail || `Failed to open document (HTTP ${res.status})`;
+    throw new Error(msg);
+  }
+  const blob = await res.blob();
+  const blobUrl = URL.createObjectURL(blob);
+  const win = window.open(blobUrl, "_blank", "noopener,noreferrer");
+  if (!win) {
+    // Popup blocked — fall back to same-tab navigation so the user still sees it.
+    window.location.href = blobUrl;
+  }
+  // Revoke after a delay so the new tab has time to load.
+  setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000);
+}
+
 export function useDashboardSummary() {
   return useQuery({ queryKey: ["dashboard"], queryFn: () => fetchApi("/api/dashboard/summary") });
 }
