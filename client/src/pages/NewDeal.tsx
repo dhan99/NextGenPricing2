@@ -300,7 +300,7 @@ export function NewDeal() {
           </fieldset>
         </div>
 
-        <fieldset disabled={!form.dealType} className={!form.dealType ? "opacity-50 pointer-events-none select-none" : ""}>
+        <fieldset disabled={fieldsLocked} className={fieldsLocked ? "opacity-50 pointer-events-none select-none" : ""}>
           <div className="card p-3 sm:p-6">
             <h2 className="text-sm sm:text-lg font-semibold text-foreground mb-3 sm:mb-4">PDL Assignment</h2>
             <div className="grid grid-cols-2 gap-3">
@@ -316,7 +316,7 @@ export function NewDeal() {
           </div>
         </fieldset>
 
-        <fieldset disabled={!form.dealType} className={!form.dealType ? "opacity-50 pointer-events-none select-none" : ""}>
+        <fieldset disabled={fieldsLocked} className={fieldsLocked ? "opacity-50 pointer-events-none select-none" : ""}>
           <div className="card p-3 sm:p-6">
             <h2 className="text-sm sm:text-lg font-semibold text-foreground mb-3 sm:mb-4">Additional Notes</h2>
             <textarea value={form.notes} onChange={e => setForm({...form, notes: e.target.value})} className="input-field mt-1 min-h-[72px] sm:min-h-[100px] resize-y" placeholder="Any additional context about this engagement..." />
