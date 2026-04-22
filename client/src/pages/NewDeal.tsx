@@ -316,9 +316,9 @@ export function NewDeal() {
         </fieldset>
 
         {/* Ask AI is only available for roles with runAI permission */}
-        <div className="flex items-center justify-end gap-3">
-          <Link href="/deals"><button type="button" className="btn-ghost">Cancel</button></Link>
-          <button type="submit" disabled={submitting || !form.dealType || (isRenewal && !form.sourceDealId)} className="btn-primary">
+        <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-end gap-2 sm:gap-3">
+          <Link href="/deals" className="w-full sm:w-auto"><button type="button" className="btn-ghost w-full sm:w-auto justify-center">Cancel</button></Link>
+          <button type="submit" disabled={submitting || !form.dealType || (isRenewal && !form.sourceDealId)} className="btn-primary w-full sm:w-auto justify-center">
             {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : (isRenewal ? <Sparkles className="w-4 h-4" /> : <FileText className="w-4 h-4" />)}
             {submitting
               ? (isRenewal ? "Building Leadsheet..." : "Creating...")

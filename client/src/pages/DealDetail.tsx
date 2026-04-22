@@ -4070,22 +4070,35 @@ function WorkdayDealPanel({ deal }: { deal: any }) {
   const usedPct = latest?.budgetUsedPct != null ? parseFloat(latest.budgetUsedPct) : null;
 
   return (
-    <div className={`card border ${tone} p-5 space-y-4`}>
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex items-start gap-3">
-          <Icon className={`w-5 h-5 mt-0.5 ${iconColor}`} />
-          <div>
-            <div className="flex items-center gap-2">
-              <h3 className="text-sm font-semibold text-foreground">Workday Validation</h3>
-              <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-100 text-amber-800">Source · Simulation</span>
-              {isOverridden && <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-200 text-amber-900">Override on file</span>}
-            </div>
-            <p className="text-sm text-foreground mt-0.5">
-              {isLoading ? "Loading…" : latest?.summary || "No validation has been run yet."}
-            </p>
+    <div className={`card border ${tone} p-3 sm:p-5 space-y-3 sm:space-y-4`}>
+      <div className="flex items-start gap-2 sm:gap-3">
+        <Icon className={`w-5 h-5 mt-0.5 shrink-0 ${iconColor}`} />
+        <div className="flex-1 min-w-0">
+          <div className="flex items-start sm:items-center gap-1.5 sm:gap-2 flex-wrap">
+            <h3 className="text-[13px] sm:text-sm font-semibold text-foreground leading-snug">Workday Validation</h3>
+            <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-100 text-amber-800">Source · Simulation</span>
+            {isOverridden && <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-200 text-amber-900">Override on file</span>}
+          </div>
+          <p className="text-[12px] sm:text-sm text-foreground mt-1 sm:mt-0.5 leading-snug">
+            {isLoading ? "Loading…" : latest?.summary || "No validation has been run yet."}
+          </p>
+          {/* Mobile actions row — full-width buttons under the summary */}
+          <div className="sm:hidden flex items-center gap-2 mt-2">
+            <button onClick={() => runValidation.mutate({ dealId: deal.id, userName: persona?.name })}
+              disabled={runValidation.isPending}
+              className="flex-1 inline-flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-md border border-stone-300 bg-white text-[11px] font-medium hover:bg-stone-50 disabled:opacity-50">
+              {runValidation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+              Re-run
+            </button>
+            <button onClick={() => setShowLink(!showLink)}
+              className="flex-1 inline-flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-md border border-stone-300 bg-white text-[11px] font-medium hover:bg-stone-50">
+              <GitBranch className="w-3.5 h-3.5" />
+              {cc ? "Re-link" : "Link CC"}
+            </button>
           </div>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
+        {/* Desktop actions */}
+        <div className="hidden sm:flex items-center gap-2 shrink-0">
           <button onClick={() => runValidation.mutate({ dealId: deal.id, userName: persona?.name })}
             disabled={runValidation.isPending}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-stone-300 bg-white text-xs font-medium hover:bg-stone-50 disabled:opacity-50">
