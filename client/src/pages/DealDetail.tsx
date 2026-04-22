@@ -1860,7 +1860,6 @@ function PricingStep({ deal }: { deal: any }) {
                 </tr>
               </tfoot>
             </table>
-          </div>
           <div className="px-6 py-3 border-t border-border bg-muted/30 flex items-center justify-between">
             <span className="text-sm text-muted-foreground">Overall Margin <span className="text-xs">(target {targetMargin}% — {targetSourceLabel})</span></span>
             <span className={cn("text-lg font-bold", marginPct >= targetMargin ? "text-success" : marginPct >= warnThreshold ? "text-warning" : "text-destructive")}>{marginPct.toFixed(1)}%</span>
