@@ -1104,9 +1104,15 @@ export function registerRoutes(app: Express) {
     const dealCount = await db.select({ count: count() }).from(deals);
     const dealNumber = `DL-2026-${String(dealCount[0].count + 1).padStart(3, "0")}`;
 
+    // Strip any pre-existing "(Renewal)"/"(Copy)" suffixes so we don't end up
+    // with titles like "Project X (Renewal) (Renewal) (Renewal)" after a deal
+    // is renewed multiple times across cycles.
+    const baseTitle = (source.title || "")
+      .replace(/(\s*\((?:Renewal|Copy)\))+\s*$/gi, "")
+      .trim();
     const title = isRenewal
-      ? `${source.title} (Renewal)`
-      : req.body.title || `${source.title} (Copy)`;
+      ? `${baseTitle} (Renewal)`
+      : req.body.title || `${baseTitle} (Copy)`;
 
     const [newDeal] = await db.insert(deals).values({
       title,
