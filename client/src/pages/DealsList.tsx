@@ -6,6 +6,7 @@ import { Search, FileText, Plus, LayoutGrid, List, Filter, Copy, RefreshCw, More
 import { useAuth } from "@/context/AuthContext";
 import { useCloneDeal } from "@/hooks/use-api";
 import { useLocation } from "wouter";
+import { SortableTH, useTableSort } from "@/components/SortableHeader";
 
 export function DealsList() {
   const [archiveView, setArchiveView] = useState<"active" | "archived" | "all">("active");
@@ -23,7 +24,7 @@ export function DealsList() {
     typeof window !== "undefined" && window.matchMedia("(max-width: 767px)").matches ? "card" : "table"
   );
 
-  const filtered = (deals || []).filter((d: any) => {
+  const baseFiltered = (deals || []).filter((d: any) => {
     const matchesSearch = !search || d.title.toLowerCase().includes(search.toLowerCase()) ||
       d.dealNumber.toLowerCase().includes(search.toLowerCase()) ||
       d.client?.name?.toLowerCase().includes(search.toLowerCase()) ||
@@ -34,6 +35,25 @@ export function DealsList() {
       || (linkFilter === "standalone" && !d.dynamicsLink);
     return matchesSearch && matchesStatus && matchesLink;
   });
+
+  type DealSortKey = "deal" | "client" | "serviceLine" | "status" | "fee" | "margin" | "hours";
+  const { sortBy, sortDir, toggleSort, sorted: filtered } = useTableSort<any, DealSortKey>(
+    baseFiltered,
+    "deal",
+    "asc",
+    (d, key) => {
+      switch (key) {
+        case "deal": return d.title || "";
+        case "client": return d.client?.name || "";
+        case "serviceLine": return d.serviceLine || "";
+        case "status": return d.status || "";
+        case "fee": return parseFloat(d.totalFee || "0");
+        case "margin": return parseFloat(d.marginPercent || "0");
+        case "hours": return parseFloat(d.totalHours || "0");
+      }
+    },
+    ["fee", "margin", "hours"] as const,
+  );
 
   const standaloneCount = (deals || []).filter((d: any) => !d.dynamicsLink && !d.archivedAt).length;
 
@@ -178,13 +198,13 @@ export function DealsList() {
           <table className="w-full min-w-[640px]">
             <thead>
               <tr className="border-b border-border bg-muted/50">
-                <th className="text-left px-6 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Deal</th>
-                <th className="text-left px-6 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Client</th>
-                <th className="text-left px-6 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Service Line</th>
-                <th className="text-left px-6 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Status</th>
-                <th className="text-right px-6 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Fee</th>
-                <th className="text-right px-6 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Margin</th>
-                <th className="text-right px-6 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Hours</th>
+                <SortableTH label="Deal" sortKey="deal" activeKey={sortBy} direction={sortDir} onToggle={toggleSort} className="px-6" />
+                <SortableTH label="Client" sortKey="client" activeKey={sortBy} direction={sortDir} onToggle={toggleSort} className="px-6" />
+                <SortableTH label="Service Line" sortKey="serviceLine" activeKey={sortBy} direction={sortDir} onToggle={toggleSort} className="px-6" />
+                <SortableTH label="Status" sortKey="status" activeKey={sortBy} direction={sortDir} onToggle={toggleSort} className="px-6" />
+                <SortableTH label="Fee" sortKey="fee" activeKey={sortBy} direction={sortDir} onToggle={toggleSort} align="right" className="px-6" />
+                <SortableTH label="Margin" sortKey="margin" activeKey={sortBy} direction={sortDir} onToggle={toggleSort} align="right" className="px-6" />
+                <SortableTH label="Hours" sortKey="hours" activeKey={sortBy} direction={sortDir} onToggle={toggleSort} align="right" className="px-6" />
                 {hasPermission("createDeals") && (
                   <th className="text-right px-6 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Actions</th>
                 )}

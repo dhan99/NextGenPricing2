@@ -15,6 +15,7 @@ import {
 } from "@/hooks/use-api";
 import { useAuth } from "@/context/AuthContext";
 import { cn } from "@/lib/utils";
+import { SortableTH, useTableSort } from "@/components/SortableHeader";
 
 type Tab = "accounts" | "opportunities" | "pipeline" | "settings";
 
@@ -121,6 +122,24 @@ function AccountsTab() {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<any>({});
 
+  type AcctSortKey = "accountNumber" | "name" | "industry" | "annualRevenue" | "ownerName" | "lastSyncedAt";
+  const { sortBy, sortDir, toggleSort, sorted: sortedAccounts } = useTableSort<any, AcctSortKey>(
+    accounts,
+    "name",
+    "asc",
+    (a, key) => {
+      switch (key) {
+        case "accountNumber": return a.accountNumber || "";
+        case "name": return a.name || "";
+        case "industry": return a.industry || "";
+        case "annualRevenue": return Number(a.annualRevenue || 0);
+        case "ownerName": return a.ownerName || "";
+        case "lastSyncedAt": return a.lastSyncedAt ? new Date(a.lastSyncedAt).getTime() : 0;
+      }
+    },
+    ["annualRevenue", "lastSyncedAt"] as const,
+  );
+
   const selected = accounts.find((a: any) => a.id === selectedId);
   useEffect(() => { if (selected) setDraft(selected); }, [selectedId, selected?.updatedAt]);
 
@@ -174,18 +193,18 @@ function AccountsTab() {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
         <div className={`card p-0 overflow-x-auto ${selected ? "lg:col-span-7" : "lg:col-span-12"}`}>
           <table className="w-full text-sm min-w-[640px]">
-            <thead className="bg-stone-50 border-b border-stone-200 text-xs uppercase tracking-wider text-muted-foreground">
+            <thead className="bg-stone-50 border-b border-stone-200">
               <tr>
-                <th className="px-4 py-3 text-left font-semibold">Account #</th>
-                <th className="px-4 py-3 text-left font-semibold">Account Name</th>
-                <th className="px-4 py-3 text-left font-semibold">Industry</th>
-                <th className="px-4 py-3 text-right font-semibold">Annual Revenue</th>
-                <th className="px-4 py-3 text-left font-semibold">Owner</th>
-                <th className="px-4 py-3 text-left font-semibold">Sync</th>
+                <SortableTH label="Account #" sortKey="accountNumber" activeKey={sortBy} direction={sortDir} onToggle={toggleSort} />
+                <SortableTH label="Account Name" sortKey="name" activeKey={sortBy} direction={sortDir} onToggle={toggleSort} />
+                <SortableTH label="Industry" sortKey="industry" activeKey={sortBy} direction={sortDir} onToggle={toggleSort} />
+                <SortableTH label="Annual Revenue" sortKey="annualRevenue" activeKey={sortBy} direction={sortDir} onToggle={toggleSort} align="right" />
+                <SortableTH label="Owner" sortKey="ownerName" activeKey={sortBy} direction={sortDir} onToggle={toggleSort} />
+                <SortableTH label="Sync" sortKey="lastSyncedAt" activeKey={sortBy} direction={sortDir} onToggle={toggleSort} />
               </tr>
             </thead>
             <tbody>
-              {accounts.map((a: any) => (
+              {sortedAccounts.map((a: any) => (
                 <tr key={a.id} onClick={() => { setSelectedId(a.id); setEditing(false); }}
                   className={`border-b border-stone-100 hover:bg-stone-50 cursor-pointer ${selectedId === a.id ? "bg-amber-50/50" : ""}`}>
                   <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{a.accountNumber}</td>
@@ -342,6 +361,26 @@ function OpportunitiesTab() {
   const queued = opps.filter((o: any) => !o.dealpadDealId && o.syncStatus === "queued");
   const synced = opps.filter((o: any) => o.dealpadDealId);
   const ready = synced.filter((o: any) => o.readyForSales);
+
+  type SyncedSortKey = "name" | "accountName" | "stage" | "estimatedValue" | "probability" | "ownerName" | "lastSyncedAt";
+  const { sortBy: syncedSortBy, sortDir: syncedSortDir, toggleSort: toggleSyncedSort, sorted: sortedSynced } =
+    useTableSort<any, SyncedSortKey>(
+      synced,
+      "lastSyncedAt",
+      "desc",
+      (o, key) => {
+        switch (key) {
+          case "name": return o.name || "";
+          case "accountName": return o.accountName || "";
+          case "stage": return o.stage || "";
+          case "estimatedValue": return Number(o.estimatedValue || 0);
+          case "probability": return Number(o.probability || 0);
+          case "ownerName": return o.ownerName || "";
+          case "lastSyncedAt": return o.lastSyncedAt ? new Date(o.lastSyncedAt).getTime() : 0;
+        }
+      },
+      ["estimatedValue", "probability", "lastSyncedAt"] as const,
+    );
 
   if (isLoading) return <div className="text-sm text-muted-foreground">Loading opportunities...</div>;
 
@@ -572,20 +611,20 @@ function OpportunitiesTab() {
         </div>
         <div className="overflow-x-auto">
         <table className="w-full text-sm min-w-[820px]">
-          <thead className="bg-stone-50 border-b border-stone-200 text-xs uppercase tracking-wider text-muted-foreground">
+          <thead className="bg-stone-50 border-b border-stone-200">
             <tr>
-              <th className="px-4 py-3 text-left font-semibold">Opportunity</th>
-              <th className="px-4 py-3 text-left font-semibold">Account</th>
-              <th className="px-4 py-3 text-left font-semibold">Stage</th>
-              <th className="px-4 py-3 text-right font-semibold">Est. Value</th>
-              <th className="px-4 py-3 text-center font-semibold">Prob</th>
-              <th className="px-4 py-3 text-left font-semibold">Owner</th>
-              <th className="px-4 py-3 text-left font-semibold">Sync</th>
-              <th className="px-4 py-3 text-right font-semibold"></th>
+              <SortableTH label="Opportunity" sortKey="name" activeKey={syncedSortBy} direction={syncedSortDir} onToggle={toggleSyncedSort} />
+              <SortableTH label="Account" sortKey="accountName" activeKey={syncedSortBy} direction={syncedSortDir} onToggle={toggleSyncedSort} />
+              <SortableTH label="Stage" sortKey="stage" activeKey={syncedSortBy} direction={syncedSortDir} onToggle={toggleSyncedSort} />
+              <SortableTH label="Est. Value" sortKey="estimatedValue" activeKey={syncedSortBy} direction={syncedSortDir} onToggle={toggleSyncedSort} align="right" />
+              <SortableTH label="Prob" sortKey="probability" activeKey={syncedSortBy} direction={syncedSortDir} onToggle={toggleSyncedSort} align="center" />
+              <SortableTH label="Owner" sortKey="ownerName" activeKey={syncedSortBy} direction={syncedSortDir} onToggle={toggleSyncedSort} />
+              <SortableTH label="Sync" sortKey="lastSyncedAt" activeKey={syncedSortBy} direction={syncedSortDir} onToggle={toggleSyncedSort} />
+              <th className="px-4 py-3 text-right text-xs font-semibold text-muted-foreground uppercase tracking-wider"></th>
             </tr>
           </thead>
           <tbody>
-            {synced.map((o: any) => {
+            {sortedSynced.map((o: any) => {
               const isEditing = editingId === o.id;
               const isReady = o.readyForSales;
               return (
