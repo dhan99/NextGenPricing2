@@ -67,14 +67,14 @@ export function WorkdayIntegration() {
 
   return (
     <div className="px-4 sm:px-6 lg:px-8 py-4 sm:py-6 max-w-[1400px] mx-auto">
-      <div className="flex items-start justify-between mb-6">
-        <div>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between mb-5 sm:mb-6">
+        <div className="min-w-0">
           <div className="flex items-center gap-2 mb-1">
             <Briefcase className="w-4 h-4 text-primary" />
             <span className="text-xs uppercase tracking-wider font-semibold text-muted-foreground">Integration · 4-week Pilot</span>
           </div>
-          <h1 className="text-2xl font-bold text-foreground">Workday — Source of Truth</h1>
-          <p className="text-sm text-muted-foreground mt-1">
+          <h1 className="text-xl sm:text-2xl font-bold text-foreground">Workday — Source of Truth</h1>
+          <p className="text-xs sm:text-sm text-muted-foreground mt-1">
             Budgets, resource availability, staffing capacity, and standard cost rates. Persistent simulation; flip to live by config when ready.
           </p>
         </div>
@@ -89,8 +89,8 @@ export function WorkdayIntegration() {
         </div>
       </div>
 
-      <div className="border-b border-stone-200 mb-6">
-        <div className="flex gap-1">
+      <div className="border-b border-stone-200 mb-5 sm:mb-6 -mx-4 sm:mx-0 px-4 sm:px-0">
+        <div className="flex gap-1 overflow-x-auto no-scrollbar">
           {[
             { id: "cost-centers" as const, label: "Cost Centers",  icon: Building2,   sub: "Budgets & headroom" },
             { id: "workers" as const,      label: "Workers",       icon: Users,       sub: "Roles & availability" },
@@ -99,14 +99,14 @@ export function WorkdayIntegration() {
             { id: "settings" as const,     label: "Settings",      icon: Settings,    sub: "Mode & tolerances" },
           ].map((t) => (
             <button key={t.id} onClick={() => setTab(t.id)}
-              className={`px-5 py-3 text-sm font-medium border-b-2 transition-colors ${
+              className={`px-3 sm:px-5 py-2.5 sm:py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap flex-shrink-0 ${
                 tab === t.id ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"
               }`}>
               <div className="flex items-center gap-2">
                 <t.icon className="w-4 h-4" />
                 <div className="text-left">
                   <div>{t.label}</div>
-                  <div className="text-[10px] font-normal text-muted-foreground">{t.sub}</div>
+                  <div className="hidden sm:block text-[10px] font-normal text-muted-foreground">{t.sub}</div>
                 </div>
               </div>
             </button>
@@ -140,9 +140,9 @@ function CostCentersTab() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-sm text-muted-foreground">{rows.length} cost centers · committed amounts roll up monthly from Workday journals.</p>
-        <button onClick={() => setShowNew(!showNew)} className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md border border-stone-300 text-sm font-medium hover:bg-stone-50">
+        <button onClick={() => setShowNew(!showNew)} className="inline-flex items-center justify-center gap-2 px-3 py-1.5 rounded-md border border-stone-300 text-sm font-medium hover:bg-stone-50 w-full sm:w-auto">
           <Plus className="w-4 h-4" /> Add Cost Center
         </button>
       </div>
@@ -260,9 +260,9 @@ function WorkersTab() {
         ))}
       </div>
 
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-sm text-muted-foreground">{rows.length} workers · pulled from Workday HCM module.</p>
-        <button onClick={() => setShowNew(!showNew)} className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md border border-stone-300 text-sm font-medium hover:bg-stone-50">
+        <button onClick={() => setShowNew(!showNew)} className="inline-flex items-center justify-center gap-2 px-3 py-1.5 rounded-md border border-stone-300 text-sm font-medium hover:bg-stone-50 w-full sm:w-auto">
           <Plus className="w-4 h-4" /> Add Worker
         </button>
       </div>
@@ -391,7 +391,7 @@ function ValidationsTab() {
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-      <div className="col-span-2 card overflow-hidden">
+      <div className="sm:col-span-2 card overflow-hidden">
         <div className="px-4 py-2.5 border-b border-stone-200 flex items-center justify-between">
           <h3 className="text-sm font-semibold text-foreground flex items-center gap-2"><ShieldCheck className="w-4 h-4 text-primary" /> Recent Validations</h3>
           <span className="text-xs text-muted-foreground">{rows.length}</span>

@@ -25,36 +25,36 @@ export function Intapp() {
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8">
-      <div className="mb-6 flex items-start justify-between">
-        <div className="flex items-start gap-4">
-          <div className="w-12 h-12 rounded-xl bg-amber-100 flex items-center justify-center">
-            <ShieldAlert className="w-6 h-6 text-amber-700" />
+      <div className="mb-5 sm:mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex items-start gap-3 sm:gap-4 min-w-0">
+          <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-amber-100 flex items-center justify-center flex-shrink-0">
+            <ShieldAlert className="w-5 h-5 sm:w-6 sm:h-6 text-amber-700" />
           </div>
-          <div>
-            <h1 className="text-2xl font-bold text-foreground">Intapp Risk &amp; Compliance</h1>
-            <p className="text-sm text-muted-foreground mt-0.5">
+          <div className="min-w-0">
+            <h1 className="text-xl sm:text-2xl font-bold text-foreground">Intapp Risk &amp; Compliance</h1>
+            <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
               Conflicts, sanctions, PEP and independence screening — running in{" "}
               <span className="font-semibold text-foreground">{settings?.mode === "live" ? "LIVE" : "SIMULATION"}</span> mode for the 4-week pilot.
             </p>
           </div>
         </div>
         {settings && (
-          <div className="text-right text-xs">
+          <div className="text-left sm:text-right text-xs flex flex-row sm:flex-col items-center sm:items-end gap-2 sm:gap-0 flex-wrap">
             <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-stone-100 text-foreground font-medium">
               {settings.mode === "live" ? <Globe className="w-3.5 h-3.5" /> : <Cog className="w-3.5 h-3.5" />}
               {settings.mode === "live" ? "Live API" : "Simulated"}
             </div>
-            <div className="text-muted-foreground mt-1">Policy {settings.policyVersion}</div>
+            <div className="text-muted-foreground sm:mt-1">Policy {settings.policyVersion}</div>
             {settings.pilotEndsOn && <div className="text-muted-foreground">Pilot ends {settings.pilotEndsOn}</div>}
           </div>
         )}
       </div>
 
-      <div className="border-b border-stone-200 mb-6">
-        <nav className="flex gap-1">
+      <div className="border-b border-stone-200 mb-5 sm:mb-6 -mx-4 sm:mx-0 px-4 sm:px-0">
+        <nav className="flex gap-1 overflow-x-auto no-scrollbar">
           {TABS.map((t) => (
             <button key={t.key} onClick={() => setTab(t.key)}
-              className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+              className={`flex items-center gap-2 px-3 sm:px-4 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap flex-shrink-0 ${
                 tab === t.key
                   ? "border-primary text-primary"
                   : "border-transparent text-muted-foreground hover:text-foreground"
@@ -162,8 +162,8 @@ function ScreeningsTab() {
 
   return (
     <div className="space-y-5">
-      <div className="card p-4 flex items-end gap-3">
-        <div className="flex-1">
+      <div className="card p-4 flex flex-col sm:flex-row sm:items-end gap-3">
+        <div className="flex-1 min-w-0">
           <label className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">Run a new screening</label>
           <select value={pickDeal} onChange={(e) => setPickDeal(e.target.value)}
             className="w-full mt-1 px-3 py-2 border border-stone-300 rounded-md text-sm focus:outline-none focus:border-primary">
@@ -178,7 +178,7 @@ function ScreeningsTab() {
         <button
           onClick={() => pickDeal && run.mutate({ dealId: parseInt(pickDeal), userName: persona?.name })}
           disabled={!pickDeal || run.isPending}
-          className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-primary text-white text-sm font-medium hover:bg-primary/90 disabled:opacity-50">
+          className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-md bg-primary text-white text-sm font-medium hover:bg-primary/90 disabled:opacity-50 w-full sm:w-auto flex-shrink-0">
           {run.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <PlayCircle className="w-4 h-4" />}
           Run screening
         </button>
@@ -266,7 +266,7 @@ function SettingsTab() {
             settings.mode === "live" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"
           }`}>{settings.mode}</span>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <button onClick={() => set("mode", "simulated")}
             className={`px-3 py-1.5 text-xs rounded-md font-medium border ${
               settings.mode === "simulated" ? "bg-primary text-white border-primary" : "bg-white border-stone-300 text-foreground hover:bg-stone-50"
@@ -277,8 +277,8 @@ function SettingsTab() {
               settings.mode === "live" ? "bg-primary text-white border-primary" : "bg-white border-stone-300 text-foreground hover:bg-stone-50"
             }`}>Live API</button>
           {!settings.hasApiToken && (
-            <span className="text-[10px] text-muted-foreground inline-flex items-center gap-1">
-              <Lock className="w-3 h-3" /> Add INTAPP_API_TOKEN to enable live mode
+            <span className="text-[10px] text-muted-foreground inline-flex items-center gap-1 basis-full sm:basis-auto">
+              <Lock className="w-3 h-3 flex-shrink-0" /> Add INTAPP_API_TOKEN to enable live mode
             </span>
           )}
         </div>
@@ -361,7 +361,7 @@ function SettingsTab() {
           checked={!!settings.qrmNotifyOnConflict} onChange={(v) => set("qrmNotifyOnConflict", v)} />
         <div>
           <label className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">Channel</label>
-          <div className="mt-1 flex items-center gap-2">
+          <div className="mt-1 flex items-center gap-2 flex-wrap">
             {["email", "teams", "both", "none"].map((c) => (
               <button key={c} onClick={() => set("qrmNotifyChannel", c)}
                 className={`px-3 py-1.5 text-xs rounded-md font-medium border capitalize ${
@@ -373,7 +373,7 @@ function SettingsTab() {
           </div>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div className="col-span-2">
+          <div className="sm:col-span-2">
             <label className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">Recipients (comma-separated emails)</label>
             <input type="text" defaultValue={settings.qrmNotifyRecipients || ""}
               onBlur={(e) => set("qrmNotifyRecipients", e.target.value)}
@@ -383,7 +383,7 @@ function SettingsTab() {
               Pilot mode: emails are simulated-send (recorded in the audit log; no SMTP wired). Live cutover swaps in your firm's mail relay.
             </div>
           </div>
-          <div className="col-span-2">
+          <div className="sm:col-span-2">
             <label className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">
               Microsoft Teams incoming-webhook URL {settings.qrmTeamsWebhookMasked && <span className="text-emerald-700 normal-case">· stored ({settings.qrmTeamsWebhookUrl})</span>}
             </label>
@@ -400,7 +400,7 @@ function SettingsTab() {
               Clear stored webhook
             </button>
           </div>
-          <div className="col-span-2">
+          <div className="sm:col-span-2">
             <label className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">App base URL (used in deal links)</label>
             <input type="text" defaultValue={settings.appBaseUrl || ""}
               onBlur={(e) => set("appBaseUrl", e.target.value)}
