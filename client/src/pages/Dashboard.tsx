@@ -4,7 +4,7 @@ import { formatCurrency, formatPercent, getStatusColor, getStatusLabel } from "@
 import { Link } from "wouter";
 import { TrendingUp, DollarSign, AlertCircle, ArrowRight, FileText, ShieldCheck, Layers, Network, BarChart3, Shield, CheckCircle, Search, Sparkles, Lightbulb, RefreshCw, Briefcase, Settings2, ChevronDown, ChevronUp, ChevronsUpDown } from "lucide-react";
 import { useAuth, type PersonaRole } from "@/context/AuthContext";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AskDealPadAI } from "@/components/AskDealPadAI";
 
 const ROLE_ACCENT: Record<PersonaRole, { bg: string; border: string; text: string; badge: string }> = {
@@ -204,6 +204,23 @@ export function Dashboard() {
       setActiveTab(visibleTabs[0].key);
     }
   }, [visibleKeys, activeTab, visibleTabs]);
+
+  // Refresh dashboard data every time a tab is shown so users always see the
+  // latest pipeline / ops / AI numbers without needing a hard reload. The
+  // dashboard summary feeds every tab's KPI strip; pipeline needs the deals
+  // list; ops needs the Workday snapshot. Invalidating triggers a background
+  // refetch — cached values stay visible until fresh data arrives, so there's
+  // no flash of empty state.
+  const queryClient = useQueryClient();
+  useEffect(() => {
+    queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+    if (activeTab === "pipeline") {
+      queryClient.invalidateQueries({ queryKey: ["deals"] });
+    } else if (activeTab === "ops") {
+      queryClient.invalidateQueries({ queryKey: ["workday-dashboard"] });
+      queryClient.invalidateQueries({ queryKey: ["deals"] });
+    }
+  }, [activeTab, queryClient]);
 
   return (
     <div className="p-3 sm:p-6 max-w-[1600px] mx-auto">
