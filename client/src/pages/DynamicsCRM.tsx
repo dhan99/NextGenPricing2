@@ -48,7 +48,7 @@ export function DynamicsCRM() {
         <div className="min-w-0">
           <div className="flex items-center gap-2 mb-1">
             <Database className="w-4 h-4 text-primary" />
-            <span className="text-xs uppercase tracking-wider font-semibold text-muted-foreground">Integration · Pilot Simulation</span>
+            <span className="text-xs uppercase tracking-wider font-semibold text-muted-foreground">CRM Integration · Bi-directional Sync</span>
           </div>
           <h1 className="text-xl sm:text-2xl font-bold text-foreground">Microsoft Dynamics 365 CRM</h1>
           <p className="text-xs sm:text-sm text-muted-foreground mt-1">
