@@ -189,33 +189,45 @@ export function Dashboard() {
         </div>
       </div>
 
-      {/* Mobile-only compact header + primary CTA — sticky so context is preserved while scrolling */}
-      <div className="sm:hidden sticky top-0 z-20 bg-background -mx-3 px-3 pt-3 pb-3 -mt-3 mb-3 border-b border-border">
-        <div className="flex items-center justify-between gap-2 mb-3">
-          <h1 className="text-base font-bold text-foreground tracking-tight truncate">{greeting.title}</h1>
-          <span className={`text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full whitespace-nowrap ${accent.badge}`}>
+      {/* Mobile-only compact header — single row. The Topbar already provides search and a "+" New Deal button. */}
+      <div className="sm:hidden sticky top-0 z-20 bg-background -mx-3 px-3 pt-2.5 pb-2 -mt-3 mb-3 border-b border-border">
+        <div className="flex items-center justify-between gap-2">
+          <h1 className="text-[15px] font-bold text-foreground tracking-tight truncate">{greeting.title}</h1>
+          <span className={`shrink-0 text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full whitespace-nowrap ${accent.badge}`}>
             {persona?.role?.toUpperCase()}
           </span>
         </div>
-        {hasPermission("createDeal") && (
-          <Link href="/deals/new">
-            <button className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-primary text-primary-foreground text-sm font-semibold hover:opacity-90 transition-all">
-              <FileText className="w-4 h-4" />
-              New Deal
-            </button>
-          </Link>
-        )}
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4 mb-4 sm:mb-6">
+      {/* KPIs: mobile horizontal scroll of slim chips · desktop 4-col grid */}
+      <div className="sm:hidden flex items-stretch gap-2 overflow-x-auto -mx-3 px-3 pb-1 mb-3 snap-x snap-mandatory">
         {kpis.map((kpi) => {
           const content = (
-            <div className={`card p-3 sm:p-5 h-full flex flex-col transition-all ${kpi.href ? "hover:shadow-md hover:border-primary/30 cursor-pointer" : ""}`}>
-              <div className="flex items-center justify-between mb-1.5 sm:mb-3 gap-2">
-                <span className="text-[10px] sm:text-xs text-muted-foreground font-medium uppercase tracking-wider truncate">{kpi.label}</span>
-                <kpi.icon className={`w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0 ${accent.text}`} />
+            <div className="card p-2.5 min-w-[140px] snap-start flex flex-col">
+              <div className="flex items-center gap-1.5 mb-1">
+                <kpi.icon className={`w-3 h-3 shrink-0 ${accent.text}`} />
+                <span className="text-[9px] text-muted-foreground font-medium uppercase tracking-wider truncate">{kpi.label}</span>
               </div>
-              <p className={`text-base sm:text-2xl font-bold leading-tight ${kpi.valueClass || "text-foreground"}`}>{kpi.value}</p>
+              <p className={`text-base font-bold leading-tight ${kpi.valueClass || "text-foreground"}`}>{kpi.value}</p>
+            </div>
+          );
+          return kpi.href ? (
+            <Link key={kpi.label} href={kpi.href}>{content}</Link>
+          ) : (
+            <div key={kpi.label}>{content}</div>
+          );
+        })}
+      </div>
+
+      <div className="hidden sm:grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        {kpis.map((kpi) => {
+          const content = (
+            <div className={`card p-5 h-full flex flex-col transition-all ${kpi.href ? "hover:shadow-md hover:border-primary/30 cursor-pointer" : ""}`}>
+              <div className="flex items-center justify-between mb-3 gap-2">
+                <span className="text-xs text-muted-foreground font-medium uppercase tracking-wider truncate">{kpi.label}</span>
+                <kpi.icon className={`w-4 h-4 shrink-0 ${accent.text}`} />
+              </div>
+              <p className={`text-2xl font-bold leading-tight ${kpi.valueClass || "text-foreground"}`}>{kpi.value}</p>
             </div>
           );
           return kpi.href ? (
