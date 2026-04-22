@@ -3716,25 +3716,43 @@ function IntappCompliancePanel({ deal }: { deal: any }) {
     setShowOverride(false);
   };
 
+  // One-line summary for mobile collapsed state
+  const summaryLine = isBlocked
+    ? `Blocked · ${openHitCount} of ${allHits.length} unresolved`
+    : isOverridden
+      ? `Overridden by QRM · ${allHits.length} hit(s) on record`
+      : isMitigated
+        ? `Mitigated · ${allHits.length} hit(s) cleared`
+        : isReview
+          ? `${allHits.length} finding${allHits.length !== 1 ? "s" : ""} · ${openHitCount} open · may proceed with mitigations`
+          : isClear
+            ? "No compliance issues found"
+            : "Awaiting screening";
+
   return (
-    <div className={`card p-5 border ${banner.cls}`}>
-      <div className="flex items-start gap-3 mb-3">
-        {banner.icon}
+    <div className={`card p-3 sm:p-5 border ${banner.cls}`}>
+      <div className="flex items-start gap-2 sm:gap-3 mb-2 sm:mb-3">
+        <div className="shrink-0 mt-0.5 sm:mt-0">{banner.icon}</div>
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <h3 className="text-sm font-semibold text-foreground">{banner.title}</h3>
-            <IntappResultBadge result={screening.result} />
-            <IntappRiskBadge tier={screening.riskTier} />
-            <IntappSourceBadge source={screening.source} />
-            {screening.externalRef && <span className="text-[10px] font-mono text-muted-foreground">{screening.externalRef}</span>}
+          <div className="flex items-start sm:items-center gap-1.5 sm:gap-2 flex-wrap">
+            <h3 className="text-[13px] sm:text-sm font-semibold text-foreground leading-snug">{banner.title}</h3>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <IntappResultBadge result={screening.result} />
+              <IntappRiskBadge tier={screening.riskTier} />
+              <span className="hidden sm:inline-flex"><IntappSourceBadge source={screening.source} /></span>
+              {screening.externalRef && <span className="hidden sm:inline text-[10px] font-mono text-muted-foreground">{screening.externalRef}</span>}
+            </div>
           </div>
-          <p className="text-xs text-muted-foreground mt-1.5 whitespace-pre-line">{screening.narrative}</p>
+          {/* Mobile: 1-line summary. Desktop: full narrative. */}
+          <p className="sm:hidden text-[11px] text-muted-foreground mt-1 line-clamp-2">{summaryLine}</p>
+          <p className="hidden sm:block text-xs text-muted-foreground mt-1.5 whitespace-pre-line">{screening.narrative}</p>
         </div>
         <button onClick={() => runScreen.mutate({ dealId: deal.id, userName: persona?.name })}
           disabled={runScreen.isPending}
-          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-white border border-stone-300 text-xs font-medium hover:bg-stone-50 disabled:opacity-50">
+          title="Re-screen"
+          className="shrink-0 inline-flex items-center gap-1.5 px-2 sm:px-2.5 py-1.5 rounded-md bg-white border border-stone-300 text-xs font-medium hover:bg-stone-50 disabled:opacity-50">
           {runScreen.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
-          Re-screen
+          <span className="hidden sm:inline">Re-screen</span>
         </button>
       </div>
 
