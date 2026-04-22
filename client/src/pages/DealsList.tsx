@@ -382,41 +382,42 @@ export function DealsList() {
 
 function LatestOpportunitiesPanel({ search }: { search: string }) {
   const { data: opps = [], isLoading } = useDynamicsOpportunities();
-  const { hasPermission, persona } = useAuth();
-  const importOpp = useImportOpportunity();
   const [, navigate] = useLocation();
-  const [busyId, setBusyId] = useState<number | null>(null);
 
-  const sorted = [...(opps as any[])]
+  const importedSorted = [...(opps as any[])]
+    .filter((o) => !!o.dealpadDeal)
     .filter((o) => {
       if (!search) return true;
       const q = search.toLowerCase();
       return (o.name || "").toLowerCase().includes(q)
         || (o.accountName || "").toLowerCase().includes(q)
-        || (o.opportunityNumber || "").toLowerCase().includes(q);
+        || (o.opportunityNumber || "").toLowerCase().includes(q)
+        || (o.dealpadDeal?.dealNumber || "").toLowerCase().includes(q);
     })
-    .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime())
+    .sort((a, b) => {
+      const ad = new Date(a.dealpadDeal?.updatedAt || a.createdAt || 0).getTime();
+      const bd = new Date(b.dealpadDeal?.updatedAt || b.createdAt || 0).getTime();
+      return bd - ad;
+    })
     .slice(0, 5);
 
-  const stageColor = (stage: string) => {
-    switch (stage) {
-      case "Qualify": return "bg-stone-100 text-stone-700 border-stone-200";
-      case "Develop": return "bg-amber-50 text-amber-700 border-amber-200";
-      case "Propose": return "bg-blue-50 text-blue-700 border-blue-200";
-      case "Close": return "bg-emerald-50 text-emerald-700 border-emerald-200";
-      case "Won": return "bg-emerald-100 text-emerald-800 border-emerald-300";
-      case "Lost": return "bg-red-50 text-red-700 border-red-200";
-      default: return "bg-stone-100 text-stone-700 border-stone-200";
-    }
-  };
-
-  const handleImport = async (opp: any) => {
-    setBusyId(opp.id);
-    try {
-      const result: any = await importOpp.mutateAsync({ id: opp.id, userName: persona?.name });
-      if (result?.dealId) navigate(`/deals/${result.dealId}`);
-    } finally {
-      setBusyId(null);
+  // Routes the user to the correct screen for this deal's lifecycle stage.
+  // The wizard and the deal detail share /deals/:id and DealDetail auto-
+  // navigates to the deal's currentStep, so the destination is the same;
+  // we still keep an explicit hint string for the tooltip/CTA copy.
+  const destFor = (status: string) => {
+    switch (status) {
+      case "draft":
+      case "in_progress":
+      case "pendingReviewAgent":
+        return { label: "Open in wizard", icon: Sparkles };
+      case "submitted":
+        return { label: "Open approval queue", icon: FileText };
+      case "approved":
+      case "rejected":
+        return { label: "Open deal summary", icon: FileText };
+      default:
+        return { label: "Open deal", icon: FileText };
     }
   };
 
@@ -426,8 +427,8 @@ function LatestOpportunitiesPanel({ search }: { search: string }) {
         <div className="flex items-center gap-2">
           <Database className="w-4 h-4 text-blue-600" />
           <div>
-            <h3 className="text-sm font-semibold text-foreground">Latest Dynamics 365 opportunities</h3>
-            <p className="text-[11px] text-muted-foreground">5 most recent opportunities synced from CRM (newest first)</p>
+            <h3 className="text-sm font-semibold text-foreground">Latest opportunities added to DealPad</h3>
+            <p className="text-[11px] text-muted-foreground">5 most recently updated D365 opportunities that have been imported as DealPad deals</p>
           </div>
         </div>
         <Link href="/integrations/dynamics">
@@ -437,23 +438,39 @@ function LatestOpportunitiesPanel({ search }: { search: string }) {
 
       {isLoading ? (
         <div className="p-10 text-center text-sm text-muted-foreground"><Loader2 className="w-4 h-4 animate-spin inline mr-2" />Loading opportunities…</div>
-      ) : sorted.length === 0 ? (
-        <div className="p-10 text-center text-sm text-muted-foreground">No Dynamics opportunities found.</div>
+      ) : importedSorted.length === 0 ? (
+        <div className="p-10 text-center text-sm text-muted-foreground">
+          No D365 opportunities have been imported into DealPad yet.
+          <div className="mt-2"><Link href="/integrations/dynamics"><span className="text-primary hover:underline cursor-pointer">Import one from the CRM →</span></Link></div>
+        </div>
       ) : (
         <ul className="divide-y divide-border">
-          {sorted.map((o: any) => {
+          {importedSorted.map((o: any) => {
             const value = typeof o.estimatedValue === "number" ? o.estimatedValue : parseFloat(o.estimatedValue || "0");
-            const linked = !!o.dealpadDeal;
-            const dealId = o.dealpadDeal?.id;
+            const dp = o.dealpadDeal;
+            const dest = destFor(dp.status);
+            const Icon = dest.icon;
+            const open = () => navigate(`/deals/${dp.id}`);
             return (
-              <li key={o.id} className="px-4 sm:px-6 py-4 hover:bg-muted/30 transition-colors">
+              <li
+                key={o.id}
+                onClick={open}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); } }}
+                className="px-4 sm:px-6 py-4 hover:bg-muted/30 transition-colors cursor-pointer focus:bg-muted/40 focus:outline-none"
+              >
                 <div className="flex items-start gap-4 flex-wrap sm:flex-nowrap">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <p className="text-sm font-medium text-foreground truncate">{o.name}</p>
-                      <span className={`inline-flex items-center text-[10px] font-medium uppercase tracking-wider px-1.5 py-0.5 rounded border ${stageColor(o.stage)}`}>
-                        {o.stage}
-                      </span>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); open(); }}
+                        title={dest.label}
+                        className={`badge ${getStatusColor(dp.status)} hover:ring-2 hover:ring-primary/40 transition-shadow cursor-pointer`}
+                      >
+                        {getStatusLabel(dp.status)}
+                      </button>
                       {o.scopeTemplate && (
                         <span className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200">
                           <Sparkles className="w-2.5 h-2.5" /> {o.scopeTemplate.serviceLine}
@@ -461,39 +478,33 @@ function LatestOpportunitiesPanel({ search }: { search: string }) {
                       )}
                     </div>
                     <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground flex-wrap">
-                      <span className="font-mono">{o.opportunityNumber}</span>
+                      <span className="font-mono">{dp.dealNumber}</span>
+                      <span>·</span>
+                      <span title="Linked Dynamics opportunity" className="inline-flex items-center gap-1">
+                        <Database className="w-3 h-3 text-blue-500" /> {o.opportunityNumber}
+                      </span>
                       <span>·</span>
                       <span>{o.accountName}</span>
                       <span>·</span>
-                      <span>{o.ownerName || "Unassigned"}</span>
+                      <span>{dp.pdlName || o.ownerName || "Unassigned"}</span>
                       {o.estimatedCloseDate && (<><span>·</span><span>Close {o.estimatedCloseDate}</span></>)}
                     </div>
                   </div>
                   <div className="flex items-center gap-4 sm:gap-6 shrink-0">
                     <div className="text-right">
-                      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Est. value</div>
-                      <div className="text-sm font-semibold text-foreground">{formatCurrency(value)}</div>
+                      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Fee</div>
+                      <div className="text-sm font-semibold text-foreground">{formatCurrency(dp.totalFee || value)}</div>
                     </div>
                     <div className="text-right hidden sm:block">
-                      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Probability</div>
-                      <div className="text-sm font-semibold text-foreground">{o.probability ?? 0}%</div>
+                      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Margin</div>
+                      <div className="text-sm font-semibold text-foreground">{formatPercent(dp.marginPercent || 0)}</div>
                     </div>
-                    {linked ? (
-                      <button onClick={() => navigate(`/deals/${dealId}`)} className="btn-ghost text-xs whitespace-nowrap">
-                        <FileText className="w-3.5 h-3.5" /> {o.dealpadDeal.dealNumber}
-                      </button>
-                    ) : hasPermission("createDeals") ? (
-                      <button
-                        onClick={() => handleImport(o)}
-                        disabled={busyId === o.id}
-                        className="btn-primary text-xs whitespace-nowrap disabled:opacity-50"
-                      >
-                        {busyId === o.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ArrowDownToLine className="w-3.5 h-3.5" />}
-                        Import as deal
-                      </button>
-                    ) : (
-                      <span className="text-[11px] text-muted-foreground italic">Not linked</span>
-                    )}
+                    <button
+                      onClick={(e) => { e.stopPropagation(); open(); }}
+                      className="btn-ghost text-xs whitespace-nowrap"
+                    >
+                      <Icon className="w-3.5 h-3.5" /> {dest.label}
+                    </button>
                   </div>
                 </div>
               </li>
