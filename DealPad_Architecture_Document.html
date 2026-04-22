@@ -125,7 +125,24 @@
   .diagram-container .mermaid {
     display: flex;
     justify-content: center;
+    background: #ffffff;
+    border-radius: 8px;
+    padding: 12px;
   }
+  /* Mermaid sometimes inherits a dark background from the user agent's
+     dark color-scheme; force a white SVG canvas + dark text so sequence
+     diagram message labels remain legible. */
+  .diagram-container .mermaid svg { background: #ffffff !important; }
+  .diagram-container .mermaid .messageText,
+  .diagram-container .mermaid .labelText,
+  .diagram-container .mermaid .loopText,
+  .diagram-container .mermaid .noteText,
+  .diagram-container .mermaid text.actor,
+  .diagram-container .mermaid .actor > tspan { fill: #1c1917 !important; color: #1c1917 !important; }
+  .diagram-container .mermaid .messageLine0,
+  .diagram-container .mermaid .messageLine1 { stroke: #1c1917 !important; }
+  .diagram-container .mermaid .actor { stroke: #57534e !important; fill: #ffffff !important; }
+  .diagram-container .mermaid line.actor-line { stroke: #a8a29e !important; }
   .diagram-label {
     font-size: 12px;
     color: var(--muted);
