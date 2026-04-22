@@ -157,21 +157,31 @@ async function renderLetterPdf(args: {
   doc.moveTo(64, 110).lineTo(548, 110).lineWidth(2).strokeColor(ORANGE).stroke();
 
   // ---- Salutation block
+  // Reset cursor to the left margin — the doc-ref block above wrote at x=360
+  // with a narrow width, and PDFKit would otherwise inherit those values for
+  // every paragraph below, squeezing the body text into a thin right column.
+  const BODY_X = 64;
+  const BODY_W = 484;
+  doc.x = BODY_X;
   doc.y = 124;
-  doc.fillColor(STONE_900).font("Helvetica-Bold").fontSize(11).text(client.name || "Client");
+  doc.fillColor(STONE_900).font("Helvetica-Bold").fontSize(11)
+     .text(client.name || "Client", BODY_X, doc.y, { width: BODY_W });
   doc.font("Helvetica").fontSize(10).fillColor(STONE_600);
   if (client.contactName || client.contactEmail) {
-    doc.text(`${client.contactName || ""}${client.contactName && client.contactEmail ? ", " : ""}${client.contactEmail || ""}`);
+    doc.text(
+      `${client.contactName || ""}${client.contactName && client.contactEmail ? ", " : ""}${client.contactEmail || ""}`,
+      BODY_X, doc.y, { width: BODY_W }
+    );
   }
-  if (client.region) doc.text(client.region);
+  if (client.region) doc.text(client.region, BODY_X, doc.y, { width: BODY_W });
   doc.moveDown(0.8);
 
   doc.fillColor(STONE_900).font("Helvetica").fontSize(10)
-     .text(`Dear ${client.contactName || "Client"},`);
+     .text(`Dear ${client.contactName || "Client"},`, BODY_X, doc.y, { width: BODY_W });
   doc.moveDown(0.4);
   doc.text(
     `Armanino LLP ("Armanino", "we") is pleased to confirm the terms of our engagement to perform `,
-    { continued: true }
+    BODY_X, doc.y, { width: BODY_W, continued: true }
   );
   doc.font("Helvetica-Bold").text(cleanTitle, { continued: true });
   doc.font("Helvetica").text(
@@ -210,21 +220,25 @@ async function renderLetterPdf(args: {
     doc.fillColor(STONE_900).font("Helvetica-Bold").fontSize(10)
        .text(row[1], x + 100, y - 1, { width: 130, height: 14, lineBreak: false, ellipsis: true });
   });
+  doc.x = BODY_X;
   doc.y = cardY + cardH + 18;
 
   // ---- Standard clauses
   const clauses = Array.isArray(template.clauses) ? template.clauses : [];
   for (const c of clauses) {
-    if (doc.y > 680) doc.addPage();
-    doc.fillColor(STONE_900).font("Helvetica-Bold").fontSize(10).text((c.heading || "").toUpperCase(), { characterSpacing: 1 });
+    if (doc.y > 680) { doc.addPage(); doc.x = BODY_X; }
+    doc.fillColor(STONE_900).font("Helvetica-Bold").fontSize(10)
+       .text((c.heading || "").toUpperCase(), BODY_X, doc.y, { width: BODY_W, characterSpacing: 1 });
     doc.moveDown(0.2);
-    doc.fillColor(STONE_900).font("Helvetica").fontSize(10).text(c.body || "", { lineGap: 2, align: "justify" });
+    doc.fillColor(STONE_900).font("Helvetica").fontSize(10)
+       .text(c.body || "", BODY_X, doc.y, { width: BODY_W, lineGap: 2, align: "justify" });
     doc.moveDown(0.8);
   }
 
   // ---- Engagement Team table
-  if (doc.y > 600) doc.addPage();
-  doc.fillColor(STONE_900).font("Helvetica-Bold").fontSize(10).text("ENGAGEMENT TEAM & ESTIMATED HOURS", { characterSpacing: 1 });
+  if (doc.y > 600) { doc.addPage(); doc.x = BODY_X; }
+  doc.fillColor(STONE_900).font("Helvetica-Bold").fontSize(10)
+     .text("ENGAGEMENT TEAM & ESTIMATED HOURS", BODY_X, doc.y, { width: BODY_W, characterSpacing: 1 });
   doc.moveDown(0.4);
   const tx = 64;
   const colWidths = [240, 80, 80, 84];
