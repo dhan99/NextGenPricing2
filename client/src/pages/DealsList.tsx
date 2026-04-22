@@ -1,15 +1,17 @@
-import { useDeals, useArchiveDeal, useRestoreDeal } from "@/hooks/use-api";
+import { useDeals, useArchiveDeal, useRestoreDeal, useDynamicsOpportunities, useImportOpportunity } from "@/hooks/use-api";
 import { formatCurrency, formatPercent, getStatusColor, getStatusLabel } from "@/lib/utils";
 import { Link } from "wouter";
 import { useState } from "react";
-import { Search, FileText, Plus, LayoutGrid, List, Filter, Copy, RefreshCw, MoreVertical, Loader2, Archive, ArchiveRestore, Database, Unlink } from "lucide-react";
+import { Search, FileText, Plus, LayoutGrid, List, Filter, Copy, RefreshCw, MoreVertical, Loader2, Archive, ArchiveRestore, Database, Unlink, Sparkles, ArrowDownToLine } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { useCloneDeal } from "@/hooks/use-api";
 import { useLocation } from "wouter";
 import { SortableTH, useTableSort } from "@/components/SortableHeader";
 
+type ArchiveView = "active" | "archived" | "all" | "opportunities";
+
 export function DealsList() {
-  const [archiveView, setArchiveView] = useState<"active" | "archived" | "all">("active");
+  const [archiveView, setArchiveView] = useState<ArchiveView>("active");
   const { data: deals, isLoading } = useDeals({
     includeArchived: archiveView === "all",
     onlyArchived: archiveView === "archived",
@@ -125,12 +127,13 @@ export function DealsList() {
             ))}
           </div>
           <div className="flex items-center gap-1 bg-muted rounded-lg p-0.5">
-            {(["active", "archived", "all"] as const).map((v) => (
+            {(["active", "archived", "all", "opportunities"] as const).map((v) => (
               <button key={v} onClick={() => setArchiveView(v)}
-                className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors flex items-center gap-1.5 ${
                   archiveView === v ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
                 }`}>
-                {v === "active" ? "Active" : v === "archived" ? "Archived" : "All"}
+                {v === "opportunities" && <Database className="w-3 h-3" />}
+                {v === "active" ? "Active" : v === "archived" ? "Archived" : v === "all" ? "All" : "Latest Opportunities"}
               </button>
             ))}
           </div>
@@ -181,19 +184,21 @@ export function DealsList() {
               </button>
             ))}
             <span className="shrink-0 w-px h-4 bg-border mx-1" aria-hidden="true" />
-            {(["active", "archived", "all"] as const).map((v) => (
+            {(["active", "archived", "all", "opportunities"] as const).map((v) => (
               <button key={v} onClick={() => setArchiveView(v)}
                 className={`shrink-0 px-2.5 py-1 rounded-full text-[11px] font-medium border transition-colors ${
                   archiveView === v ? "bg-primary text-primary-foreground border-primary" : "bg-card text-muted-foreground border-border"
                 }`}>
-                {v === "active" ? "Active" : v === "archived" ? "Archived" : "All states"}
+                {v === "active" ? "Active" : v === "archived" ? "Archived" : v === "all" ? "All states" : "Latest opps"}
               </button>
             ))}
           </div>
         </div>
       </div>
 
-      {viewMode === "table" ? (
+      {archiveView === "opportunities" ? (
+        <LatestOpportunitiesPanel search={search} />
+      ) : viewMode === "table" ? (
         <div className="card overflow-x-auto hidden md:block">
           <table className="w-full min-w-[640px]">
             <thead>
@@ -370,6 +375,131 @@ export function DealsList() {
             </Link>
           ))}
         </div>
+      )}
+    </div>
+  );
+}
+
+function LatestOpportunitiesPanel({ search }: { search: string }) {
+  const { data: opps = [], isLoading } = useDynamicsOpportunities();
+  const { hasPermission, persona } = useAuth();
+  const importOpp = useImportOpportunity();
+  const [, navigate] = useLocation();
+  const [busyId, setBusyId] = useState<number | null>(null);
+
+  const sorted = [...(opps as any[])]
+    .filter((o) => {
+      if (!search) return true;
+      const q = search.toLowerCase();
+      return (o.name || "").toLowerCase().includes(q)
+        || (o.accountName || "").toLowerCase().includes(q)
+        || (o.opportunityNumber || "").toLowerCase().includes(q);
+    })
+    .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime())
+    .slice(0, 5);
+
+  const stageColor = (stage: string) => {
+    switch (stage) {
+      case "Qualify": return "bg-stone-100 text-stone-700 border-stone-200";
+      case "Develop": return "bg-amber-50 text-amber-700 border-amber-200";
+      case "Propose": return "bg-blue-50 text-blue-700 border-blue-200";
+      case "Close": return "bg-emerald-50 text-emerald-700 border-emerald-200";
+      case "Won": return "bg-emerald-100 text-emerald-800 border-emerald-300";
+      case "Lost": return "bg-red-50 text-red-700 border-red-200";
+      default: return "bg-stone-100 text-stone-700 border-stone-200";
+    }
+  };
+
+  const handleImport = async (opp: any) => {
+    setBusyId(opp.id);
+    try {
+      const result: any = await importOpp.mutateAsync({ id: opp.id, userName: persona?.name });
+      if (result?.dealId) navigate(`/deals/${result.dealId}`);
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  return (
+    <div className="card overflow-hidden">
+      <div className="px-4 sm:px-6 py-3 border-b border-border flex items-center justify-between bg-muted/30">
+        <div className="flex items-center gap-2">
+          <Database className="w-4 h-4 text-blue-600" />
+          <div>
+            <h3 className="text-sm font-semibold text-foreground">Latest Dynamics 365 opportunities</h3>
+            <p className="text-[11px] text-muted-foreground">5 most recent opportunities synced from CRM (newest first)</p>
+          </div>
+        </div>
+        <Link href="/integrations/dynamics">
+          <span className="text-xs text-primary hover:underline cursor-pointer whitespace-nowrap">View all in CRM →</span>
+        </Link>
+      </div>
+
+      {isLoading ? (
+        <div className="p-10 text-center text-sm text-muted-foreground"><Loader2 className="w-4 h-4 animate-spin inline mr-2" />Loading opportunities…</div>
+      ) : sorted.length === 0 ? (
+        <div className="p-10 text-center text-sm text-muted-foreground">No Dynamics opportunities found.</div>
+      ) : (
+        <ul className="divide-y divide-border">
+          {sorted.map((o: any) => {
+            const value = typeof o.estimatedValue === "number" ? o.estimatedValue : parseFloat(o.estimatedValue || "0");
+            const linked = !!o.dealpadDeal;
+            const dealId = o.dealpadDeal?.id;
+            return (
+              <li key={o.id} className="px-4 sm:px-6 py-4 hover:bg-muted/30 transition-colors">
+                <div className="flex items-start gap-4 flex-wrap sm:flex-nowrap">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="text-sm font-medium text-foreground truncate">{o.name}</p>
+                      <span className={`inline-flex items-center text-[10px] font-medium uppercase tracking-wider px-1.5 py-0.5 rounded border ${stageColor(o.stage)}`}>
+                        {o.stage}
+                      </span>
+                      {o.scopeTemplate && (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200">
+                          <Sparkles className="w-2.5 h-2.5" /> {o.scopeTemplate.serviceLine}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground flex-wrap">
+                      <span className="font-mono">{o.opportunityNumber}</span>
+                      <span>·</span>
+                      <span>{o.accountName}</span>
+                      <span>·</span>
+                      <span>{o.ownerName || "Unassigned"}</span>
+                      {o.estimatedCloseDate && (<><span>·</span><span>Close {o.estimatedCloseDate}</span></>)}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-4 sm:gap-6 shrink-0">
+                    <div className="text-right">
+                      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Est. value</div>
+                      <div className="text-sm font-semibold text-foreground">{formatCurrency(value)}</div>
+                    </div>
+                    <div className="text-right hidden sm:block">
+                      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Probability</div>
+                      <div className="text-sm font-semibold text-foreground">{o.probability ?? 0}%</div>
+                    </div>
+                    {linked ? (
+                      <button onClick={() => navigate(`/deals/${dealId}`)} className="btn-ghost text-xs whitespace-nowrap">
+                        <FileText className="w-3.5 h-3.5" /> {o.dealpadDeal.dealNumber}
+                      </button>
+                    ) : hasPermission("createDeals") ? (
+                      <button
+                        onClick={() => handleImport(o)}
+                        disabled={busyId === o.id}
+                        className="btn-primary text-xs whitespace-nowrap disabled:opacity-50"
+                      >
+                        {busyId === o.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ArrowDownToLine className="w-3.5 h-3.5" />}
+                        Import as deal
+                      </button>
+                    ) : (
+                      <span className="text-[11px] text-muted-foreground italic">Not linked</span>
+                    )}
+                  </div>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
       )}
     </div>
   );
