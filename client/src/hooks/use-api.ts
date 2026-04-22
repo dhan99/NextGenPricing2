@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
-async function fetchApi(url: string, options?: RequestInit) {
+export async function fetchApi(url: string, options?: RequestInit) {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     ...((options?.headers as Record<string, string>) || {}),

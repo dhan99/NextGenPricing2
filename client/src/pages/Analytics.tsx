@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, CartesianGrid, Legend } from "recharts";
 import { TrendingUp, DollarSign, Clock, Target, Award, BarChart3, Activity, Layers } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
-import { useMarginTargets } from "@/hooks/use-api";
+import { useMarginTargets, fetchApi } from "@/hooks/use-api";
 
 function firmTargetFromResponse(resp: any): number {
   if (resp && typeof resp.firmDefault === "number") return resp.firmDefault;
@@ -16,13 +16,9 @@ const STATUS_COLORS: Record<string, string> = { draft: "#a8a29e", submitted: "#d
 export function Analytics() {
   const { data: targetData } = useMarginTargets();
   const firmTarget = firmTargetFromResponse(targetData);
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, error } = useQuery({
     queryKey: ["analytics"],
-    queryFn: async () => {
-      const res = await fetch("/api/analytics/overview");
-      if (!res.ok) throw new Error("Failed to fetch analytics");
-      return res.json();
-    },
+    queryFn: () => fetchApi("/api/analytics/overview"),
   });
 
   if (isLoading) {
@@ -41,7 +37,16 @@ export function Analytics() {
     );
   }
 
-  if (!data) return null;
+  if (error || !data) {
+    return (
+      <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto">
+        <h1 className="text-2xl font-bold text-foreground tracking-tight mb-2">Analytics</h1>
+        <div className="card p-6 text-sm text-stone-600">
+          Unable to load analytics right now. Please try again in a moment.
+        </div>
+      </div>
+    );
+  }
 
   const { summary, pipelineSummary, serviceLineBreakdown, marginDistribution, complexityBreakdown, monthlyTrend } = data;
 
