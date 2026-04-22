@@ -90,7 +90,7 @@ export const PERSONAS: Record<PersonaRole, Persona> = {
       viewPricing: true,
       editPricing: false,
       viewMargins: true,
-      viewRiskSummary: false,
+      viewRiskSummary: true,
       viewArchitecture: true,
       viewDashboard: true,
       runAI: false,

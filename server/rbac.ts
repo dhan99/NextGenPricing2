@@ -36,7 +36,7 @@ export const PERMISSIONS_BY_ROLE: Record<PersonaRole, Record<PermissionKey, bool
     createDeals: false, editDeals: false, viewDeals: true, approveDeals: false,
     manageRateCards: true, manageScopeCatalog: true,
     viewPricing: true, editPricing: false,
-    viewMargins: true, viewRiskSummary: false,
+    viewMargins: true, viewRiskSummary: true,
     viewArchitecture: true, viewDashboard: true, runAI: false,
   },
   fin: {
