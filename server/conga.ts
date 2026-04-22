@@ -272,15 +272,17 @@ async function renderLetterPdf(args: {
   doc.y = rowY + 12;
 
   if (deal.notes) {
-    if (doc.y > 640) doc.addPage();
-    doc.fillColor(STONE_900).font("Helvetica-Bold").fontSize(10).text("ENGAGEMENT NOTES", { characterSpacing: 1 });
+    if (doc.y > 640) { doc.addPage(); doc.x = BODY_X; }
+    doc.fillColor(STONE_900).font("Helvetica-Bold").fontSize(10)
+       .text("ENGAGEMENT NOTES", BODY_X, doc.y, { width: BODY_W, characterSpacing: 1 });
     doc.moveDown(0.2);
-    doc.font("Helvetica").fontSize(10).text(deal.notes, { lineGap: 2 });
+    doc.font("Helvetica").fontSize(10)
+       .text(deal.notes, BODY_X, doc.y, { width: BODY_W, lineGap: 2 });
     doc.moveDown(0.8);
   }
 
   // ---- Signature blocks
-  if (doc.y > 600) doc.addPage();
+  if (doc.y > 600) { doc.addPage(); doc.x = BODY_X; }
   const sigY = doc.y + 24;
   const sigCols = [
     { x: 64, label: `ACCEPTED BY ${(client.name || "CLIENT").toUpperCase()}`, name: "Name, Title" },
