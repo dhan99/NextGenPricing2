@@ -25,18 +25,7 @@ function inferScreen(path: string): ScreenInfo {
   return { screen: "global", screenLabel: "DealPad" };
 }
 
-const SCREENS_WITH_INLINE = new Set([
-  "dashboard",
-  "renewal-leadsheet",
-  "wizard-setup",
-  "wizard-scope",
-  "wizard-assumptions",
-  "wizard-pricing",
-  "wizard-scenarios",
-  "wizard-review",
-  "wizard-approval",
-  "wizard-summary",
-]);
+const SCREENS_WITH_INLINE = new Set<string>([]);
 
 export function GlobalAskAI() {
   const [location] = useLocation();
