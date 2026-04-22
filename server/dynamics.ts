@@ -277,6 +277,20 @@ async function pushDealToDynamics(dealId: number, actorName: string | undefined,
 export function tmplKey(name: string): string | null {
   const n = (name || "").toLowerCase();
   if (n.includes("audit")) return "Annual Audit";
+  // Complex Tax cues (Pillar 2, transfer pricing, ASC 740, M&A tax DD,
+  // indirect tax transformation, multi-jurisdiction, controversy) route to
+  // the parametric Complex Tax template. Order matters — these checks
+  // precede the simpler "tax provision" / "tax outsourc" cue from Task #30
+  // so a multi-jurisdiction provision still lands on the complex template.
+  if (
+    n.includes("pillar 2") || n.includes("pillar two") || n.includes("globe") ||
+    n.includes("transfer pricing") || n.includes("asc 740") || n.includes("ias 12") ||
+    n.includes("m&a tax") || n.includes("tax due diligence") || n.includes("tax dd") ||
+    n.includes("indirect tax transformation") || n.includes("vat transformation") ||
+    n.includes("multi-jurisdiction") || n.includes("multi jurisdiction") ||
+    n.includes("complex tax") ||
+    (n.includes("controversy") && n.includes("tax"))
+  ) return "Complex Tax Engagement";
   if (n.includes("tax provision") || n.includes("tax outsourc")) return "Tax Provision Outsourcing";
   if (
     n.includes("erp") ||
@@ -348,6 +362,10 @@ const SCOPE_TEMPLATES: Record<string, { businessUnit: string; serviceLine: strin
   "Tax Provision Outsourcing": {
     businessUnit: "Tax Services", serviceLine: "Tax Planning", complexity: "medium",
     scopeNotes: "Quarterly tax provision support + year-end true-up. Multi-state, ~600 hours/year.",
+  },
+  "Complex Tax Engagement": {
+    businessUnit: "Tax Services", serviceLine: "Tax-Corporate", complexity: "very_high",
+    scopeNotes: "Multi-workstream complex Tax engagement — Direct/Provision (ASC 740), Indirect, Transfer Pricing, International (Pillar 2), Controversy and M&A Tax DD. Parametric scope scales with legal entities, jurisdictions, return counts and intercompany transactions; senior-heavy Tax pyramid; recurring fixed-fee + project T&M roll-up.",
   },
   "ERP Implementation": {
     businessUnit: "Technology Consulting", serviceLine: "ERP Implementation", complexity: "high",

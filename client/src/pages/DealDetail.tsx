@@ -677,7 +677,7 @@ function ScopeStep({ deal }: { deal: any }) {
               return <p className="text-xs text-muted-foreground">Add scope items to see the calculated preview.</p>;
             }
             const total = billable.reduce((sum: number, si: any) => {
-              const qty = si.quantity || 1;
+              const qty = si.quantity ?? 1;
               const baseHrs = parseFloat(si.adjustedHours || si.scopeItem?.defaultHours || "0");
               const mult = parseFloat(si.complexityMultiplier || "1");
               return sum + baseHrs * qty * mult;
@@ -686,7 +686,7 @@ function ScopeStep({ deal }: { deal: any }) {
               <>
                 <div className="space-y-2.5">
                   {billable.map((si: any) => {
-                    const qty = si.quantity || 1;
+                    const qty = si.quantity ?? 1;
                     const baseHrs = parseFloat(si.adjustedHours || si.scopeItem?.defaultHours || "0");
                     const mult = parseFloat(si.complexityMultiplier || "1");
                     const totalHrs = baseHrs * qty * mult;
@@ -1050,6 +1050,15 @@ function EngagementInputsCard({ deal }: { deal: any }) {
                     <option key={opt} value={opt}>{opt}</option>
                   ))}
                 </select>
+              ) : f.type === "text" ? (
+                <input
+                  type="text"
+                  value={value}
+                  onChange={(e) => setField(f.key, e.target.value)}
+                  onBlur={(e) => commitField(f.key, e.target.value)}
+                  disabled={updateDeal.isPending}
+                  className="w-full px-3 py-2 text-sm rounded-lg border border-border bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+                />
               ) : (
                 <div className="relative">
                   {f.prefix && (
@@ -1089,7 +1098,7 @@ function ScopeBreakdownPanel({ dealId, pricingLines }: { dealId: number; pricing
   const lines = pricingLines || [];
 
   const totalScopeHours = items.reduce(
-    (s: number, i: any) => s + parseFloat(i.adjustedHours || 0) * parseFloat(i.complexityMultiplier || 1) * (i.quantity || 1),
+    (s: number, i: any) => s + parseFloat(i.adjustedHours || 0) * parseFloat(i.complexityMultiplier || 1) * (i.quantity ?? 1),
     0
   );
   const roleHourTotals: Record<number, number> = {};
@@ -1103,10 +1112,29 @@ function ScopeBreakdownPanel({ dealId, pricingLines }: { dealId: number; pricing
     if (!groups[prefix]) groups[prefix] = [];
     groups[prefix].push(item);
   });
+  // Tax codes are namespaced as TAX-DIR-*, TAX-IND-*, TAX-TP-*, TAX-INT-*,
+  // TAX-CON-*, TAX-MA-*, TAX-PMO-*. Re-bucket those by their second segment
+  // so workstream subtotals appear in the panel for Complex Tax engagements.
+  const taxGroups: Record<string, any[]> = {};
+  Object.keys(groups).forEach((g) => {
+    if (g === "TAX") {
+      groups[g].forEach((it) => {
+        const code: string = it.scopeItem?.code || it.code || "";
+        const parts = code.split("-");
+        const sub = parts.length >= 3 ? `TAX-${parts[1]}` : "TAX";
+        if (!taxGroups[sub]) taxGroups[sub] = [];
+        taxGroups[sub].push(it);
+      });
+      delete groups[g];
+    }
+  });
+  Object.assign(groups, taxGroups);
+
   const groupOrder = [
     // SAP Activate phases — render in canonical order so reviewers see
     // Prepare → Explore → Realize → Deploy → Run for ERP deals.
     "ERPPREP", "ERPEXPL", "ERPRLZE", "ERPDPLY", "ERPRUN",
+    "TAX-DIR", "TAX-IND", "TAX-TP", "TAX-INT", "TAX-CON", "TAX-MA", "TAX-PMO",
     "IMPL", "TEST", "PMO", "TRN",
   ];
   const orderedGroupKeys = [
@@ -1124,6 +1152,13 @@ function ScopeBreakdownPanel({ dealId, pricingLines }: { dealId: number; pricing
     TEST: "Testing & QA",
     PMO: "Project Management",
     TRN: "Training & Enablement",
+    "TAX-DIR": "Direct Tax / Provision",
+    "TAX-IND": "Indirect Tax",
+    "TAX-TP":  "Transfer Pricing",
+    "TAX-INT": "International / Pillar 2",
+    "TAX-CON": "Tax Controversy",
+    "TAX-MA":  "M&A Tax DD",
+    "TAX-PMO": "Tax Engagement Mgmt",
     OTHER: "Other",
   };
 
@@ -1177,7 +1212,7 @@ function ScopeBreakdownPanel({ dealId, pricingLines }: { dealId: number; pricing
           <tbody className="divide-y divide-border">
             {orderedGroupKeys.map((g) => {
               const groupItems = groups[g];
-              const groupHours = groupItems.reduce((s, i) => s + parseFloat(i.adjustedHours || 0) * parseFloat(i.complexityMultiplier || 1) * (i.quantity || 1), 0);
+              const groupHours = groupItems.reduce((s, i) => s + parseFloat(i.adjustedHours || 0) * parseFloat(i.complexityMultiplier || 1) * (i.quantity ?? 1), 0);
               const groupFee = itemRowFee(groupHours);
               const groupCost = itemRowCost(groupHours);
               const groupMargin = groupFee - groupCost;
@@ -1199,7 +1234,7 @@ function ScopeBreakdownPanel({ dealId, pricingLines }: { dealId: number; pricing
                   {groupItems.map((item: any) => {
                     const code = item.scopeItem?.code || "—";
                     const name = item.scopeItem?.name || "Unnamed";
-                    const itemHours = parseFloat(item.adjustedHours || 0) * parseFloat(item.complexityMultiplier || 1) * (item.quantity || 1);
+                    const itemHours = parseFloat(item.adjustedHours || 0) * parseFloat(item.complexityMultiplier || 1) * (item.quantity ?? 1);
                     return (
                       <tr key={item.id} className="hover:bg-muted/30">
                         <td className="px-6 py-2.5">
@@ -2307,7 +2342,7 @@ function ReviewStep({ deal, navigateToStep, onReadiness, override, setOverride }
   // Scope summary: group billable items by code prefix and allocate fee proportionally to total scope hours.
   const billable = items.filter((si: any) => !si.scopeItem?.isAssembly);
   const itemHours = (si: any) =>
-    parseFloat(si.adjustedHours || 0) * parseFloat(si.complexityMultiplier || 1) * (si.quantity || 1);
+    parseFloat(si.adjustedHours || 0) * parseFloat(si.complexityMultiplier || 1) * (si.quantity ?? 1);
   const totalScopeHours = billable.reduce((s: number, si: any) => s + itemHours(si), 0);
   const groupLabels: Record<string, string> = {
     IMPL: "Implementation",

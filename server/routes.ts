@@ -490,7 +490,10 @@ async function recalcPricingFromScope(dealId: number) {
   if (billableScope.length > 0) {
     totalHours = billableScope.reduce((sum: number, si: any) => {
       const baseHrs = parseFloat(si.adjustedHours || si.scopeItem?.defaultHours || "40");
-      const qty = si.quantity || 1;
+      // Use ?? not || so an explicit zero quantity (e.g. parametric Tax
+      // line where the input resolved to zero units) stays zero. Falsy-
+      // coalescing would silently bill those lines as 1 × baseHrs.
+      const qty = si.quantity ?? 1;
       return sum + Math.round(baseHrs * qty * totalMultiplier);
     }, 0);
   } else {
@@ -504,9 +507,15 @@ async function recalcPricingFromScope(dealId: number) {
     const allRoles = await db.select().from(roles).orderBy(roles.sortOrder);
     const roleMap = new Map(allRoles.map(r => [r.id, r]));
 
+    // Senior-heavy pyramid for Complex Tax engagements; Digital pyramid for
+    // everything else. Without this, recalc after any edit would drift a
+    // Tax-Corporate deal back to the default role mix.
+    const dist = (deal.serviceLine === COMPLEX_TAX_SERVICE_LINE)
+      ? COMPLEX_TAX_ROLE_DISTRIBUTION
+      : ROLE_DISTRIBUTION;
     for (const line of existingLines) {
       const role = roleMap.get(line.roleId!);
-      const pct = role ? (ROLE_DISTRIBUTION[role.name] || (1 / allRoles.length)) : (1 / existingLines.length);
+      const pct = role ? (dist[role.name] || (1 / allRoles.length)) : (1 / existingLines.length);
       const hours = Math.max(Math.round(totalHours * pct), 1);
       // The standard rate is the rate-card baseline; the displayed rate is
       // that baseline times the T&M adjustment factor. We persist the
@@ -531,6 +540,19 @@ async function recalcPricingFromScope(dealId: number) {
 
 import { registerDynamicsRoutes, autoPushDeal, pickTemplateForName, tmplKey, linkDealToOpportunity, unlinkOpportunity } from "./dynamics";
 import { ERP_TEMPLATE_NAME, ERP_SERVICE_LINE, scaleErpItems, summarizeErpInputs, parseErpInputs } from "./erp-scaling";
+import {
+  COMPLEX_TAX_TEMPLATE_NAME,
+  COMPLEX_TAX_SERVICE_LINE,
+  COMPLEX_TAX_ROLE_DISTRIBUTION,
+  COMPLEX_TAX_INPUT_FIELDS,
+  COMPLEX_TAX_INPUT_DEFAULTS,
+  COMPLEX_TAX_DEFAULT_INPUTS,
+  COMPLEX_TAX_ITEM_META,
+  readComplexTaxInputs,
+  scaleHoursFor,
+  summarizeTaxRollup,
+  type ComplexTaxInputs,
+} from "./tax-template";
 import { autoPushWorkdayProject, getProvider as getWorkdayProvider } from "./workday";
 import { autoPushIntappOutcome, runScreeningForDeal, getLatestScreening } from "./intapp";
 import {
@@ -934,7 +956,15 @@ export function registerRoutes(app: Express) {
     const changedFields = Object.keys(req.body || {});
     let finalRow = updated;
     if (req.body.complexity || req.body.engagementInputs !== undefined) {
-      await recalcPricingFromScope(dealId);
+      // For Tax-Corporate deals, rescale Tax-coded scope items from the
+      // freshly-saved engagement inputs FIRST so recalcPricingFromScope
+      // reads the updated quantities + per-unit hours. rescaleTaxScope is
+      // a no-op (returns null) for non-Tax deals or deals with no scope.
+      if (req.body.engagementInputs !== undefined && finalRow.serviceLine === COMPLEX_TAX_SERVICE_LINE) {
+        await rescaleTaxScope(dealId).catch(() => null);
+      } else {
+        await recalcPricingFromScope(dealId);
+      }
       if (!changedFields.includes("totalFee")) changedFields.push("totalFee", "totalCost", "totalHours");
       // Re-fetch so the response carries the freshly recalculated totals
       const [refetched] = await db.select().from(deals).where(eq(deals.id, dealId));
@@ -985,6 +1015,14 @@ export function registerRoutes(app: Express) {
           return { error: `"${f.label}" must be between ${bounds.min} and ${bounds.max}`, field: key, values: {} };
         }
         out[key] = String(n);
+      } else if (f.type === "text") {
+        // Free-form text input (e.g. comma-separated jurisdiction codes for
+        // the Complex Tax preset). Trim, length-bound, and normalise.
+        const v = String(raw ?? "").trim();
+        if (v.length > 500) {
+          return { error: `"${f.label}" must be 500 characters or fewer`, field: key, values: {} };
+        }
+        out[key] = v;
       }
     }
     return { values: out };
@@ -1335,6 +1373,30 @@ export function registerRoutes(app: Express) {
         { key: "ricefw", label: "RICEFW Objects", type: "number", help: "Count of custom Reports/Interfaces/Conversions/Enhancements/Forms/Workflows.", group: "ERP scaling" },
       ],
     },
+    "Tax-Corporate": {
+      label: "Tax — Complex Corporate Engagement",
+      sourceWorkbook: "Complex Tax Engagement template (parametric)",
+      defaults: {
+        rateYear: "2026",
+        tmBasis: "National",
+        tmRateAdjustmentPct: "0",
+        techAdminFeePct: "7",
+        grossMarginBenchmarkPct: "55",
+        lineItemRounding: "100",
+        fixedFeeRounding: "1000",
+        ...COMPLEX_TAX_INPUT_DEFAULTS,
+      },
+      fields: [
+        { key: "rateYear", label: "Rate Year", type: "select", options: ["2025", "2026"], help: "Select 2026 for projects starting after Jan 1, 2026." },
+        { key: "tmBasis", label: "T&M Basis", type: "select", options: ["National", "Geo"], help: "Standard rate (National) or geography-adjusted (Geo)." },
+        { key: "tmRateAdjustmentPct", label: "One-time Pricing Adjustment (%)", type: "number", suffix: "%", help: "Applied to T&M rates. Default 0%." },
+        { key: "techAdminFeePct", label: "Technology & Admin Fee (%)", type: "number", suffix: "%", help: "7% standard." },
+        { key: "grossMarginBenchmarkPct", label: "Gross Margin Benchmark (%)", type: "number", suffix: "%", help: "Tax-Corporate target. Senior-heavy pyramid pulls margin lower than Digital." },
+        { key: "lineItemRounding", label: "Line Item Rounding ($)", type: "number", prefix: "$" },
+        { key: "fixedFeeRounding", label: "Fixed Fee Total Rounding ($)", type: "number", prefix: "$" },
+        ...COMPLEX_TAX_INPUT_FIELDS,
+      ],
+    },
     "_generic": {
       label: "Generic Engagement Inputs",
       sourceWorkbook: null,
@@ -1381,6 +1443,78 @@ export function registerRoutes(app: Express) {
       }
     }
     res.json({ serviceLine: sl, ...preset, defaults, overrideSources });
+  });
+
+  // Shared helper used by the explicit /tax-rescale endpoint and by the
+  // PATCH /api/deals handler so editing engagement inputs (entities,
+  // jurisdictions, return counts, TP txns) automatically re-scales the
+  // Tax scope without requiring a separate UI action.
+  async function rescaleTaxScope(dealId: number): Promise<{ updatedCount: number; inputs: ComplexTaxInputs; taxRollup: ReturnType<typeof summarizeTaxRollup> } | null> {
+    const [deal] = await db.select().from(deals).where(eq(deals.id, dealId));
+    if (!deal || deal.serviceLine !== COMPLEX_TAX_SERVICE_LINE) return null;
+    const inputs: ComplexTaxInputs = readComplexTaxInputs(deal.engagementInputs);
+
+    const dsItems = await db.select().from(dealScopeItems).where(eq(dealScopeItems.dealId, dealId));
+    if (dsItems.length === 0) return null;
+    const catalogIds = dsItems.map((d) => d.scopeItemId);
+    const catRows = await db.select().from(scopeCatalog).where(inArray(scopeCatalog.id, catalogIds));
+    const catById = new Map(catRows.map((c) => [c.id, c]));
+
+    const scaledLines: Array<{ code: string; hours: number; explanation: string }> = [];
+    let updatedCount = 0;
+    for (const ds of dsItems) {
+      const cat = catById.get(ds.scopeItemId);
+      if (!cat) continue;
+      if (!COMPLEX_TAX_ITEM_META[cat.code]) continue;
+      const scaled = scaleHoursFor(cat.code, inputs);
+      if (!scaled) continue;
+      // Store per-unit hours + units count separately so pricing math
+      // (qty × adjustedHours × multiplier) does not double-count.
+      await db.update(dealScopeItems).set({
+        quantity: scaled.quantity,
+        adjustedHours: String(scaled.perUnit),
+        notes: scaled.explanation,
+      }).where(eq(dealScopeItems.id, ds.id));
+      scaledLines.push({ code: cat.code, hours: scaled.hours, explanation: scaled.explanation });
+      updatedCount++;
+    }
+
+    await recalcPricingFromScope(dealId);
+    const [refreshed] = await db.select().from(deals).where(eq(deals.id, dealId));
+    const fee = parseFloat(refreshed?.totalFee || "0");
+    const totalH = scaledLines.reduce((s, l) => s + l.hours, 0) || 1;
+    const lineFees = scaledLines.map((l) => ({ code: l.code, hours: l.hours, fee: Math.round((l.hours / totalH) * fee) }));
+    const taxRollup = summarizeTaxRollup(lineFees);
+    const merged = { ...((refreshed as any)?.engagementInputs || {}), taxRollup };
+    await db.update(deals).set({ engagementInputs: merged, updatedAt: new Date() }).where(eq(deals.id, dealId));
+    return { updatedCount, inputs, taxRollup };
+  }
+
+  // Re-apply Complex Tax parametric scaling using the deal's current
+  // engagement_inputs. Reviewer-callable for explicit "recompute" actions.
+  app.post("/api/deals/:id/tax-rescale", requirePerm("editDeals"), async (req: Request, res: Response) => {
+    const dealId = parseInt(req.params.id);
+    if (Number.isNaN(dealId)) return res.status(400).json({ error: "Invalid id" });
+    const [deal] = await db.select().from(deals).where(eq(deals.id, dealId));
+    if (!deal) return res.status(404).json({ error: "Deal not found" });
+    if (deal.serviceLine !== COMPLEX_TAX_SERVICE_LINE) {
+      return res.status(400).json({ error: `Tax rescale only applies to ${COMPLEX_TAX_SERVICE_LINE} deals` });
+    }
+    const dsItems = await db.select().from(dealScopeItems).where(eq(dealScopeItems.dealId, dealId));
+    if (dsItems.length === 0) return res.status(400).json({ error: "Deal has no scope items to rescale" });
+    const result = await rescaleTaxScope(dealId);
+    if (!result) return res.status(400).json({ error: "Nothing to rescale" });
+    const { updatedCount: updated, inputs, taxRollup } = result;
+
+    await db.insert(activityLog).values({
+      dealId,
+      action: "tax_rescale",
+      description: `[Tax] Rescaled ${updated} scope item(s): ${inputs.entities} entities · ${inputs.jurisdictions.length} jurisdictions · ${inputs.returnsPerYear} returns · ${inputs.tpTransactions} TP txns`,
+      userName: req.body?.userName || req.header("x-user-name") || "Reviewer",
+      metadata: { inputs, taxRollup, updatedCount: updated },
+    });
+
+    res.json({ success: true, dealId, updatedCount: updated, inputs, taxRollup });
   });
 
   app.get("/api/scope-catalog", requireAnyPerm("viewDeals", "manageScopeCatalog"), async (req: Request, res: Response) => {
@@ -3214,20 +3348,62 @@ export function registerRoutes(app: Express) {
       });
     }
 
+    // For Complex Tax engagements, prefer ALL items from the matched template
+    // (so every workstream is represented) and apply parametric scaling from
+    // the deal's engagement inputs. Falls back to the generic 8-item cap for
+    // every other service line.
+    const isComplexTax = templateKey === COMPLEX_TAX_TEMPLATE_NAME;
+    if (isComplexTax) {
+      candidateScope = [...picked.values()].filter((c) => COMPLEX_TAX_ITEM_META[c.code]);
+      if (candidateScope.length === 0) {
+        candidateScope = [...picked.values()].slice(0, 8);
+      }
+    }
+
+    const taxInputsForAgent = isComplexTax
+      ? readComplexTaxInputs(COMPLEX_TAX_INPUT_DEFAULTS)
+      : null;
+
     const insertedScope: any[] = [];
+    const scaledTaxLines: Array<{ code: string; hours: number; explanation: string }> = [];
     for (const item of candidateScope) {
+      let quantity = 1;
+      let hoursStr: string | null = item.defaultHours;
+      let notes: string | null = null;
+      // ERP parametric scaling (S/4HANA module gating + scaled hours)
       const erp = erpScaleByItemId.get(item.id);
-      const adjusted = erp ? String(erp.adjustedHours) : item.defaultHours;
-      const notes = erp ? erp.notes : null;
+      if (erp) {
+        hoursStr = String(erp.adjustedHours);
+        notes = erp.notes;
+      }
+      // Complex Tax parametric scaling (entities × jurisdictions × returns × TP txns).
+      // Store per-unit hours + units count separately so the existing pricing
+      // math (qty × adjustedHours × multiplier) lands on the scaled total
+      // without double-counting.
+      if (isComplexTax && taxInputsForAgent && COMPLEX_TAX_ITEM_META[item.code]) {
+        const scaled = scaleHoursFor(item.code, taxInputsForAgent);
+        if (scaled) {
+          // Store per-unit hours and units count separately so the existing
+          // pricing math (qty × adjustedHours × multiplier) lands on the
+          // scaled total without double-counting.
+          quantity = scaled.quantity;
+          hoursStr = String(scaled.perUnit);
+          notes = scaled.explanation;
+          scaledTaxLines.push({ code: item.code, hours: scaled.hours, explanation: scaled.explanation });
+        }
+      }
       const [row] = await db.insert(dealScopeItems).values({
         dealId,
         scopeItemId: item.id,
-        quantity: 1,
-        adjustedHours: adjusted,
+        quantity,
+        adjustedHours: hoursStr,
         complexityMultiplier: "1.0",
         notes,
       }).onConflictDoNothing({ target: [dealScopeItems.dealId, dealScopeItems.scopeItemId] }).returning();
-      if (row) insertedScope.push({ id: row.id, code: item.code, name: item.name, defaultHours: adjusted });
+      if (row) insertedScope.push({
+        id: row.id, code: item.code, name: item.name,
+        defaultHours: hoursStr, quantity, scalingNote: notes,
+      });
     }
     const sourceSummary =
       `template:${sources.template.length} tag:${sources.tag.length} universal:${sources.universal.length}`;
@@ -3255,11 +3431,17 @@ export function registerRoutes(app: Express) {
       const promptMul = 1.05 ** prompts.length;
       const totalMul = baseMul * promptMul;
       const totalHours = insertedScope.length > 0
-        ? insertedScope.reduce((s, si) => s + Math.round(parseFloat(si.defaultHours || "40") * totalMul), 0)
+        ? insertedScope.reduce(
+            (s, si) =>
+              s +
+              Math.round(parseFloat(si.defaultHours || "40") * (si.quantity ?? 1) * totalMul),
+            0,
+          )
         : Math.round(200 * totalMul);
+      const roleDist = isComplexTax ? COMPLEX_TAX_ROLE_DISTRIBUTION : ROLE_DISTRIBUTION;
       await db.insert(pricingLines).values(
         allRoles.map((r) => {
-          const pct = ROLE_DISTRIBUTION[r.name] || (1 / allRoles.length);
+          const pct = roleDist[r.name] || (1 / allRoles.length);
           const hours = Math.max(Math.round(totalHours * pct), 1);
           const rate = parseFloat(r.defaultRate || "300");
           const costRate = parseFloat(r.costRate || "150");
@@ -3287,11 +3469,41 @@ export function registerRoutes(app: Express) {
     const hours = parseFloat(refreshedDeal?.totalHours || "0");
     const margin = parseFloat(refreshedDeal?.marginPercent || "0");
     const blended = parseFloat(refreshedDeal?.blendedRate || "0");
+
+    // Workstream + recurring/project rollup for complex Tax engagements.
+    // Computed by allocating each scope item's share of total hours to its
+    // workstream and applying the deal's blended rate, then persisted onto
+    // engagement_inputs.taxRollup so the UI can render the split alongside
+    // the standard totals.
+    let taxRollup: any = null;
+    if (isComplexTax && scaledTaxLines.length > 0) {
+      const totalScaledH = scaledTaxLines.reduce((s, l) => s + l.hours, 0) || 1;
+      const lineFees = scaledTaxLines.map((l) => ({
+        code: l.code,
+        hours: l.hours,
+        fee: Math.round((l.hours / totalScaledH) * fee),
+      }));
+      taxRollup = summarizeTaxRollup(lineFees);
+      const merged = { ...((refreshedDeal as any)?.engagementInputs || {}), ...COMPLEX_TAX_INPUT_DEFAULTS, taxRollup };
+      await db.update(deals).set({ engagementInputs: merged, updatedAt: new Date() }).where(eq(deals.id, dealId));
+    }
+
+    const pricingOutput: any = { totalFee: fee, totalCost: cost, totalHours: hours, marginPercent: margin, blendedRate: blended, roleCount: allRoles.length };
+    let pricingSummary = `Effort estimate: ${hours} hrs across ${allRoles.length} roles. Fee $${fee.toLocaleString()}, margin ${margin.toFixed(1)}%, blended $${blended.toFixed(0)}/hr.`;
+    if (taxRollup) {
+      pricingOutput.taxRollup = taxRollup;
+      pricingOutput.engagementInputs = { ...COMPLEX_TAX_INPUT_DEFAULTS };
+      const wsSummary = taxRollup.workstreams
+        .map((w: any) => `${w.label}: $${Math.round(w.fee).toLocaleString()}`).join(" · ");
+      pricingSummary +=
+        ` Recurring $${Math.round(taxRollup.recurring.fee).toLocaleString()} / Project $${Math.round(taxRollup.project.fee).toLocaleString()}.` +
+        ` Workstreams — ${wsSummary}.`;
+    }
     await logStep(
       "pricing",
       "Pricing computed",
-      `Effort estimate: ${hours} hrs across ${allRoles.length} roles. Fee $${fee.toLocaleString()}, margin ${margin.toFixed(1)}%, blended $${blended.toFixed(0)}/hr.`,
-      { totalFee: fee, totalCost: cost, totalHours: hours, marginPercent: margin, blendedRate: blended, roleCount: allRoles.length },
+      pricingSummary,
+      pricingOutput,
       hours > 0 ? 0.75 : 0.3,
       hours === 0,
     );

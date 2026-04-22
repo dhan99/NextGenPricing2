@@ -1296,6 +1296,331 @@
       "sort_order": 72,
       "service_lines": "ERP Implementation,Digital Transformation",
       "is_active": true
+    },
+    {
+      "id": 200,
+      "code": "TAX-DIR-001",
+      "name": "Annual Income Tax Provision (per entity)",
+      "category": "Tax — Direct/Provision",
+      "description": "ASC 740 / IAS 12 annual income tax provision computation per legal entity, including current/deferred true-up.",
+      "default_hours": "28.00",
+      "is_assembly": false,
+      "parent_id": null,
+      "service_lines": "Tax-Corporate,Tax,Tax Planning",
+      "sort_order": 200,
+      "is_active": true
+    },
+    {
+      "id": 201,
+      "code": "TAX-DIR-002",
+      "name": "Quarterly Provision (per entity, 4/yr)",
+      "category": "Tax — Direct/Provision",
+      "description": "Quarterly ASC 740 provision support per legal entity (4 cycles/year).",
+      "default_hours": "6.00",
+      "is_assembly": false,
+      "parent_id": null,
+      "service_lines": "Tax-Corporate,Tax,Tax Planning",
+      "sort_order": 201,
+      "is_active": true
+    },
+    {
+      "id": 202,
+      "code": "TAX-DIR-003",
+      "name": "Uncertain Tax Position (FIN 48) Review",
+      "category": "Tax — Direct/Provision",
+      "description": "Identification, measurement and disclosure of uncertain tax positions.",
+      "default_hours": "60.00",
+      "is_assembly": false,
+      "parent_id": null,
+      "service_lines": "Tax-Corporate,Tax,Tax Planning",
+      "sort_order": 202,
+      "is_active": true
+    },
+    {
+      "id": 203,
+      "code": "TAX-DIR-004",
+      "name": "Federal/State Return Preparation (per return)",
+      "category": "Tax — Direct/Provision",
+      "description": "Per-return preparation including book-to-tax adjustments, M-3, apportionment.",
+      "default_hours": "22.00",
+      "is_assembly": false,
+      "parent_id": null,
+      "service_lines": "Tax-Corporate,Tax,Tax Planning",
+      "sort_order": 203,
+      "is_active": true
+    },
+    {
+      "id": 204,
+      "code": "TAX-DIR-005",
+      "name": "Tax Accounting Methods Study",
+      "category": "Tax — Direct/Provision",
+      "description": "Method change analysis, Form 3115 support, Sec 481(a) computations.",
+      "default_hours": "80.00",
+      "is_assembly": false,
+      "parent_id": null,
+      "service_lines": "Tax-Corporate,Tax,Tax Planning",
+      "sort_order": 204,
+      "is_active": true
+    },
+    {
+      "id": 205,
+      "code": "TAX-IND-001",
+      "name": "Indirect Tax Registration (per jurisdiction)",
+      "category": "Tax — Indirect",
+      "description": "VAT / GST / sales-and-use registration in a jurisdiction.",
+      "default_hours": "24.00",
+      "is_assembly": false,
+      "parent_id": null,
+      "service_lines": "Tax-Corporate,Tax,Tax Planning",
+      "sort_order": 205,
+      "is_active": true
+    },
+    {
+      "id": 206,
+      "code": "TAX-IND-002",
+      "name": "Monthly Indirect Tax Filings (per jurisdiction, 12/yr)",
+      "category": "Tax — Indirect",
+      "description": "Monthly VAT/GST/sales-and-use return preparation per jurisdiction.",
+      "default_hours": "4.00",
+      "is_assembly": false,
+      "parent_id": null,
+      "service_lines": "Tax-Corporate,Tax,Tax Planning",
+      "sort_order": 206,
+      "is_active": true
+    },
+    {
+      "id": 207,
+      "code": "TAX-IND-003",
+      "name": "Indirect Tax Transformation",
+      "category": "Tax — Indirect",
+      "description": "Indirect tax tech enablement: tax engine, determination logic, ERP integration.",
+      "default_hours": "240.00",
+      "is_assembly": false,
+      "parent_id": null,
+      "service_lines": "Tax-Corporate,Tax,Tax Planning",
+      "sort_order": 207,
+      "is_active": true
+    },
+    {
+      "id": 208,
+      "code": "TAX-IND-004",
+      "name": "Nexus & Taxability Study (per jurisdiction)",
+      "category": "Tax — Indirect",
+      "description": "Economic / physical nexus analysis and taxability matrix per jurisdiction.",
+      "default_hours": "32.00",
+      "is_assembly": false,
+      "parent_id": null,
+      "service_lines": "Tax-Corporate,Tax,Tax Planning",
+      "sort_order": 208,
+      "is_active": true
+    },
+    {
+      "id": 209,
+      "code": "TAX-TP-001",
+      "name": "Transfer Pricing Master File",
+      "category": "Tax — Transfer Pricing",
+      "description": "OECD-aligned master file documentation covering global TP policies.",
+      "default_hours": "120.00",
+      "is_assembly": false,
+      "parent_id": null,
+      "service_lines": "Tax-Corporate,Tax,Tax Planning",
+      "sort_order": 209,
+      "is_active": true
+    },
+    {
+      "id": 210,
+      "code": "TAX-TP-002",
+      "name": "Transfer Pricing Local File (per jurisdiction)",
+      "category": "Tax — Transfer Pricing",
+      "description": "Country-specific TP local file documentation per jurisdiction.",
+      "default_hours": "60.00",
+      "is_assembly": false,
+      "parent_id": null,
+      "service_lines": "Tax-Corporate,Tax,Tax Planning",
+      "sort_order": 210,
+      "is_active": true
+    },
+    {
+      "id": 211,
+      "code": "TAX-TP-003",
+      "name": "Country-by-Country Report (CbCR)",
+      "category": "Tax — Transfer Pricing",
+      "description": "CbCR data collection, validation and Form 8975 / equivalent preparation.",
+      "default_hours": "40.00",
+      "is_assembly": false,
+      "parent_id": null,
+      "service_lines": "Tax-Corporate,Tax,Tax Planning",
+      "sort_order": 211,
+      "is_active": true
+    },
+    {
+      "id": 212,
+      "code": "TAX-TP-004",
+      "name": "Benchmarking Study (per intercompany txn)",
+      "category": "Tax — Transfer Pricing",
+      "description": "Per-transaction benchmarking and economic analysis (TNMM/CUP/CPM).",
+      "default_hours": "12.00",
+      "is_assembly": false,
+      "parent_id": null,
+      "service_lines": "Tax-Corporate,Tax,Tax Planning",
+      "sort_order": 212,
+      "is_active": true
+    },
+    {
+      "id": 213,
+      "code": "TAX-TP-005",
+      "name": "Operational Transfer Pricing & Policy Design",
+      "category": "Tax — Transfer Pricing",
+      "description": "TP policy redesign, true-up mechanics, intercompany agreement support.",
+      "default_hours": "100.00",
+      "is_assembly": false,
+      "parent_id": null,
+      "service_lines": "Tax-Corporate,Tax,Tax Planning",
+      "sort_order": 213,
+      "is_active": true
+    },
+    {
+      "id": 214,
+      "code": "TAX-INT-001",
+      "name": "Pillar 2 (GloBE) Readiness Assessment",
+      "category": "Tax — International",
+      "description": "BEPS 2.0 Pillar 2 impact assessment, data gap analysis, IIR/UTPR modelling.",
+      "default_hours": "200.00",
+      "is_assembly": false,
+      "parent_id": null,
+      "service_lines": "Tax-Corporate,Tax,Tax Planning",
+      "sort_order": 214,
+      "is_active": true
+    },
+    {
+      "id": 215,
+      "code": "TAX-INT-002",
+      "name": "Pillar 2 GloBE Compliance (per jurisdiction)",
+      "category": "Tax — International",
+      "description": "Annual Pillar 2 GloBE Information Return support per jurisdiction.",
+      "default_hours": "32.00",
+      "is_assembly": false,
+      "parent_id": null,
+      "service_lines": "Tax-Corporate,Tax,Tax Planning",
+      "sort_order": 215,
+      "is_active": true
+    },
+    {
+      "id": 216,
+      "code": "TAX-INT-003",
+      "name": "GILTI / Subpart F Computation (per CFC)",
+      "category": "Tax — International",
+      "description": "Per-CFC GILTI / Subpart F / FDII / BEAT computation and Forms 5471 support.",
+      "default_hours": "16.00",
+      "is_assembly": false,
+      "parent_id": null,
+      "service_lines": "Tax-Corporate,Tax,Tax Planning",
+      "sort_order": 216,
+      "is_active": true
+    },
+    {
+      "id": 217,
+      "code": "TAX-INT-004",
+      "name": "Treaty & Withholding Analysis",
+      "category": "Tax — International",
+      "description": "Treaty eligibility, withholding tax planning, and PE risk review.",
+      "default_hours": "80.00",
+      "is_assembly": false,
+      "parent_id": null,
+      "service_lines": "Tax-Corporate,Tax,Tax Planning",
+      "sort_order": 217,
+      "is_active": true
+    },
+    {
+      "id": 218,
+      "code": "TAX-CON-001",
+      "name": "Tax Audit Defense — Open Examination",
+      "category": "Tax — Controversy",
+      "description": "Federal / state / foreign exam defense including IDR coordination and position memos.",
+      "default_hours": "160.00",
+      "is_assembly": false,
+      "parent_id": null,
+      "service_lines": "Tax-Corporate,Tax,Tax Planning",
+      "sort_order": 218,
+      "is_active": true
+    },
+    {
+      "id": 219,
+      "code": "TAX-CON-002",
+      "name": "IDR Response & Appeals Support",
+      "category": "Tax — Controversy",
+      "description": "Information document request response drafting and IRS Appeals support.",
+      "default_hours": "100.00",
+      "is_assembly": false,
+      "parent_id": null,
+      "service_lines": "Tax-Corporate,Tax,Tax Planning",
+      "sort_order": 219,
+      "is_active": true
+    },
+    {
+      "id": 220,
+      "code": "TAX-MA-001",
+      "name": "Buy-side Tax Due Diligence — Federal/State",
+      "category": "Tax — M&A DD",
+      "description": "Buy-side tax DD report covering federal/state historical exposures.",
+      "default_hours": "180.00",
+      "is_assembly": false,
+      "parent_id": null,
+      "service_lines": "Tax-Corporate,Tax,Tax Planning",
+      "sort_order": 220,
+      "is_active": true
+    },
+    {
+      "id": 221,
+      "code": "TAX-MA-002",
+      "name": "International Tax DD (per jurisdiction)",
+      "category": "Tax — M&A DD",
+      "description": "Cross-border tax DD per foreign jurisdiction in scope.",
+      "default_hours": "28.00",
+      "is_assembly": false,
+      "parent_id": null,
+      "service_lines": "Tax-Corporate,Tax,Tax Planning",
+      "sort_order": 221,
+      "is_active": true
+    },
+    {
+      "id": 222,
+      "code": "TAX-MA-003",
+      "name": "Tax Structuring Memo",
+      "category": "Tax — M&A DD",
+      "description": "Acquisition structuring memo: 338(h)(10), F-reorgs, treaty planning.",
+      "default_hours": "80.00",
+      "is_assembly": false,
+      "parent_id": null,
+      "service_lines": "Tax-Corporate,Tax,Tax Planning",
+      "sort_order": 222,
+      "is_active": true
+    },
+    {
+      "id": 223,
+      "code": "TAX-PMO-001",
+      "name": "Tax Engagement PMO & Status Reporting",
+      "category": "Tax — Engagement Mgmt",
+      "description": "Engagement PMO, weekly status, RAID log, billing oversight.",
+      "default_hours": "80.00",
+      "is_assembly": false,
+      "parent_id": null,
+      "service_lines": "Tax-Corporate,Tax,Tax Planning",
+      "sort_order": 223,
+      "is_active": true
+    },
+    {
+      "id": 224,
+      "code": "TAX-PMO-002",
+      "name": "Tax Quality / EQR Review",
+      "category": "Tax — Engagement Mgmt",
+      "description": "Independent engagement quality / concurring review.",
+      "default_hours": "40.00",
+      "is_assembly": false,
+      "parent_id": null,
+      "service_lines": "Tax-Corporate,Tax,Tax Planning",
+      "sort_order": 224,
+      "is_active": true
     }
   ],
   "scope_templates": [
@@ -1342,6 +1667,15 @@
       "service_line": "ERP Implementation",
       "is_active": true,
       "sort_order": 5,
+      "created_at": "2026-04-17T05:01:17.217Z"
+    },
+    {
+      "id": 6,
+      "name": "Complex Tax Engagement",
+      "description": "Multi-workstream complex Tax engagement: Direct/Provision, Indirect, Transfer Pricing, International (Pillar 2), Controversy, M&A DD. Parametric scope scales with entities, jurisdictions, returns, and TP transactions.",
+      "service_line": "Tax-Corporate",
+      "is_active": true,
+      "sort_order": 6,
       "created_at": "2026-04-22T00:00:00.000Z"
     }
   ],
@@ -1617,6 +1951,206 @@
       "default_hours": null,
       "complexity_multiplier": "1.00",
       "sort_order": 20
+    },
+    {
+      "id": 35,
+      "template_id": 6,
+      "scope_item_id": 200,
+      "default_hours": "28.00",
+      "complexity_multiplier": "1.00",
+      "sort_order": 200
+    },
+    {
+      "id": 36,
+      "template_id": 6,
+      "scope_item_id": 201,
+      "default_hours": "6.00",
+      "complexity_multiplier": "1.00",
+      "sort_order": 201
+    },
+    {
+      "id": 37,
+      "template_id": 6,
+      "scope_item_id": 202,
+      "default_hours": "60.00",
+      "complexity_multiplier": "1.00",
+      "sort_order": 202
+    },
+    {
+      "id": 38,
+      "template_id": 6,
+      "scope_item_id": 203,
+      "default_hours": "22.00",
+      "complexity_multiplier": "1.00",
+      "sort_order": 203
+    },
+    {
+      "id": 39,
+      "template_id": 6,
+      "scope_item_id": 204,
+      "default_hours": "80.00",
+      "complexity_multiplier": "1.00",
+      "sort_order": 204
+    },
+    {
+      "id": 40,
+      "template_id": 6,
+      "scope_item_id": 205,
+      "default_hours": "24.00",
+      "complexity_multiplier": "1.00",
+      "sort_order": 205
+    },
+    {
+      "id": 41,
+      "template_id": 6,
+      "scope_item_id": 206,
+      "default_hours": "4.00",
+      "complexity_multiplier": "1.00",
+      "sort_order": 206
+    },
+    {
+      "id": 42,
+      "template_id": 6,
+      "scope_item_id": 207,
+      "default_hours": "240.00",
+      "complexity_multiplier": "1.00",
+      "sort_order": 207
+    },
+    {
+      "id": 43,
+      "template_id": 6,
+      "scope_item_id": 208,
+      "default_hours": "32.00",
+      "complexity_multiplier": "1.00",
+      "sort_order": 208
+    },
+    {
+      "id": 44,
+      "template_id": 6,
+      "scope_item_id": 209,
+      "default_hours": "120.00",
+      "complexity_multiplier": "1.00",
+      "sort_order": 209
+    },
+    {
+      "id": 45,
+      "template_id": 6,
+      "scope_item_id": 210,
+      "default_hours": "60.00",
+      "complexity_multiplier": "1.00",
+      "sort_order": 210
+    },
+    {
+      "id": 46,
+      "template_id": 6,
+      "scope_item_id": 211,
+      "default_hours": "40.00",
+      "complexity_multiplier": "1.00",
+      "sort_order": 211
+    },
+    {
+      "id": 47,
+      "template_id": 6,
+      "scope_item_id": 212,
+      "default_hours": "12.00",
+      "complexity_multiplier": "1.00",
+      "sort_order": 212
+    },
+    {
+      "id": 48,
+      "template_id": 6,
+      "scope_item_id": 213,
+      "default_hours": "100.00",
+      "complexity_multiplier": "1.00",
+      "sort_order": 213
+    },
+    {
+      "id": 49,
+      "template_id": 6,
+      "scope_item_id": 214,
+      "default_hours": "200.00",
+      "complexity_multiplier": "1.00",
+      "sort_order": 214
+    },
+    {
+      "id": 50,
+      "template_id": 6,
+      "scope_item_id": 215,
+      "default_hours": "32.00",
+      "complexity_multiplier": "1.00",
+      "sort_order": 215
+    },
+    {
+      "id": 51,
+      "template_id": 6,
+      "scope_item_id": 216,
+      "default_hours": "16.00",
+      "complexity_multiplier": "1.00",
+      "sort_order": 216
+    },
+    {
+      "id": 52,
+      "template_id": 6,
+      "scope_item_id": 217,
+      "default_hours": "80.00",
+      "complexity_multiplier": "1.00",
+      "sort_order": 217
+    },
+    {
+      "id": 53,
+      "template_id": 6,
+      "scope_item_id": 218,
+      "default_hours": "160.00",
+      "complexity_multiplier": "1.00",
+      "sort_order": 218
+    },
+    {
+      "id": 54,
+      "template_id": 6,
+      "scope_item_id": 219,
+      "default_hours": "100.00",
+      "complexity_multiplier": "1.00",
+      "sort_order": 219
+    },
+    {
+      "id": 55,
+      "template_id": 6,
+      "scope_item_id": 220,
+      "default_hours": "180.00",
+      "complexity_multiplier": "1.00",
+      "sort_order": 220
+    },
+    {
+      "id": 56,
+      "template_id": 6,
+      "scope_item_id": 221,
+      "default_hours": "28.00",
+      "complexity_multiplier": "1.00",
+      "sort_order": 221
+    },
+    {
+      "id": 57,
+      "template_id": 6,
+      "scope_item_id": 222,
+      "default_hours": "80.00",
+      "complexity_multiplier": "1.00",
+      "sort_order": 222
+    },
+    {
+      "id": 58,
+      "template_id": 6,
+      "scope_item_id": 223,
+      "default_hours": "80.00",
+      "complexity_multiplier": "1.00",
+      "sort_order": 223
+    },
+    {
+      "id": 59,
+      "template_id": 6,
+      "scope_item_id": 224,
+      "default_hours": "40.00",
+      "complexity_multiplier": "1.00",
+      "sort_order": 224
     }
   ],
   "prompt_sets": [
