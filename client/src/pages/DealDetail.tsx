@@ -1778,10 +1778,10 @@ function PricingStep({ deal }: { deal: any }) {
               </p>
             </div>
           )}
-          <div className="overflow-x-auto">
+          <div className="overflow-auto max-h-[60vh] relative">
             <table className="w-full">
-              <thead>
-                <tr className="bg-muted/50">
+              <thead className="sticky top-0 z-10">
+                <tr className="bg-muted/95 backdrop-blur supports-[backdrop-filter]:bg-muted/80 shadow-[0_1px_0_0_var(--tw-shadow-color)] shadow-border">
                   <th className="text-left px-6 py-3 text-xs font-semibold text-muted-foreground uppercase">Role</th>
                   <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase">Level</th>
                   <th className="text-right px-4 py-3 text-xs font-semibold text-muted-foreground uppercase">Hours</th>
