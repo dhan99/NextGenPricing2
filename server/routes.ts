@@ -3863,6 +3863,19 @@ export function registerRoutes(app: Express) {
       "wizard-approval":   { allowed: ["sll"], readOnly: ["pdl","po","fin","qrm","it"] },
       "wizard-summary":    { allowed: ["pdl","sll","po","fin","qrm"], readOnly: [] },
       "renewal-leadsheet": { allowed: ["pdl"], readOnly: ["sll","po","fin","qrm","it"] },
+      "deals-list":        { allowed: ["pdl","sll","po","fin","qrm","it"], readOnly: [] },
+      "analytics":         { allowed: ["pdl","sll","po","fin","qrm","it"], readOnly: [] },
+      "admin":             { allowed: ["pdl","po"], readOnly: ["sll","fin","qrm","it"] },
+      "admin-rate-cards":  { allowed: ["po"], readOnly: ["pdl","sll","fin","qrm","it"] },
+      "admin-scope-catalog": { allowed: ["po"], readOnly: ["pdl","sll","fin","qrm","it"] },
+      "admin-prompt-sets": { allowed: ["po"], readOnly: ["pdl","sll","fin","qrm","it"] },
+      "admin-margin-targets": { allowed: ["po"], readOnly: ["pdl","sll","fin","qrm","it"] },
+      "admin-conga":       { allowed: ["po"], readOnly: ["pdl","sll","fin","qrm","it"] },
+      "integration-dynamics": { allowed: ["pdl","sll","po","fin","qrm","it"], readOnly: [] },
+      "integration-intapp":   { allowed: ["pdl","sll","qrm"], readOnly: ["po","fin","it"] },
+      "integration-workday":  { allowed: ["pdl","sll","po","fin","qrm","it"], readOnly: [] },
+      "architecture":      { allowed: ["pdl","sll","po","fin","qrm","it"], readOnly: [] },
+      "global":            { allowed: ["pdl","sll","po","fin","qrm","it"], readOnly: [] },
     };
     const perm = screenPermissions[screen] || { allowed: ["pdl"], readOnly: ["sll","po","fin","qrm","it"] };
     const isEditor = perm.allowed.includes(r);
@@ -3969,6 +3982,77 @@ export function registerRoutes(app: Express) {
       "renewal-leadsheet": [
         { keys: ["uplift","increase","raise"], answer: () => "Recommended renewal uplift is 4.2% (illustrative market avg). Apply per line or globally from the toolbar." },
         { keys: ["compare","prior","py"], answer: () => "PY columns are read-only snapshots from the source deal. CY columns are editable; deltas highlight changes >10%." },
+      ],
+      "deals-list": [
+        { keys: ["filter","search","find"], answer: () => "Use the search box for free-text matching across deal title, client, and number. Status filters live in the toolbar; combine them to scope to draft / submitted / approved / rejected. Sort by clicking any column header." },
+        { keys: ["archive","restore","deleted"], answer: () => "Archived deals are hidden by default. Toggle 'Show archived' to include them; archived rows can be restored from the row menu. Archive is reversible — nothing is hard-deleted." },
+        { keys: ["new","create","start"], answer: () => "Start a new deal from the New Deal button (top right). PDLs can also pick Renewal Fast-Track from the action menu on any approved deal to clone its scope and pricing." },
+        { keys: ["status","stage","lifecycle"], answer: () => "Deals flow draft -> submitted -> approved (or rejected -> draft for revision). Status badges are color-coded; submitted deals are awaiting SLL approval." },
+        { keys: ["margin","color","badge"], answer: () => "Margin badges turn amber under 25% and red under 20%. These are the same thresholds the approval gate uses, so anything red will require justification at submit time." },
+      ],
+      "analytics": [
+        { keys: ["pipeline","forecast","total"], answer: () => "Pipeline total = sum of total fee across active (non-archived, non-rejected) deals. The trend chart aggregates by deal createdAt; the breakdown card splits by service line." },
+        { keys: ["margin","average","portfolio"], answer: () => "Portfolio margin = weighted average of marginPercent across deals, weighted by total fee. Below 25% triggers risk highlighting." },
+        { keys: ["service line","practice","mix"], answer: () => "Service line mix shows fee distribution across Tax / Audit / Consulting / Risk Advisory / Outsourcing. Click any segment to drill into its deals." },
+        { keys: ["scenario","standard","premium","value"], answer: () => "Scenario adoption tracks which scenario (Standard / Premium / Value) PDLs ultimately selected per deal. Premium adoption above 30% is healthy." },
+        { keys: ["export","download","csv"], answer: () => "Export is on the action menu in the top-right. CSV export streams the underlying deal rows; PDF export captures the dashboard layout." },
+      ],
+      "admin": [
+        { keys: ["who can edit","permission","manage"], answer: () => "Pricing Operations (PO) is the only role that can edit configuration. PDLs see the same pages in read-only mode for transparency. SLL/FIN/QRM/IT have no admin access." },
+        { keys: ["where is","navigate","sections"], answer: () => "Configuration covers: Rate Cards (bill + cost rates), Scope Catalog (engagement templates), Prompt Sets (assumption questions), Margin Targets (per-service-line targets), and Conga Templates (proposal/engagement letter mappings)." },
+      ],
+      "admin-rate-cards": [
+        { keys: ["create","add new","new card"], answer: () => "Click 'New Rate Card' to draft a card. Cards are versioned by effective date; only one card per practice/region can be active at a time. Activating a new card archives the previous one but keeps it linked to historical deals." },
+        { keys: ["bill rate","cost rate","margin"], answer: () => "Each role row carries a bill rate (what the client pays) and cost rate (fully-loaded internal cost). The implied margin is shown live as you edit. Cost rates are sourced from Finance/Workday in production." },
+        { keys: ["uplift","increase","annual"], answer: () => "Annual uplift is applied per-role with a single percentage. The form previews the new rate next to the old before you commit." },
+        { keys: ["effective date","activate","schedule"], answer: () => "Cards take effect on their effective date. Future-dated cards stay in 'pending' until midnight UTC of that date." },
+      ],
+      "admin-scope-catalog": [
+        { keys: ["create","add item","new item"], answer: () => "Click 'New Item'. Required: code, name, category, default hours, complexity. Tags help PDLs filter inside the wizard. Items default to active." },
+        { keys: ["assembly","parent","cascade","children"], answer: () => "Assemblies are catalog items that auto-add a curated set of children when added to a deal. Define children in the assembly editor; the cascade is one-way — removing the parent leaves children in place." },
+        { keys: ["deactivate","retire","hide"], answer: () => "Deactivating an item hides it from new deals but preserves it on every existing deal. To re-enable, toggle 'Show inactive' in the list and click the row's restore action." },
+        { keys: ["template","starter","bundle"], answer: () => "Starter templates live under Scope Templates and bundle multiple catalog items with default hour overrides. PDLs apply them in one click from the wizard's Scope step." },
+        { keys: ["tag","filter","practice"], answer: () => "Tags are free-form labels (e.g. 'tax', 'sox', 'erp'). The wizard auto-filters by service line; the 'Show all practices' toggle lifts that filter." },
+      ],
+      "admin-prompt-sets": [
+        { keys: ["what is","prompt","purpose"], answer: () => "Prompt sets are the assumption questionnaires PDLs answer in the Assumptions step. Each prompt has a question, response options, and per-option multipliers that compound into the deal's effort total." },
+        { keys: ["multiplier","impact","effort"], answer: () => "Each response option carries a multiplier (1.0 = baseline). Multipliers compound: three 1.1x answers produce 1.331x total effort. Keep extreme multipliers (>1.3x or <0.8x) intentional." },
+        { keys: ["create","add prompt","new"], answer: () => "Build a set, then add prompts one at a time. Each prompt needs a question and at least two response options. Drag to reorder; PDLs see them in this order." },
+        { keys: ["assign","service line","attach"], answer: () => "Assign a prompt set to one or more service lines. The wizard auto-attaches the matching set when a deal is created against that service line." },
+      ],
+      "admin-margin-targets": [
+        { keys: ["target","threshold","floor"], answer: () => "Margin targets define the floor used by the approval gate. Standard target is 31%; below 25% requires SLL justification, below 20% triggers second approver. Per-service-line overrides take precedence." },
+        { keys: ["how it","applied","enforced"], answer: () => "Targets are evaluated at submit time against the deal's calculated margin. Failures don't block submission — they route the deal through the stricter approval path with a visible badge." },
+      ],
+      "admin-conga": [
+        { keys: ["template","mapping","field"], answer: () => "Each Conga template maps DealPad fields to merge fields in the destination doc (proposal, engagement letter, change order). Templates support conditional sections and per-line iteration." },
+        { keys: ["proposal","engagement letter","change order"], answer: () => "Three template types ship by default: Proposal, Engagement Letter, Change Order. Add custom types by registering them with Conga and linking the template ID here." },
+        { keys: ["provider","conga","stub"], answer: () => "The PoC uses a stubbed Conga provider — generated docs are saved locally and tagged 'simulation'. Production swaps in real Conga REST credentials via the Provider Config card." },
+      ],
+      "integration-dynamics": [
+        { keys: ["sync","direction","push","pull"], answer: () => "Dynamics sync is bi-directional. Opportunity updates flow into DealPad on a 5-minute poll; deal status changes push back as opportunity stage updates. Conflicts are flagged in the activity log." },
+        { keys: ["link","attach","opportunity"], answer: () => "Link an opportunity from the New Deal screen or from any deal detail page. Linking copies client, value, and notes; subsequent edits sync both ways." },
+        { keys: ["mock","stub","simulation"], answer: () => "The integration runs against a deterministic stub for the PoC. Production swaps in real Dataverse credentials with no code changes — only the provider config moves." },
+      ],
+      "integration-intapp": [
+        { keys: ["screening","conflict","check"], answer: () => "Intapp runs a conflict + risk screening on every submitted deal. Findings show severity (Low/Medium/High) and the matched clauses; QRM triages from the queue." },
+        { keys: ["mitigation","resolve","clear"], answer: () => "High-severity findings require a mitigation note before approval. QRM enters the note here; it threads onto the deal's approval record." },
+        { keys: ["dashboard","summary","queue"], answer: () => "The Intapp dashboard summarizes open conflicts, in-flight reviews, and open mitigations. Click any tile to drill into the underlying screenings." },
+      ],
+      "integration-workday": [
+        { keys: ["validation","status","clean"], answer: () => "Workday validation classifies each deal as Clean / Over Budget / Staffing Short / Rate Variance / Unvalidated. PDLs can override with a justification; overrides surface to the SLL." },
+        { keys: ["cost center","link","mapping"], answer: () => "Linking a Workday cost center sets the post-award accounting hook. Validation runs immediately after link; mismatches highlight in the deal's review step." },
+        { keys: ["rate variance","cost rate","drift"], answer: () => "Rate Variance triggers when a deal's bill or cost rate diverges from Workday's source-of-truth by more than 5%. Reconcile by re-pulling the rate card or filing a Workday correction." },
+      ],
+      "architecture": [
+        { keys: ["diagram","map","overview"], answer: () => "The Architecture Hub renders the system map: bounded contexts, integrations, AI services, and data flow. Click any node to drill into its routes, schemas, and dependencies." },
+        { keys: ["bounded","context","domain"], answer: () => "Bounded contexts: Deal, Pricing, Scope Catalog, Rate Cards, Scenarios, Approvals, AI, Integrations (Dynamics / Intapp / Workday / Conga). Each owns its tables and route module." },
+        { keys: ["azure","production","target"], answer: () => "Production target is Azure: Container Apps behind APIM, Service Bus + Event Grid for async, Entra ID for auth, Azure OpenAI for AI. The PoC handler shapes are designed to map 1:1 onto that topology." },
+      ],
+      "global": [
+        { keys: ["what can","help","how"], answer: () => "Ask DealPad AI is contextual — open it on any screen for screen-specific help. From here you can ask about navigation, persona permissions, or general DealPad concepts." },
+        { keys: ["persona","switch","role"], answer: () => "Switch personas from your avatar in the top-right. Each persona has its own permissions: PDL creates deals, SLL approves, PO manages config, FIN reviews margins, QRM handles risk, IT sees architecture." },
+        { keys: ["navigation","menu","find"], answer: () => "The left sidebar groups navigation by area: Pipeline (Dashboard, Deals, Analytics), Integrations (Dynamics, Intapp, Workday), Configuration (admin pages), and Architecture. Items hide automatically when your role lacks access." },
       ],
     };
 
