@@ -2786,67 +2786,69 @@ function SummaryStep({ deal }: { deal: any }) {
   const { data: marginTarget } = useDealMarginTarget(deal.id);
   const summaryTarget = marginTarget?.percent ?? 35;
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
-      <div className="flex gap-3 justify-end flex-wrap">
+    <div className="max-w-4xl mx-auto space-y-4 sm:space-y-6">
+      {/* Action buttons — full-width stacked on mobile, inline on desktop */}
+      <div className="grid grid-cols-1 sm:flex sm:gap-3 sm:justify-end sm:flex-wrap gap-2">
         <a
           href={`/api/deals/${deal.id}/proposal`}
           target="_blank"
           rel="noopener noreferrer"
-          className="btn-primary flex items-center gap-2"
+          className="btn-primary flex items-center justify-center gap-2 w-full sm:w-auto"
         >
           <FileText className="w-4 h-4" />
           Generate Proposal
         </a>
         <button
           onClick={() => setLetterModalOpen(true)}
-          className="px-4 py-2 rounded-lg bg-primary/10 text-primary text-sm font-medium hover:bg-primary/20 transition-all flex items-center gap-2"
+          className="px-4 py-2 rounded-lg bg-primary/10 text-primary text-sm font-medium hover:bg-primary/20 transition-all flex items-center justify-center gap-2 w-full sm:w-auto"
         >
           <FileText className="w-4 h-4" />
           Generate Engagement Letter
         </button>
         <Link href={`/deals/${deal.id}/change-orders`}>
-          <button className="px-4 py-2 rounded-lg border border-stone-200 text-sm font-medium hover:bg-stone-50 transition-all flex items-center gap-2">
+          <button className="px-4 py-2 rounded-lg border border-stone-200 text-sm font-medium hover:bg-stone-50 transition-all flex items-center justify-center gap-2 w-full sm:w-auto">
             <GitBranch className="w-4 h-4" />
             Change Orders
           </button>
         </Link>
       </div>
       <div className="card overflow-hidden">
-        <div className="bg-primary px-8 py-6 text-primary-foreground">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm opacity-80">Deal Summary</p>
-              <h2 className="text-2xl font-bold mt-1">{deal.title}</h2>
-              <p className="text-sm opacity-80 mt-1">{deal.dealNumber} | {deal.client?.name}</p>
+        {/* Hero — stacked on mobile (fee under title), side-by-side on desktop */}
+        <div className="bg-primary px-4 sm:px-8 py-4 sm:py-6 text-primary-foreground">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
+            <div className="min-w-0">
+              <p className="text-[11px] sm:text-sm opacity-80 uppercase sm:normal-case tracking-wider sm:tracking-normal">Deal Summary</p>
+              <h2 className="text-base sm:text-2xl font-bold mt-0.5 sm:mt-1 leading-tight break-words">{deal.title}</h2>
+              <p className="text-[11px] sm:text-sm opacity-80 mt-1 truncate">{deal.dealNumber} | {deal.client?.name}</p>
             </div>
-            <div className="text-right">
-              <p className="text-3xl font-bold">{formatCurrency(deal.totalFee || 0)}</p>
-              <p className="text-sm opacity-80 mt-1">Total Engagement Fee</p>
+            <div className="sm:text-right shrink-0 border-t sm:border-t-0 border-white/20 pt-3 sm:pt-0">
+              <p className="text-2xl sm:text-3xl font-bold leading-none">{formatCurrency(deal.totalFee || 0)}</p>
+              <p className="text-[11px] sm:text-sm opacity-80 mt-1">Total Engagement Fee</p>
             </div>
           </div>
         </div>
 
-        <div className="p-8">
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-6 mb-8">
-            <div className="text-center p-4 bg-muted/50 rounded-xl">
-              <p className="text-xs text-muted-foreground mb-1">Total Cost</p>
-              <p className="text-lg font-bold text-foreground">{formatCurrency(deal.totalCost || 0)}</p>
+        <div className="p-3 sm:p-8">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-6 mb-4 sm:mb-8">
+            <div className="text-center p-2.5 sm:p-4 bg-muted/50 rounded-xl">
+              <p className="text-[10px] sm:text-xs text-muted-foreground mb-0.5 sm:mb-1 uppercase tracking-wider sm:normal-case sm:tracking-normal">Total Cost</p>
+              <p className="text-sm sm:text-lg font-bold text-foreground">{formatCurrency(deal.totalCost || 0)}</p>
             </div>
-            <div className="text-center p-4 bg-muted/50 rounded-xl">
-              <p className="text-xs text-muted-foreground mb-1">Margin</p>
-              <p className={cn("text-lg font-bold", parseFloat(deal.marginPercent) >= summaryTarget ? "text-success" : "text-warning")}>{formatPercent(deal.marginPercent || 0)}</p>
+            <div className="text-center p-2.5 sm:p-4 bg-muted/50 rounded-xl">
+              <p className="text-[10px] sm:text-xs text-muted-foreground mb-0.5 sm:mb-1 uppercase tracking-wider sm:normal-case sm:tracking-normal">Margin</p>
+              <p className={cn("text-sm sm:text-lg font-bold", parseFloat(deal.marginPercent) >= summaryTarget ? "text-success" : "text-warning")}>{formatPercent(deal.marginPercent || 0)}</p>
             </div>
-            <div className="text-center p-4 bg-muted/50 rounded-xl">
-              <p className="text-xs text-muted-foreground mb-1">Total Hours</p>
-              <p className="text-lg font-bold text-foreground">{formatNumber(deal.totalHours || 0)}</p>
+            <div className="text-center p-2.5 sm:p-4 bg-muted/50 rounded-xl">
+              <p className="text-[10px] sm:text-xs text-muted-foreground mb-0.5 sm:mb-1 uppercase tracking-wider sm:normal-case sm:tracking-normal">Total Hours</p>
+              <p className="text-sm sm:text-lg font-bold text-foreground">{formatNumber(deal.totalHours || 0)}</p>
             </div>
-            <div className="text-center p-4 bg-muted/50 rounded-xl">
-              <p className="text-xs text-muted-foreground mb-1">Blended Rate</p>
-              <p className="text-lg font-bold text-foreground">{formatCurrency(deal.blendedRate || 0)}/hr</p>
+            <div className="text-center p-2.5 sm:p-4 bg-muted/50 rounded-xl">
+              <p className="text-[10px] sm:text-xs text-muted-foreground mb-0.5 sm:mb-1 uppercase tracking-wider sm:normal-case sm:tracking-normal">Blended Rate</p>
+              <p className="text-sm sm:text-lg font-bold text-foreground">{formatCurrency(deal.blendedRate || 0)}/hr</p>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-8">
             <div>
               <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">Engagement Details</h3>
               <div className="space-y-2">
