@@ -4,6 +4,7 @@ import { useParams, Link } from "wouter";
 import { ArrowLeft, Plus, FileText, Check, X, Clock, TrendingUp, TrendingDown, Minus, GitBranch, AlertCircle } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { useAuth } from "@/context/AuthContext";
+import { fetchApi } from "@/hooks/use-api";
 
 interface ChangeOrder {
   id: number;
@@ -57,31 +58,28 @@ export function ChangeOrders() {
 
   const { data: deal } = useQuery({
     queryKey: ["deal", dealId],
-    queryFn: async () => { const r = await fetch(`/api/deals/${dealId}`); return r.json(); },
+    queryFn: () => fetchApi(`/api/deals/${dealId}`),
     enabled: !!dealId,
   });
 
-  const { data: orders = [], isLoading } = useQuery({
+  const { data: ordersRaw, isLoading } = useQuery({
     queryKey: ["change-orders", dealId],
-    queryFn: async () => { const r = await fetch(`/api/deals/${dealId}/change-orders`); return r.json(); },
+    queryFn: () => fetchApi(`/api/deals/${dealId}/change-orders`),
     enabled: !!dealId,
   });
+  // Defensive: fetchApi throws on non-2xx, but if upstream ever returns a
+  // wrapped object instead of an array, fall back to [] so .map() never blows
+  // up the page (the symptom that caused the blank white screen).
+  const orders: ChangeOrder[] = Array.isArray(ordersRaw) ? ordersRaw : [];
 
   const [error, setError] = useState<string | null>(null);
 
   const createOrder = useMutation({
-    mutationFn: async (data: any) => {
-      const r = await fetch(`/api/deals/${dealId}/change-orders`, {
+    mutationFn: (data: any) =>
+      fetchApi(`/api/deals/${dealId}/change-orders`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...data, createdBy: persona?.name || "System" }),
-      });
-      if (!r.ok) {
-        const err = await r.json().catch(() => ({ error: "Failed to create change order" }));
-        throw new Error(err.error || "Failed to create change order");
-      }
-      return r.json();
-    },
+      }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["change-orders", dealId] });
       qc.invalidateQueries({ queryKey: ["activity"] });
@@ -93,18 +91,11 @@ export function ChangeOrders() {
   });
 
   const updateOrder = useMutation({
-    mutationFn: async ({ id, status }: { id: number; status: string }) => {
-      const r = await fetch(`/api/change-orders/${id}`, {
+    mutationFn: ({ id, status }: { id: number; status: string }) =>
+      fetchApi(`/api/change-orders/${id}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status, approvedBy: persona?.name || "System" }),
-      });
-      if (!r.ok) {
-        const err = await r.json().catch(() => ({ error: "Failed to update change order" }));
-        throw new Error(err.error || "Failed to update change order");
-      }
-      return r.json();
-    },
+      }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["change-orders", dealId] });
       qc.invalidateQueries({ queryKey: ["deal", dealId] });
