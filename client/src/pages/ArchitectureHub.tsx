@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { Layers, Network, MessageSquare, FileText, Send, Bot, User, ChevronRight, Sparkles, Database, Server, Brain, Shield, Cpu, Cloud, BarChart3, ArrowRight, ExternalLink, Plug, Boxes, Scale } from "lucide-react";
+import { fetchApi } from "@/hooks/use-api";
 import { Architecture } from "./Architecture";
 import { ArchitectureInteractive } from "./ArchitectureInteractive";
 import { ArchitectureIntegrations } from "./ArchitectureIntegrations";
@@ -46,15 +47,10 @@ function ConversationalAI() {
     setIsLoading(true);
 
     try {
-      const res = await fetch("/api/ai/architecture-chat", {
+      const data = await fetchApi("/api/ai/architecture-chat", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message: text.trim(), history: messages }),
       });
-      if (!res.ok) {
-        throw new Error(`Server returned ${res.status}`);
-      }
-      const data = await res.json();
       const assistantMsg: ChatMessage = {
         role: "assistant",
         content: data.response,
