@@ -31,6 +31,10 @@ export function NewDeal() {
 
   const isRenewal = form.dealType === "renewal";
   const isNewEngagement = form.dealType === "new";
+  // Lower fields stay locked until the user has chosen Deal Type AND, for
+  // renewals, a prior deal to clone from. This prevents stub deals with no
+  // source from being created.
+  const fieldsLocked = !form.dealType || (isRenewal && !form.sourceDealId);
   const { data: eligibleOpps = [] } = useEligibleOpportunities(isNewEngagement ? form.clientId || null : undefined);
 
   const selectedOpp = useMemo(() => {
@@ -240,9 +244,13 @@ export function NewDeal() {
             </div>
           )}
 
-          <fieldset disabled={!form.dealType} className={!form.dealType ? "opacity-50 pointer-events-none select-none" : ""}>
-            {!form.dealType && (
-              <p className="text-xs text-muted-foreground mt-4 mb-2 italic">Select a Deal Type to enable the remaining fields.</p>
+          <fieldset disabled={fieldsLocked} className={fieldsLocked ? "opacity-50 pointer-events-none select-none" : ""}>
+            {fieldsLocked && (
+              <p className="text-xs text-muted-foreground mt-4 mb-2 italic">
+                {!form.dealType
+                  ? "Select a Deal Type to enable the remaining fields."
+                  : "Select a Prior Deal to Renew above to enable the remaining fields."}
+              </p>
             )}
             <div className="grid grid-cols-2 gap-3 mt-4">
               <div className="col-span-2">
