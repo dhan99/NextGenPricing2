@@ -717,12 +717,16 @@ export function registerDynamicsRoutes(app: Express) {
     }
 
     const dealNumber = `D-${Date.now().toString().slice(-7)}`;
+    const tmpl = pickTemplateForName(opp.name);
     const [newDeal] = await db.insert(deals).values({
       dealNumber,
       title: opp.name,
       clientId: clientId!,
       status: "draft",
       dealType: "new",
+      businessUnit: tmpl?.businessUnit ?? null,
+      serviceLine: tmpl?.serviceLine ?? null,
+      complexity: tmpl?.complexity ?? "medium",
       totalFee: opp.estimatedValue || "0",
       startDate: new Date().toISOString().slice(0, 10),
       endDate: opp.estimatedCloseDate || null,
