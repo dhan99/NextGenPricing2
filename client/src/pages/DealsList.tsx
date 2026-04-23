@@ -116,16 +116,20 @@ export function DealsList() {
               </button>
             ))}
           </div>
-          <div className="flex items-center gap-1 bg-muted rounded-lg p-0.5">
-            {(["all", "linked", "standalone"] as const).map((f) => (
-              <button key={f} onClick={() => setLinkFilter(f)}
-                className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-                  linkFilter === f ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
-                }`}>
-                {f === "all" ? "All" : f === "linked" ? "D365 linked" : "Standalone"}
-              </button>
-            ))}
-          </div>
+          {/* Source filter is meaningless on the Latest Opportunities tab —
+              every row there is by definition a D365-linked opportunity. */}
+          {archiveView !== "opportunities" && (
+            <div className="flex items-center gap-1 bg-muted rounded-lg p-0.5">
+              {(["all", "linked", "standalone"] as const).map((f) => (
+                <button key={f} onClick={() => setLinkFilter(f)}
+                  className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                    linkFilter === f ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+                  }`}>
+                  {f === "all" ? "All" : f === "linked" ? "D365 linked" : "Standalone"}
+                </button>
+              ))}
+            </div>
+          )}
           <div className="flex items-center gap-1 bg-muted rounded-lg p-0.5">
             {(["active", "archived", "all", "opportunities"] as const).map((v) => (
               <button key={v} onClick={() => setArchiveView(v)}
@@ -197,7 +201,7 @@ export function DealsList() {
       </div>
 
       {archiveView === "opportunities" ? (
-        <LatestOpportunitiesPanel search={search} />
+        <LatestOpportunitiesPanel search={search} statusFilter={statusFilter} />
       ) : viewMode === "table" ? (
         <div className="card overflow-x-auto hidden md:block">
           <table className="w-full min-w-[640px]">
@@ -380,12 +384,13 @@ export function DealsList() {
   );
 }
 
-function LatestOpportunitiesPanel({ search }: { search: string }) {
+function LatestOpportunitiesPanel({ search, statusFilter }: { search: string; statusFilter: string }) {
   const { data: opps = [], isLoading } = useDynamicsOpportunities();
   const [, navigate] = useLocation();
 
   const importedSorted = [...(opps as any[])]
     .filter((o) => !!o.dealpadDeal)
+    .filter((o) => statusFilter === "all" || o.dealpadDeal?.status === statusFilter)
     .filter((o) => {
       if (!search) return true;
       const q = search.toLowerCase();
