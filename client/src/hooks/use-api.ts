@@ -801,6 +801,107 @@ export function useIntappDashboard() {
   });
 }
 
+// ============ INTAKE (Intapp Intake) ============
+export function useIntakeRequests() {
+  return useQuery({ queryKey: ["intake-requests"], queryFn: () => fetchApi("/api/intake/requests"), refetchInterval: 8000 });
+}
+export function useIntakeRequest(id: number | null) {
+  return useQuery({
+    queryKey: ["intake-request", id],
+    queryFn: () => fetchApi(`/api/intake/requests/${id}`),
+    enabled: !!id,
+    refetchInterval: 5000,
+  });
+}
+export function useIntakeForDeal(dealId: number | null) {
+  return useQuery({
+    queryKey: ["intake-for-deal", dealId],
+    queryFn: () => fetchApi(`/api/intake/deals/${dealId}/request`),
+    enabled: !!dealId,
+  });
+}
+export function useOpenIntakeForDeal() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (dealId: number) => fetchApi(`/api/intake/deals/${dealId}/open`, { method: "POST" }),
+    onSuccess: (_d, dealId) => {
+      qc.invalidateQueries({ queryKey: ["intake-requests"] });
+      qc.invalidateQueries({ queryKey: ["intake-for-deal", dealId] });
+      qc.invalidateQueries({ queryKey: ["intake-events"] });
+      qc.invalidateQueries({ queryKey: ["intake-dashboard"] });
+    },
+  });
+}
+export function useIntakeExtractionAction() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, action, value }: { id: number; action: "accept" | "reject" | "edit"; value?: string }) =>
+      fetchApi(`/api/intake/extractions/${id}/${action}`, { method: "POST", body: JSON.stringify({ value }) }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["intake-request"] });
+      qc.invalidateQueries({ queryKey: ["intake-requests"] });
+    },
+  });
+}
+export function useIntakeApprovalDecide() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, status, notes }: { id: number; status: "approved" | "rejected" | "waived"; notes?: string }) =>
+      fetchApi(`/api/intake/approvals/${id}/decide`, { method: "POST", body: JSON.stringify({ status, notes }) }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["intake-request"] });
+      qc.invalidateQueries({ queryKey: ["intake-requests"] });
+      qc.invalidateQueries({ queryKey: ["intake-events"] });
+    },
+  });
+}
+export function useIntakeAttachPricingPacket() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => fetchApi(`/api/intake/requests/${id}/pricing-packet`, { method: "POST" }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["intake-request"] });
+      qc.invalidateQueries({ queryKey: ["intake-events"] });
+    },
+  });
+}
+export function useIntakeAccept() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => fetchApi(`/api/intake/requests/${id}/accept`, { method: "POST" }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["intake-request"] });
+      qc.invalidateQueries({ queryKey: ["intake-requests"] });
+      qc.invalidateQueries({ queryKey: ["intake-events"] });
+      qc.invalidateQueries({ queryKey: ["intake-dashboard"] });
+      qc.invalidateQueries({ queryKey: ["deals"] });
+    },
+  });
+}
+export function useIntakeReject() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, reason }: { id: number; reason: string }) =>
+      fetchApi(`/api/intake/requests/${id}/reject`, { method: "POST", body: JSON.stringify({ reason }) }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["intake-request"] });
+      qc.invalidateQueries({ queryKey: ["intake-requests"] });
+      qc.invalidateQueries({ queryKey: ["intake-events"] });
+    },
+  });
+}
+export function useIntakeEvents(requestId?: number | null) {
+  const qs = requestId ? `?requestId=${requestId}` : "";
+  return useQuery({
+    queryKey: ["intake-events", requestId ?? "all"],
+    queryFn: () => fetchApi(`/api/intake/events${qs}`),
+    refetchInterval: 6000,
+  });
+}
+export function useIntakeDashboard() {
+  return useQuery({ queryKey: ["intake-dashboard"], queryFn: () => fetchApi("/api/intake/dashboard"), refetchInterval: 10000 });
+}
+
 // ============ WORKDAY ============
 export function useWorkdaySettings() {
   return useQuery({ queryKey: ["wd-settings"], queryFn: () => fetchApi("/api/workday/settings") });
