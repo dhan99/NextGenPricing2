@@ -835,19 +835,20 @@ export function useOpenIntakeForDeal() {
 export function useIntakeExtractionAction() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, action, value }: { id: number; action: "accept" | "reject" | "edit"; value?: string }) =>
-      fetchApi(`/api/intake/extractions/${id}/${action}`, { method: "POST", body: JSON.stringify({ value }) }),
+    mutationFn: ({ id, action }: { id: number; action: "apply" | "dismiss" }) =>
+      fetchApi(`/api/intake/extractions/${id}/${action}`, { method: "POST" }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["intake-request"] });
       qc.invalidateQueries({ queryKey: ["intake-requests"] });
+      qc.invalidateQueries({ queryKey: ["intake-events"] });
     },
   });
 }
 export function useIntakeApprovalDecide() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, status, notes }: { id: number; status: "approved" | "rejected" | "waived"; notes?: string }) =>
-      fetchApi(`/api/intake/approvals/${id}/decide`, { method: "POST", body: JSON.stringify({ status, notes }) }),
+    mutationFn: ({ id, decision, notes }: { id: number; decision: "approved" | "rejected" | "waived"; notes?: string }) =>
+      fetchApi(`/api/intake/approvals/${id}/decide`, { method: "POST", body: JSON.stringify({ decision, notes }) }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["intake-request"] });
       qc.invalidateQueries({ queryKey: ["intake-requests"] });
@@ -858,7 +859,11 @@ export function useIntakeApprovalDecide() {
 export function useIntakeAttachPricingPacket() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (id: number) => fetchApi(`/api/intake/requests/${id}/pricing-packet`, { method: "POST" }),
+    mutationFn: ({ id, totalFee, margin, scopeSummary }: { id: number; totalFee: number; margin: number; scopeSummary: string }) =>
+      fetchApi(`/api/intake/requests/${id}/pricing-packet`, {
+        method: "POST",
+        body: JSON.stringify({ totalFee, margin, scopeSummary }),
+      }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["intake-request"] });
       qc.invalidateQueries({ queryKey: ["intake-events"] });

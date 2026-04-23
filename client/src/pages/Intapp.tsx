@@ -1,17 +1,22 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "wouter";
 import {
   Shield, AlertTriangle, CheckCircle2, Loader2, Activity, Settings as SettingsIcon,
   PlayCircle, History, ShieldAlert, Search, ChevronRight, Lock, Globe, Cog,
+  Inbox, Workflow, FileText, X, Check, Hourglass, Sparkles, Network,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import {
   useIntappSettings, useUpdateIntappSettings, useIntappScreenings,
   useRunIntappScreening, useIntappEvents, useIntappDashboard, useDeals,
+  useIntakeRequests, useIntakeRequest, useIntakeExtractionAction,
+  useIntakeApprovalDecide, useIntakeAccept, useIntakeReject, useIntakeEvents,
+  useOpenIntakeForDeal,
 } from "@/hooks/use-api";
 
 const TABS = [
-  { key: "overview", label: "Overview", icon: Activity },
+  { key: "intake", label: "Intake", icon: Inbox },
+  { key: "overview", label: "Conflicts overview", icon: Activity },
   { key: "screenings", label: "Screenings", icon: Search },
   { key: "events", label: "Audit log", icon: History },
   { key: "settings", label: "Settings", icon: SettingsIcon },
@@ -31,9 +36,9 @@ export function Intapp() {
             <ShieldAlert className="w-5 h-5 sm:w-6 sm:h-6 text-amber-700" />
           </div>
           <div className="min-w-0">
-            <h1 className="text-xl sm:text-2xl font-bold text-foreground">Intapp Risk &amp; Compliance</h1>
+            <h1 className="text-xl sm:text-2xl font-bold text-foreground">Intapp Intake &amp; Conflicts</h1>
             <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
-              Conflicts, sanctions, PEP and independence screening — running in{" "}
+              AI request intake, federated approvals and matter acceptance — wired to conflicts, sanctions, PEP and independence screening. Running in{" "}
               <span className="font-semibold text-foreground">{settings?.mode === "live" ? "LIVE" : "SIMULATION"}</span> mode for the 4-week pilot.
             </p>
           </div>
@@ -65,12 +70,426 @@ export function Intapp() {
         </nav>
       </div>
 
+      {tab === "intake" && <IntakeTab />}
       {tab === "overview" && <OverviewTab />}
       {tab === "screenings" && <ScreeningsTab />}
       {tab === "events" && <EventsTab />}
       {tab === "settings" && <SettingsTab />}
     </div>
   );
+}
+
+// =====================================================================
+// INTAKE TAB — Intapp Intake (federated workflow peer)
+// =====================================================================
+
+const STAGE_ORDER = ["draft", "screening", "policy", "approval", "accepted"] as const;
+const STAGE_LABEL: Record<string, string> = {
+  draft: "Draft", screening: "Screening", policy: "Policy", approval: "Federated approval",
+  accepted: "Accepted", rejected: "Rejected", on_hold: "On hold",
+};
+
+// Lifecycle interaction map — how DealPad and Intapp Intake hand off across stages.
+const LIFECYCLE_MAP: { stage: string; out: string; in: string }[] = [
+  { stage: "Opportunity imported", out: "open / attach request",                       in: "requestId + preliminary risk tier" },
+  { stage: "Wizard step 1–3",      out: "(read) pull AI extractions",                  in: "webhook request.updated on drift" },
+  { stage: "Wizard step 4–6",      out: "post pricing / scope packet on submit",       in: "approval matrix" },
+  { stage: "Submitted → in-review",out: "post evidence as DealPad approvers act",      in: "webhook approval.completed for Intake-side approvers" },
+  { stage: "Approved",             out: "mark deal ready for matter open",             in: "webhook request.accepted w/ matterId" },
+  { stage: "Letter generated",     out: "(no Intake call — Conga handles)",            in: "Conga delivery webhook closes Intake task" },
+  { stage: "Change order saved",   out: "post scope-change event",                     in: "requiresReapproval verdict" },
+  { stage: "Live engagement",      out: "(none)",                                      in: "continuous-monitoring webhook on conflict / sanctions delta" },
+];
+
+function IntakeTab() {
+  const { data: requests = [], isLoading } = useIntakeRequests();
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const sorted = useMemo(() => [...(requests as any[])].sort((a, b) =>
+    new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+  ), [requests]);
+
+  return (
+    <div className="space-y-6">
+      {/* ----- Net assessment for the pilot (architectural framing copy) ----- */}
+      <div className="card p-5 bg-stone-50 border-stone-200">
+        <div className="flex items-start gap-3">
+          <Network className="w-5 h-5 text-stone-700 mt-0.5 flex-shrink-0" />
+          <div className="space-y-2 text-sm leading-relaxed text-foreground">
+            <h3 className="font-semibold">Net assessment for the pilot</h3>
+            <p className="text-muted-foreground">
+              <span className="font-medium text-foreground">Intake is a workflow peer, not a data source.</span>{" "}
+              Treating it as a passive system we POST to on approval misses the point — it has its own approvers, policies and lifecycle.
+              The right model is federated approvals with explicit handshake events.
+            </p>
+            <p className="text-muted-foreground">
+              <span className="font-medium text-foreground">The Risk / Conflicts integration is a subset of Intake.</span>{" "}
+              Once Intake sits in front of the funnel, the screening trigger moves into Intake and our local screenings table becomes a mirror, not a source.
+            </p>
+            <p className="text-muted-foreground">
+              <span className="font-medium text-foreground">Two correlation IDs do all the work:</span>{" "}
+              <code className="px-1 py-0.5 rounded bg-white border border-stone-200 text-[11px] font-mono">intakeRequestId</code> (created at scoping start)
+              and <code className="px-1 py-0.5 rounded bg-white border border-stone-200 text-[11px] font-mono">intakeMatterId</code> (assigned at acceptance).
+              Both are persisted alongside each deal (on the intake request record) so every downstream system can be wired to either, without DealPad needing to know how Intake routed the workflow internally.
+            </p>
+            <p className="text-muted-foreground">
+              <span className="font-medium text-foreground">Provider pattern stays.</span>{" "}
+              <code className="px-1 py-0.5 rounded bg-white border border-stone-200 text-[11px] font-mono">server/intake.ts</code>{" "}
+              (simulated → live) lets the pilot run end-to-end before any live Intapp tenant is available; cutover is a config + secret change, not a refactor —
+              the same playbook as Dynamics, Workday, Intapp Risk and Conga.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* ----- Lifecycle interaction map (DealPad ↔ Intake handoffs) ----- */}
+      <div className="card overflow-x-auto">
+        <div className="px-5 pt-4 pb-2 flex items-center gap-2">
+          <Workflow className="w-4 h-4 text-amber-700" />
+          <h3 className="text-sm font-semibold text-foreground">Lifecycle handoff map · DealPad ↔ Intapp Intake</h3>
+        </div>
+        <table className="w-full min-w-[720px] text-sm">
+          <thead className="bg-stone-50 text-[11px] uppercase tracking-wider text-muted-foreground">
+            <tr>
+              <th className="text-left px-4 py-2.5">DealPad stage</th>
+              <th className="text-left px-4 py-2.5">DealPad → Intake</th>
+              <th className="text-left px-4 py-2.5">Intake → DealPad</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-stone-100">
+            {LIFECYCLE_MAP.map((row) => (
+              <tr key={row.stage} className="hover:bg-stone-50/60">
+                <td className="px-4 py-2.5 font-medium text-foreground whitespace-nowrap">{row.stage}</td>
+                <td className="px-4 py-2.5 text-muted-foreground">{row.out}</td>
+                <td className="px-4 py-2.5 text-muted-foreground">{row.in}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* ----- Live intake requests ----- */}
+      <div className="grid grid-cols-1 lg:grid-cols-[minmax(280px,360px)_1fr] gap-4">
+        <div className="card p-0 overflow-hidden">
+          <div className="px-4 py-3 border-b border-stone-200 flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-foreground">Open requests</h3>
+            <span className="text-[11px] text-muted-foreground">{sorted.length}</span>
+          </div>
+          <div className="max-h-[640px] overflow-auto divide-y divide-stone-100">
+            {isLoading && <div className="p-6 text-sm text-muted-foreground">Loading…</div>}
+            {!isLoading && sorted.length === 0 && (
+              <div className="p-6 text-sm text-muted-foreground text-center">No intake requests yet.</div>
+            )}
+            {sorted.map((r: any) => (
+              <button key={r.id} onClick={() => setSelectedId(r.id)}
+                className={`w-full text-left px-4 py-3 hover:bg-stone-50 transition-colors ${
+                  selectedId === r.id ? "bg-amber-50/70" : ""
+                }`}>
+                <div className="flex items-center gap-2 flex-wrap mb-1">
+                  <span className="text-sm font-semibold text-foreground truncate">{r.clientName || "—"}</span>
+                  <StageBadge stage={r.stage} />
+                  <RiskBadge tier={r.riskTier} />
+                </div>
+                <div className="text-[11px] text-muted-foreground font-mono truncate">{r.externalRef}</div>
+                <div className="text-xs text-muted-foreground mt-1 truncate">{r.dealNumber} · {r.dealTitle}</div>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          {selectedId ? (
+            <IntakeRequestDetail id={selectedId} />
+          ) : (
+            <div className="card p-10 text-center text-sm text-muted-foreground">
+              <Inbox className="w-8 h-8 mx-auto mb-2 text-stone-400" />
+              Select an intake request on the left to inspect AI extractions, federated approvers and acceptance gates.
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function IntakeRequestDetail({ id }: { id: number }) {
+  const { data, isLoading } = useIntakeRequest(id);
+  const { data: events = [] } = useIntakeEvents(id);
+  const extAct = useIntakeExtractionAction();
+  const apprAct = useIntakeApprovalDecide();
+  const accept = useIntakeAccept();
+  const reject = useIntakeReject();
+  const [rejectReason, setRejectReason] = useState("");
+  const [showReject, setShowReject] = useState(false);
+
+  if (isLoading || !data) return <div className="card p-6 text-sm text-muted-foreground">Loading request…</div>;
+
+  // getRequestDetail returns the request fields flattened at the root, alongside
+  // deal/client/extractions/approvals/screening/events. Use `data` directly as the
+  // request, then pull related collections off named keys.
+  const r: any = data;
+  const extractions: any[] = data.extractions || [];
+  const approvals: any[] = data.approvals || [];
+  const screeningCleared = ["clear", "mitigated", "override_approved"].includes(data.screening?.result);
+  const approversGreen = approvals.length > 0 && approvals.every((a) => a.status === "approved" || a.status === "waived");
+  const canAccept = screeningCleared && approversGreen && r.stage !== "accepted" && r.stage !== "rejected";
+
+  return (
+    <div className="space-y-4">
+      {/* Header card */}
+      <div className="card p-5">
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h3 className="text-base font-semibold text-foreground">{data.client?.name || "—"}</h3>
+              <StageBadge stage={r.stage} />
+              <RiskBadge tier={r.riskTier} />
+            </div>
+            <div className="text-xs text-muted-foreground mt-1">
+              <Link href={`/deals/${r.dealId}`}>
+                <span className="text-primary hover:underline cursor-pointer">{data.deal?.dealNumber}</span>
+              </Link>
+              {" · "}{data.deal?.title}
+            </div>
+            <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+              <Field label="intakeRequestId" value={r.externalRef} mono />
+              <Field label="intakeMatterId" value={r.matterId || "— (assigned on accept)"} mono />
+              <Field label="Service line" value={r.serviceLine || "—"} />
+              <Field label="Jurisdiction" value={r.jurisdiction || "—"} />
+            </div>
+          </div>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <button
+              onClick={() => accept.mutate(id)}
+              disabled={!canAccept || accept.isPending}
+              title={!screeningCleared ? "Screening must be clear, mitigated or override_approved" : !approversGreen ? "All federated approvers must sign off" : ""}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-emerald-600 text-white text-xs font-medium hover:bg-emerald-700 disabled:opacity-40">
+              {accept.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+              Accept &amp; assign matter
+            </button>
+            <button
+              onClick={() => setShowReject((v) => !v)}
+              disabled={r.stage === "accepted" || r.stage === "rejected"}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-stone-300 text-foreground text-xs font-medium hover:bg-stone-50 disabled:opacity-40">
+              <X className="w-3.5 h-3.5" /> Reject
+            </button>
+          </div>
+        </div>
+        {showReject && (
+          <div className="mt-3 flex items-end gap-2">
+            <div className="flex-1">
+              <label className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">Rejection reason (min 10 chars)</label>
+              <input value={rejectReason} onChange={(e) => setRejectReason(e.target.value)}
+                className="w-full mt-1 px-3 py-2 border border-stone-300 rounded-md text-sm focus:outline-none focus:border-primary"
+                placeholder="e.g. Client failed AML screening, see Intapp case 884."/>
+            </div>
+            <button
+              onClick={() => { reject.mutate({ id, reason: rejectReason }); setShowReject(false); setRejectReason(""); }}
+              disabled={rejectReason.trim().length < 10}
+              className="px-3 py-2 rounded-md bg-red-600 text-white text-xs font-medium disabled:opacity-40">
+              Confirm reject
+            </button>
+          </div>
+        )}
+
+        {/* Stage rail */}
+        <div className="mt-4 flex items-center gap-1 text-[11px] uppercase tracking-wider">
+          {STAGE_ORDER.map((s, idx) => {
+            const reached = STAGE_ORDER.indexOf(r.stage as any) >= idx || r.stage === "accepted";
+            const isCurrent = r.stage === s;
+            const tone = r.stage === "rejected" ? "bg-red-100 text-red-700"
+              : isCurrent ? "bg-amber-200 text-amber-900 font-bold"
+              : reached ? "bg-emerald-100 text-emerald-700"
+              : "bg-stone-100 text-muted-foreground";
+            return (
+              <span key={s} className="flex items-center gap-1">
+                <span className={`px-2 py-0.5 rounded ${tone}`}>{STAGE_LABEL[s]}</span>
+                {idx < STAGE_ORDER.length - 1 && <ChevronRight className="w-3 h-3 text-muted-foreground" />}
+              </span>
+            );
+          })}
+        </div>
+
+        {/* Acceptance gate */}
+        <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+          <Gate ok={screeningCleared} label="Conflicts screening: clear / mitigated / override approved" />
+          <Gate ok={approversGreen} label={`Federated approvers: ${approvals.filter(a => a.status === "approved" || a.status === "waived").length} / ${approvals.length} signed off`} />
+        </div>
+      </div>
+
+      {/* AI extractions */}
+      <div className="card p-5">
+        <div className="flex items-center gap-2 mb-3">
+          <Sparkles className="w-4 h-4 text-amber-700" />
+          <h4 className="text-sm font-semibold text-foreground">AI extractions from request packet</h4>
+          <span className="text-[11px] text-muted-foreground">{extractions.length} fields</span>
+        </div>
+        <div className="space-y-2">
+          {extractions.length === 0 && <div className="text-xs text-muted-foreground">No extractions captured yet.</div>}
+          {extractions.map((e) => (
+            <div key={e.id} className="flex items-start gap-3 p-3 rounded-md border border-stone-200">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-xs uppercase tracking-wider font-semibold text-muted-foreground">{e.fieldLabel}</span>
+                  <ConfidenceBadge value={Number(e.confidence)} />
+                  <ExtractionStatusBadge status={e.status} />
+                </div>
+                <div className="text-sm font-medium text-foreground mt-0.5">{e.value}</div>
+                <div className="text-[11px] text-muted-foreground mt-0.5">Source: <span className="font-mono">{e.sourceDoc}</span>{e.actedBy ? ` · ${e.status} by ${e.actedBy}` : ""}</div>
+              </div>
+              {e.status === "pending" && (
+                <div className="flex items-center gap-1 flex-shrink-0">
+                  <button onClick={() => extAct.mutate({ id: e.id, action: "apply" })}
+                    className="inline-flex items-center gap-1 px-2 py-1 rounded border border-emerald-300 text-emerald-700 text-[11px] font-medium hover:bg-emerald-50">
+                    <Check className="w-3 h-3" /> Apply
+                  </button>
+                  <button onClick={() => extAct.mutate({ id: e.id, action: "dismiss" })}
+                    className="inline-flex items-center gap-1 px-2 py-1 rounded border border-stone-300 text-foreground text-[11px] font-medium hover:bg-stone-50">
+                    <X className="w-3 h-3" /> Dismiss
+                  </button>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Federated approvals */}
+      <div className="card p-5">
+        <div className="flex items-center gap-2 mb-3">
+          <Lock className="w-4 h-4 text-amber-700" />
+          <h4 className="text-sm font-semibold text-foreground">Federated approvers</h4>
+          <span className="text-[11px] text-muted-foreground">Each works in their own queue inside Intapp.</span>
+        </div>
+        <div className="space-y-2">
+          {approvals.length === 0 && <div className="text-xs text-muted-foreground">No approvers required for this request.</div>}
+          {approvals.map((a) => (
+            <div key={a.id} className="flex items-start gap-3 p-3 rounded-md border border-stone-200">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-sm font-semibold text-foreground">{a.reviewerLabel}</span>
+                  <ApprovalStatusBadge status={a.status} />
+                  <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-stone-100 text-muted-foreground font-mono">{a.reviewerRole}</span>
+                </div>
+                <div className="text-xs text-muted-foreground mt-0.5">{a.reason}</div>
+                {a.decidedBy && (
+                  <div className="text-[11px] text-muted-foreground mt-1">
+                    {a.status} by {a.decidedBy} · {a.decidedAt ? new Date(a.decidedAt).toLocaleString() : ""}
+                    {a.notes ? ` — ${a.notes}` : ""}
+                  </div>
+                )}
+              </div>
+              {a.status === "pending" && (
+                <div className="flex items-center gap-1 flex-shrink-0">
+                  <button onClick={() => apprAct.mutate({ id: a.id, decision: "approved" })}
+                    className="inline-flex items-center gap-1 px-2 py-1 rounded bg-emerald-600 text-white text-[11px] font-medium hover:bg-emerald-700">
+                    <Check className="w-3 h-3" /> Approve
+                  </button>
+                  <button onClick={() => apprAct.mutate({ id: a.id, decision: "waived", notes: "Waived in DealPad pilot" })}
+                    className="inline-flex items-center gap-1 px-2 py-1 rounded border border-stone-300 text-foreground text-[11px] font-medium hover:bg-stone-50">
+                    Waive
+                  </button>
+                  <button onClick={() => apprAct.mutate({ id: a.id, decision: "rejected", notes: "Rejected in DealPad pilot" })}
+                    className="inline-flex items-center gap-1 px-2 py-1 rounded border border-red-300 text-red-700 text-[11px] font-medium hover:bg-red-50">
+                    <X className="w-3 h-3" /> Reject
+                  </button>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Linked screening */}
+      {data.screening && (
+        <div className="card p-5">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <Shield className="w-4 h-4 text-amber-700" />
+              <h4 className="text-sm font-semibold text-foreground">Linked Intapp Risk screening</h4>
+            </div>
+            <Link href="#"><span /></Link>
+          </div>
+          <div className="flex items-center gap-2 flex-wrap text-xs">
+            <ResultBadge result={data.screening.result} />
+            <span className="text-muted-foreground">Hits: <span className="font-semibold text-foreground tabular-nums">{data.screening.hitCount}</span></span>
+            <span className="text-muted-foreground">Tier: <RiskBadge tier={data.screening.riskTier} /></span>
+            <span className="text-muted-foreground font-mono">{data.screening.externalRef}</span>
+          </div>
+        </div>
+      )}
+
+      {/* Events */}
+      <div className="card p-5">
+        <h4 className="text-sm font-semibold text-foreground mb-3">Intake handshake events</h4>
+        <div className="space-y-1.5 max-h-[280px] overflow-auto">
+          {(events as any[]).length === 0 && <div className="text-xs text-muted-foreground">No events yet.</div>}
+          {(events as any[]).map((e) => (
+            <div key={e.id} className="flex items-start gap-2 text-xs py-1">
+              <span className="text-muted-foreground tabular-nums whitespace-nowrap">{new Date(e.createdAt).toLocaleString()}</span>
+              <span className="font-mono text-[10px] uppercase px-1.5 py-0.5 rounded bg-stone-100 text-muted-foreground">{e.eventType}</span>
+              <span className="text-foreground flex-1">{e.message}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Field({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+  return (
+    <div>
+      <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">{label}</div>
+      <div className={`text-foreground mt-0.5 truncate ${mono ? "font-mono text-[11px]" : ""}`}>{value}</div>
+    </div>
+  );
+}
+
+function Gate({ ok, label }: { ok: boolean; label: string }) {
+  return (
+    <div className={`flex items-center gap-2 px-2.5 py-1.5 rounded border ${ok ? "border-emerald-200 bg-emerald-50/60" : "border-amber-200 bg-amber-50/60"}`}>
+      {ok ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> : <Hourglass className="w-3.5 h-3.5 text-amber-600" />}
+      <span className={ok ? "text-emerald-800" : "text-amber-800"}>{label}</span>
+    </div>
+  );
+}
+
+function StageBadge({ stage }: { stage: string }) {
+  const tones: Record<string, string> = {
+    draft: "bg-stone-100 text-stone-700",
+    screening: "bg-blue-100 text-blue-700",
+    policy: "bg-violet-100 text-violet-700",
+    approval: "bg-amber-100 text-amber-700",
+    accepted: "bg-emerald-100 text-emerald-700",
+    rejected: "bg-red-100 text-red-700",
+    on_hold: "bg-stone-200 text-stone-700",
+  };
+  return <span className={`text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded font-semibold ${tones[stage] || "bg-stone-100 text-stone-700"}`}>{STAGE_LABEL[stage] || stage}</span>;
+}
+
+function ApprovalStatusBadge({ status }: { status: string }) {
+  const tones: Record<string, string> = {
+    pending: "bg-amber-100 text-amber-700",
+    approved: "bg-emerald-100 text-emerald-700",
+    waived: "bg-stone-200 text-stone-700",
+    rejected: "bg-red-100 text-red-700",
+  };
+  return <span className={`text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded font-semibold ${tones[status] || "bg-stone-100 text-stone-700"}`}>{status}</span>;
+}
+
+function ExtractionStatusBadge({ status }: { status: string }) {
+  const tones: Record<string, string> = {
+    pending: "bg-amber-100 text-amber-700",
+    applied: "bg-emerald-100 text-emerald-700",
+    dismissed: "bg-stone-200 text-stone-700",
+  };
+  return <span className={`text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded font-semibold ${tones[status] || "bg-stone-100 text-stone-700"}`}>{status}</span>;
+}
+
+function ConfidenceBadge({ value }: { value: number }) {
+  const pct = Math.round(value * 100);
+  const tone = pct >= 90 ? "bg-emerald-100 text-emerald-700" : pct >= 75 ? "bg-amber-100 text-amber-700" : "bg-red-100 text-red-700";
+  return <span className={`text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded font-semibold tabular-nums ${tone}`}>{pct}% conf</span>;
 }
 
 function OverviewTab() {

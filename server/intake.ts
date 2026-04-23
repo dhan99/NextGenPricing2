@@ -467,7 +467,11 @@ export function registerIntakeRoutes(app: Express) {
     res.json(updated);
   });
 
-  // Decide an approval (federated)
+  // Decide an approval (federated). Each reviewerRole maps to the actor roles
+  // permitted to act on it — a non-GC actor cannot clear the GC gate, etc.
+  // QRM is treated as the demo super-reviewer for compliance gates; Finance
+  // owns Pricing Committee; PDL/SLL can sign off on operational/jurisdictional
+  // gates only when explicitly assigned to them in the demo.
   app.post("/api/intake/approvals/:id/decide", requirePerm("approveDeals"), async (req: Request, res: Response) => {
     const id = requireRoles(req, res, ["qrm", "sll", "pdl", "fin"]);
     if (!id) return;
@@ -479,6 +483,25 @@ export function registerIntakeRoutes(app: Express) {
     }
     const [appr] = await db.select().from(intakeApprovals).where(eq(intakeApprovals.id, apprId));
     if (!appr) return res.status(404).json({ error: "Approval not found" });
+
+    // Federated reviewer authorization — actor's role must be permitted to
+    // decide on this specific approval row (mirrors reviewer-queue boundaries
+    // inside Intapp Intake itself).
+    const REVIEWER_ROLE_MAP: Record<string, string[]> = {
+      gc: ["qrm"],
+      ethics: ["qrm"],
+      independence_partner: ["qrm"],
+      jurisdictional_counsel: ["qrm", "sll"],
+      aml: ["qrm"],
+      pricing_committee: ["fin", "qrm"],
+    };
+    const allowedActors = REVIEWER_ROLE_MAP[appr.reviewerRole] || ["qrm"];
+    if (!allowedActors.includes(id.role)) {
+      return res.status(403).json({
+        error: `Role '${id.role}' may not decide reviewer gate '${appr.reviewerRole}'. Allowed: ${allowedActors.join(", ")}.`,
+        code: "reviewer_role_forbidden",
+      });
+    }
     const [updated] = await db.update(intakeApprovals).set({
       status: decision, decidedBy: id.name, decidedAt: new Date(),
       notes: notes || null,
