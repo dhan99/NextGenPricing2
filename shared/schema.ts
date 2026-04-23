@@ -442,6 +442,68 @@ export const intappEvents = pgTable("intapp_events", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+// ============ INTAPP INTAKE (simulation, swappable to live) ============
+// Sits in front of conflicts: opens a request per deal, runs AI extractions,
+// drives a federated approval matrix, ties to the screening engine, and
+// assigns a matter ID at acceptance.
+export const intakeRequests = pgTable("intake_requests", {
+  id: serial("id").primaryKey(),
+  dealId: integer("deal_id").references(() => deals.id).notNull().unique(),
+  externalRef: text("external_ref").notNull(),
+  source: text("source").notNull().default("simulated"),
+  stage: text("stage").notNull().default("draft"), // draft | screening | policy | approval | accepted | rejected | on_hold
+  riskTier: text("risk_tier").notNull().default("low"), // low | medium | high
+  serviceLine: text("service_line"),
+  jurisdiction: text("jurisdiction"),
+  matterId: text("matter_id"),
+  policyVersion: text("policy_version"),
+  rejectionReason: text("rejection_reason"),
+  acceptedAt: timestamp("accepted_at"),
+  acceptedBy: text("accepted_by"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const intakeExtractions = pgTable("intake_extractions", {
+  id: serial("id").primaryKey(),
+  requestId: integer("request_id").references(() => intakeRequests.id).notNull(),
+  fieldKey: text("field_key").notNull(), // contact | scope_summary | start_date | service_line | risk_factor | budget_range
+  fieldLabel: text("field_label").notNull(),
+  value: text("value").notNull(),
+  sourceDoc: text("source_doc").notNull(), // simulated source: "RFP_v2.pdf" etc.
+  confidence: decimal("confidence", { precision: 4, scale: 3 }).notNull().default("0.900"),
+  status: text("status").notNull().default("pending"), // pending | applied | dismissed
+  actedBy: text("acted_by"),
+  actedAt: timestamp("acted_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const intakeApprovals = pgTable("intake_approvals", {
+  id: serial("id").primaryKey(),
+  requestId: integer("request_id").references(() => intakeRequests.id).notNull(),
+  reviewerRole: text("reviewer_role").notNull(), // gc | aml | ethics | pricing_committee | independence_partner | jurisdictional_counsel
+  reviewerLabel: text("reviewer_label").notNull(),
+  reason: text("reason").notNull(),
+  status: text("status").notNull().default("pending"), // pending | approved | rejected | waived
+  decidedBy: text("decided_by"),
+  decidedAt: timestamp("decided_at"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const intakeEvents = pgTable("intake_events", {
+  id: serial("id").primaryKey(),
+  requestId: integer("request_id").references(() => intakeRequests.id),
+  dealId: integer("deal_id").references(() => deals.id),
+  eventType: text("event_type").notNull(),
+  source: text("source").default("simulated"),
+  actorName: text("actor_name"),
+  actorRole: text("actor_role"),
+  message: text("message"),
+  metadata: jsonb("metadata"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 // ============ WORKDAY SIMULATION (persistent) ============
 export const workdaySettings = pgTable("workday_settings", {
   id: serial("id").primaryKey(),

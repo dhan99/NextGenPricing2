@@ -565,10 +565,12 @@ import {
 import { registerWorkdayRoutes, onDealSaved, onDealSubmitted } from "./workday";
 import { dynamicsAccounts } from "../shared/schema";
 import { registerCongaRoutes } from "./conga";
+import { registerIntakeRoutes } from "./intake";
 
 export function registerRoutes(app: Express) {
   registerDynamicsRoutes(app);
   registerIntappRoutes(app);
+  registerIntakeRoutes(app);
   registerWorkdayRoutes(app);
   registerCongaRoutes(app);
 

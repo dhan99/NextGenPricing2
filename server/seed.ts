@@ -3,6 +3,7 @@ import { clients, deals, scopeCatalog, roles, rateCards, rateCardEntries, dealSc
 import { sql, eq, and, isNull, desc } from "drizzle-orm";
 import { seedDynamics } from "./dynamics";
 import { seedIntapp } from "./intapp";
+import { seedIntake } from "./intake";
 import { seedWorkday } from "./workday";
 import { loadSeedSnapshot } from "./snapshot-loader";
 
@@ -347,6 +348,7 @@ export async function seedAll(): Promise<SeedStepResult[]> {
     // Integrations (non-fatal): a failed simulator should not block the server.
     results.push(await runStep("integration:dynamics", () => seedDynamics(), { fatal: false }));
     results.push(await runStep("integration:intapp", () => seedIntapp(), { fatal: false }));
+    results.push(await runStep("integration:intake", () => seedIntake(), { fatal: false }));
     results.push(await runStep("integration:workday", () => seedWorkday(), { fatal: false }));
   } finally {
     try {
