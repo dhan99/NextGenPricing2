@@ -2086,6 +2086,7 @@ function DealBanner({ deal, currentStep, navigateToStep, summaryUnlocked }: { de
   const dynamicsSyncedAt = dynamics?.lastSyncedAt ? formatRelativeTime(dynamics.lastSyncedAt) : null;
   const { data: intake } = useIntakeForDeal(deal.id);
   const openIntake = useOpenIntakeForDeal();
+  const { data: liveScreening } = useDealIntappScreening(deal.id);
 
   const stepProgress = ((currentStep - 1) / (STEPS.length - 1)) * 100;
 
@@ -2250,6 +2251,11 @@ function DealBanner({ deal, currentStep, navigateToStep, summaryUnlocked }: { de
                   Open Intake request
                 </button>
               )}
+
+              {/* Conflicts screening status — non-blocking, polls every 5s.
+                  Wizard keeps moving in parallel; gating only fires at submit/accept. */}
+              <ScreeningPill screening={liveScreening} dealId={deal.id} />
+              
 
               <span className="inline-flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-full bg-muted/60 text-muted-foreground border border-border">
                 <SaveIcon className="w-3 h-3" />
@@ -4432,5 +4438,42 @@ function WorkdayDealPanel({ deal }: { deal: any }) {
         </div>
       )}
     </div>
+  );
+}
+
+// Non-blocking screening status pill rendered in the deal header trust chips.
+// Polls every 5s via useDealIntappScreening; never gates the wizard.
+function ScreeningPill({ screening, dealId }: { screening: any; dealId: number }) {
+  if (!screening) {
+    return (
+      <Link href="/integrations/intapp">
+        <span className="inline-flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-full bg-stone-100 text-muted-foreground border border-stone-200 hover:bg-stone-200 cursor-pointer transition-colors">
+          <Loader2 className="w-3 h-3 animate-spin" />
+          Screening pending
+        </span>
+      </Link>
+    );
+  }
+  const result = String(screening.result || "").toLowerCase();
+  const tier = String(screening.riskTier || "").toLowerCase();
+  const hits = Number(screening.hitCount || 0);
+  const tones: Record<string, { cls: string; Icon: any; label: string }> = {
+    clear:              { cls: "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100", Icon: ShieldCheck, label: "Clear" },
+    mitigated:          { cls: "bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100",        Icon: Shield,       label: "Mitigated" },
+    override_approved:  { cls: "bg-violet-50 text-violet-700 border-violet-200 hover:bg-violet-100",    Icon: Unlock,       label: "Override approved" },
+    review:             { cls: "bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100",        Icon: ShieldAlert,  label: "Review" },
+    conflict:           { cls: "bg-red-50 text-red-700 border-red-200 hover:bg-red-100",                Icon: AlertTriangle, label: "Conflict" },
+  };
+  const t = tones[result] || { cls: "bg-stone-50 text-stone-700 border-stone-200 hover:bg-stone-100", Icon: Shield, label: result || "—" };
+  const Icon = t.Icon;
+  return (
+    <Link href="/integrations/intapp">
+      <span className={`inline-flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-full border cursor-pointer transition-colors ${t.cls}`}>
+        <Icon className="w-3 h-3" />
+        Screening: {t.label}
+        {tier && <span className="opacity-80">· {tier} tier</span>}
+        <span className="opacity-80">· {hits} hit{hits === 1 ? "" : "s"}</span>
+      </span>
+    </Link>
   );
 }
