@@ -908,6 +908,16 @@ export function registerRoutes(app: Express) {
       await linkDealToOpportunity(parseInt(dynamicsOpportunityId), newDeal.id, req.body.pdlName).catch(() => {});
     }
 
+    // Auto-open an Intapp Intake request for the new deal — the same way a
+    // matter request would be opened in Intapp the moment scoping starts.
+    // Non-fatal: a simulator hiccup must never block deal creation.
+    try {
+      const { ensureIntakeRequest } = await import("./intake");
+      await ensureIntakeRequest(newDeal.id, req.body.pdlName || "DealPad Auto");
+    } catch (e: any) {
+      console.error(`[intake] auto-open failed for deal ${newDeal.id}:`, e?.message || e);
+    }
+
     res.status(201).json(newDeal);
   });
 

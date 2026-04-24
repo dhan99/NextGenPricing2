@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useRoute } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
-import { useDeal, useUpdateDeal, useScopeCatalog, useScopeTemplates, useApplyScopeTemplate, useErpRescale, useDealScopeItems, useAddScopeItem, useRemoveScopeItem, useRoles, useDealPricing, useUpdatePricingLine, useDealScenarios, useSelectScenario, useDealApprovals, useSubmitApproval, useUpdateApproval, useDealPrompts, useUpdatePrompt, useEngagementInputSpec, useAIDealSimilarity, useAIEffortEstimation, useAIMarginAdvisor, useAIScenarioRecommendation, useAIRiskSummary, useDealIntappScreening, useRunIntappScreening, useIntappOverride, useAddIntappMitigation, useUpdateIntappMitigation, useWorkdayLatestValidation, useWorkdayCostCenters, useRunWorkdayValidation, useLinkWorkdayCostCenter, useOverrideWorkdayValidation, usePromptSets, useCongaTemplates, useDealEngagementLetters, useGenerateEngagementLetter, useAgentApproveDeal, useAgentDiscardDeal, useAgentOpenWizard, useAgentResubmit, useDealMarginTarget, openProtectedDoc } from "@/hooks/use-api";
+import { useDeal, useUpdateDeal, useScopeCatalog, useScopeTemplates, useApplyScopeTemplate, useErpRescale, useDealScopeItems, useAddScopeItem, useRemoveScopeItem, useRoles, useDealPricing, useUpdatePricingLine, useDealScenarios, useSelectScenario, useDealApprovals, useSubmitApproval, useUpdateApproval, useDealPrompts, useUpdatePrompt, useEngagementInputSpec, useAIDealSimilarity, useAIEffortEstimation, useAIMarginAdvisor, useAIScenarioRecommendation, useAIRiskSummary, useDealIntappScreening, useRunIntappScreening, useIntappOverride, useAddIntappMitigation, useUpdateIntappMitigation, useWorkdayLatestValidation, useWorkdayCostCenters, useRunWorkdayValidation, useLinkWorkdayCostCenter, useOverrideWorkdayValidation, usePromptSets, useCongaTemplates, useDealEngagementLetters, useGenerateEngagementLetter, useAgentApproveDeal, useAgentDiscardDeal, useAgentOpenWizard, useAgentResubmit, useDealMarginTarget, openProtectedDoc, useIntakeForDeal, useOpenIntakeForDeal } from "@/hooks/use-api";
 import { ResultBadge as IntappResultBadge, RiskBadge as IntappRiskBadge, SourceBadge as IntappSourceBadge } from "./Intapp";
 import { ShieldAlert, ShieldCheck, Unlock } from "lucide-react";
 import { formatCurrency, formatPercent, formatNumber, formatRelativeTime, getStatusColor, getStatusLabel, cn } from "@/lib/utils";
 import { evaluatePracticeLeadTrigger } from "@shared/policy";
-import { ArrowLeft, Check, ChevronRight, Sparkles, AlertTriangle, TrendingUp, TrendingDown, Target, FileText, Shield, CheckCircle, XCircle, Clock, Loader2, Plus, Trash2, Lightbulb, RefreshCw, Pencil, Save, GitBranch, Layers, X, Database, Save as SaveIcon, MessageSquare, ArrowUpRight, ArrowDownRight, MoreHorizontal, Copy, Archive, Download } from "lucide-react";
+import { ArrowLeft, Check, ChevronRight, Sparkles, AlertTriangle, TrendingUp, TrendingDown, Target, FileText, Shield, CheckCircle, XCircle, Clock, Loader2, Plus, Trash2, Lightbulb, RefreshCw, Pencil, Save, GitBranch, Layers, X, Database, Save as SaveIcon, MessageSquare, ArrowUpRight, ArrowDownRight, MoreHorizontal, Copy, Archive, Download, Inbox } from "lucide-react";
 import { Link } from "wouter";
 import { useAuth } from "@/context/AuthContext";
 import { AskDealPadAI } from "@/components/AskDealPadAI";
@@ -2084,6 +2084,8 @@ function DealBanner({ deal, currentStep, navigateToStep, summaryUnlocked }: { de
   const dynamics = deal.dynamicsLink;
   const lastSaved = formatRelativeTime(deal.updatedAt);
   const dynamicsSyncedAt = dynamics?.lastSyncedAt ? formatRelativeTime(dynamics.lastSyncedAt) : null;
+  const { data: intake } = useIntakeForDeal(deal.id);
+  const openIntake = useOpenIntakeForDeal();
 
   const stepProgress = ((currentStep - 1) / (STEPS.length - 1)) * 100;
 
@@ -2227,6 +2229,26 @@ function DealBanner({ deal, currentStep, navigateToStep, summaryUnlocked }: { de
                   <Database className="w-3 h-3" />
                   CRM not linked
                 </span>
+              )}
+
+              {/* Intapp Intake chip — shows the request handshake (or lets you open one). */}
+              {intake ? (
+                <Link href="/intapp">
+                  <span className="inline-flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 cursor-pointer transition-colors">
+                    <Inbox className="w-3 h-3" />
+                    Intake: {intake.externalRef}
+                    <span className="text-amber-600/80">· {String(intake.stage).replace("_", " ")}</span>
+                    {intake.matterId && <span className="text-amber-600/80">· matter {intake.matterId}</span>}
+                  </span>
+                </Link>
+              ) : (
+                <button
+                  onClick={() => openIntake.mutate(deal.id)}
+                  disabled={openIntake.isPending}
+                  className="inline-flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-full bg-muted text-muted-foreground border border-border hover:bg-stone-100 transition-colors disabled:opacity-50">
+                  {openIntake.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Inbox className="w-3 h-3" />}
+                  Open Intake request
+                </button>
               )}
 
               <span className="inline-flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-full bg-muted/60 text-muted-foreground border border-border">
