@@ -360,6 +360,27 @@ function IntakeRequestDetail({ id }: { id: number }) {
           <h4 className="text-sm font-semibold text-foreground">Federated approvers</h4>
           <span className="text-[11px] text-muted-foreground">Each works in their own queue inside Intapp.</span>
         </div>
+
+        {/* Inline error banner — surfaces reviewer_role_forbidden and similar
+            policy errors so PDLs/POs see why their click was rejected. */}
+        {apprAct.isError && (
+          <div className="mb-3 flex items-start gap-2 p-2.5 rounded-md border border-red-200 bg-red-50 text-red-800 text-xs">
+            <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <div className="font-semibold">Action not permitted</div>
+              <div className="mt-0.5">{(apprAct.error as any)?.message || "Unable to record this decision."}</div>
+              {(apprAct.error as any)?.body?.code === "reviewer_role_forbidden" && (
+                <div className="mt-1 text-red-700/80">
+                  Switch persona to one of the allowed reviewers (top-right) and try again, or ask that reviewer to act from their own queue.
+                </div>
+              )}
+            </div>
+            <button onClick={() => apprAct.reset()} className="text-red-700 hover:text-red-900" aria-label="Dismiss">
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
+
         <div className="space-y-2">
           {approvals.length === 0 && <div className="text-xs text-muted-foreground">No approvers required for this request.</div>}
           {approvals.map((a) => (
