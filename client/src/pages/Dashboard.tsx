@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from "react";
 import { useDashboardSummary, useDeals, useWorkdayDashboard, fetchApi } from "@/hooks/use-api";
-import { formatCurrency, formatPercent, getStatusColor, getStatusLabel } from "@/lib/utils";
+import { formatCurrency, formatPercent, formatRelativeTime, getStatusColor, getStatusLabel } from "@/lib/utils";
 import { Link } from "wouter";
 import { TrendingUp, DollarSign, AlertCircle, ArrowRight, FileText, ShieldCheck, Layers, Network, BarChart3, Shield, CheckCircle, Search, Sparkles, Lightbulb, RefreshCw, Briefcase, Settings2, ChevronDown, ChevronUp, ChevronsUpDown } from "lucide-react";
 import { useAuth, type PersonaRole } from "@/context/AuthContext";
@@ -74,9 +74,13 @@ export function Dashboard() {
   const [expandedDealId, setExpandedDealId] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState("all");
 
-  type SortKey = "client" | "serviceLine" | "status" | "margin" | "totalFee" | "dealNumber";
+  type SortKey = "client" | "serviceLine" | "status" | "margin" | "totalFee" | "dealNumber" | "updatedAt";
   type SortDir = "asc" | "desc";
-  const [sortBy, setSortBy] = useState<SortKey>("totalFee");
+  // Reviewer personas (SLL/FIN/QRM) default to "freshest first" so they see
+  // newly submitted/edited deals at the top of their queue. Builders (PDL/PO)
+  // keep the existing largest-fee-first default.
+  const isReviewerPersona = role === "sll" || role === "fin" || role === "qrm";
+  const [sortBy, setSortBy] = useState<SortKey>(isReviewerPersona ? "updatedAt" : "totalFee");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const toggleSort = (key: SortKey) => {
     if (key === sortBy) {
@@ -104,6 +108,12 @@ export function Dashboard() {
         case "margin": return parseFloat(d.marginPercent || "0");
         case "totalFee": return parseFloat(d.totalFee || "0");
         case "dealNumber": return d.dealNumber || "";
+        // Parse to epoch ms so it sorts as a number (newest wins when desc).
+        // Fallback to 0 when missing keeps stale rows at the bottom.
+        case "updatedAt": {
+          const t = d.updatedAt ? Date.parse(d.updatedAt) : 0;
+          return Number.isFinite(t) ? t : 0;
+        }
       }
     };
     const sorted = [...list].sort((a, b) => {
@@ -439,7 +449,7 @@ export function Dashboard() {
               <div
                 role="row"
                 className="hidden sm:grid sticky top-0 z-10 px-5 py-2 border-b border-border bg-muted/40 backdrop-blur text-[10px] font-semibold uppercase tracking-wider text-muted-foreground gap-3"
-                style={{ gridTemplateColumns: "minmax(0,2.4fr) minmax(0,1.2fr) minmax(0,1fr) minmax(0,0.8fr) minmax(0,1fr) minmax(0,1fr)" }}
+                style={{ gridTemplateColumns: "minmax(0,2.2fr) minmax(0,1.1fr) minmax(0,0.9fr) minmax(0,0.8fr) minmax(0,1fr) minmax(0,0.9fr) minmax(0,1fr)" }}
               >
                 {([
                   { key: "client" as const, label: "Client / Title", align: "left" as const },
@@ -448,6 +458,7 @@ export function Dashboard() {
                   { key: "margin" as const, label: "Margin", align: "right" as const },
                   { key: "totalFee" as const, label: "Total Fee", align: "right" as const },
                   { key: "dealNumber" as const, label: "Deal #", align: "right" as const },
+                  { key: "updatedAt" as const, label: "Updated", align: "right" as const },
                 ]).map((col) => {
                   const active = sortBy === col.key;
                   const Arrow = active ? (sortDir === "asc" ? ChevronUp : ChevronDown) : ChevronsUpDown;
@@ -484,7 +495,7 @@ export function Dashboard() {
                       <div
                         role="row"
                         className="hidden sm:grid items-center px-5 py-3 gap-3 hover:bg-muted/50 transition-colors cursor-pointer"
-                        style={{ gridTemplateColumns: "minmax(0,2.4fr) minmax(0,1.2fr) minmax(0,1fr) minmax(0,0.8fr) minmax(0,1fr) minmax(0,1fr)" }}
+                        style={{ gridTemplateColumns: "minmax(0,2.2fr) minmax(0,1.1fr) minmax(0,0.9fr) minmax(0,0.8fr) minmax(0,1fr) minmax(0,0.9fr) minmax(0,1fr)" }}
                       >
                         {/* Client / Title */}
                         <div className="min-w-0">
@@ -515,6 +526,11 @@ export function Dashboard() {
                         </div>
                         {/* Deal # */}
                         <div className="min-w-0 text-right text-xs text-muted-foreground truncate">{deal.dealNumber}</div>
+                        {/* Last updated — relative time, helps reviewers spot
+                            freshly submitted/edited deals without scanning. */}
+                        <div className="min-w-0 text-right text-xs text-muted-foreground truncate" title={deal.updatedAt ? new Date(deal.updatedAt).toLocaleString() : ""}>
+                          {deal.updatedAt ? formatRelativeTime(deal.updatedAt) : "—"}
+                        </div>
                       </div>
                     </Link>
 
