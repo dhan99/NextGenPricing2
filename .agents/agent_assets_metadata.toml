@@ -42,3 +42,9 @@ id = "sixmTBVrTbFp_Uzd6AUl-"
 uri = "file://docs/strategy/cots-vs-build-one-pager.md"
 type = "text"
 title = "COTS vs Build — Scoping & Pricing Engine (Markdown source)"
+
+[[outputs]]
+id = "tKUOsDMFCMv_3cJGPlbGO"
+uri = "file://replit-project-rigor-playbook.md"
+type = "text"
+title = "Replit Project Rigor Playbook"
