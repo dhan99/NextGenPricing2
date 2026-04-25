@@ -472,7 +472,11 @@ export function registerIntakeRoutes(app: Express) {
   // QRM is treated as the demo super-reviewer for compliance gates; Finance
   // owns Pricing Committee; PDL/SLL can sign off on operational/jurisdictional
   // gates only when explicitly assigned to them in the demo.
-  app.post("/api/intake/approvals/:id/decide", requirePerm("approveDeals"), async (req: Request, res: Response) => {
+  // NOTE: route-level perm intentionally relaxed to viewRiskSummary — the
+  // real federated gating happens below via requireRoles + REVIEWER_ROLE_MAP.
+  // Using "approveDeals" here would block QRM/FIN at the middleware (only SLL
+  // has approveDeals=true in rbac.ts), defeating the federated reviewer model.
+  app.post("/api/intake/approvals/:id/decide", requirePerm("viewRiskSummary"), async (req: Request, res: Response) => {
     const id = requireRoles(req, res, ["qrm", "sll", "pdl", "fin"]);
     if (!id) return;
     const apprId = parseInt(req.params.id);
@@ -551,7 +555,9 @@ export function registerIntakeRoutes(app: Express) {
   });
 
   // Accept — assigns matter ID, gates on screening clear + approvers green
-  app.post("/api/intake/requests/:id/accept", requirePerm("approveDeals"), async (req: Request, res: Response) => {
+  // Route-level perm relaxed to viewRiskSummary; in-handler requireRoles is
+  // the source of truth (QRM or PDL only). See note on /decide above.
+  app.post("/api/intake/requests/:id/accept", requirePerm("viewRiskSummary"), async (req: Request, res: Response) => {
     const id = requireRoles(req, res, ["qrm", "pdl"]);
     if (!id) return;
     const reqId = parseInt(req.params.id);
@@ -582,7 +588,9 @@ export function registerIntakeRoutes(app: Express) {
   });
 
   // Reject
-  app.post("/api/intake/requests/:id/reject", requirePerm("approveDeals"), async (req: Request, res: Response) => {
+  // Route-level perm relaxed to viewRiskSummary; in-handler requireRoles is
+  // the source of truth (QRM or PDL only). See note on /decide above.
+  app.post("/api/intake/requests/:id/reject", requirePerm("viewRiskSummary"), async (req: Request, res: Response) => {
     const id = requireRoles(req, res, ["qrm", "pdl"]);
     if (!id) return;
     const reqId = parseInt(req.params.id);
