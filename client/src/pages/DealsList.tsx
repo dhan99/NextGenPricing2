@@ -1,5 +1,5 @@
 import { useDeals, useArchiveDeal, useRestoreDeal, useDynamicsOpportunities, useImportOpportunity } from "@/hooks/use-api";
-import { formatCurrency, formatPercent, getStatusColor, getStatusLabel } from "@/lib/utils";
+import { formatCurrency, formatPercent, formatRelativeTime, getStatusColor, getStatusLabel } from "@/lib/utils";
 import { Link } from "wouter";
 import { useState } from "react";
 import { Search, FileText, Plus, LayoutGrid, List, Filter, Copy, RefreshCw, MoreVertical, Loader2, Archive, ArchiveRestore, Database, Unlink, Sparkles, ArrowDownToLine } from "lucide-react";
@@ -38,11 +38,15 @@ export function DealsList() {
     return matchesSearch && matchesStatus && matchesLink;
   });
 
-  type DealSortKey = "deal" | "client" | "serviceLine" | "status" | "fee" | "margin" | "hours";
+  type DealSortKey = "deal" | "client" | "serviceLine" | "status" | "fee" | "margin" | "hours" | "updated";
+  // Default to freshest-first across all personas — every role benefits from
+  // seeing the most recently touched deals at the top of the engagements list,
+  // whether they're the author returning to a draft or a reviewer auditing
+  // newly submitted work.
   const { sortBy, sortDir, toggleSort, sorted: filtered } = useTableSort<any, DealSortKey>(
     baseFiltered,
-    "deal",
-    "asc",
+    "updated",
+    "desc",
     (d, key) => {
       switch (key) {
         case "deal": return d.title || "";
@@ -52,9 +56,14 @@ export function DealsList() {
         case "fee": return parseFloat(d.totalFee || "0");
         case "margin": return parseFloat(d.marginPercent || "0");
         case "hours": return parseFloat(d.totalHours || "0");
+        // Parse to epoch ms so the sort runs as a number (newest wins on desc).
+        case "updated": {
+          const t = d.updatedAt ? Date.parse(d.updatedAt) : 0;
+          return Number.isFinite(t) ? t : 0;
+        }
       }
     },
-    ["fee", "margin", "hours"] as const,
+    ["fee", "margin", "hours", "updated"] as const,
   );
 
   const standaloneCount = (deals || []).filter((d: any) => !d.dynamicsLink && !d.archivedAt).length;
@@ -214,6 +223,7 @@ export function DealsList() {
                 <SortableTH label="Fee" sortKey="fee" activeKey={sortBy} direction={sortDir} onToggle={toggleSort} align="right" className="px-6" />
                 <SortableTH label="Margin" sortKey="margin" activeKey={sortBy} direction={sortDir} onToggle={toggleSort} align="right" className="px-6" />
                 <SortableTH label="Hours" sortKey="hours" activeKey={sortBy} direction={sortDir} onToggle={toggleSort} align="right" className="px-6" />
+                <SortableTH label="Updated" sortKey="updated" activeKey={sortBy} direction={sortDir} onToggle={toggleSort} align="right" className="px-6" />
                 {hasPermission("createDeals") && (
                   <th className="text-right px-6 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Actions</th>
                 )}
@@ -256,6 +266,12 @@ export function DealsList() {
                   <td className="px-6 py-4 text-right text-sm font-semibold text-foreground">{formatCurrency(deal.totalFee || 0)}</td>
                   <td className="px-6 py-4 text-right text-sm text-foreground">{formatPercent(deal.marginPercent || 0)}</td>
                   <td className="px-6 py-4 text-right text-sm text-muted-foreground">{parseFloat(deal.totalHours || 0).toLocaleString()}</td>
+                  <td
+                    className="px-6 py-4 text-right text-sm text-muted-foreground whitespace-nowrap"
+                    title={deal.updatedAt ? new Date(deal.updatedAt).toLocaleString() : ""}
+                  >
+                    {deal.updatedAt ? formatRelativeTime(deal.updatedAt) : "—"}
+                  </td>
                   {hasPermission("createDeals") && (
                     <td className="px-6 py-4 text-right" onClick={(e) => e.stopPropagation()}>
                       <div className="relative inline-block">
@@ -360,7 +376,12 @@ export function DealsList() {
                   </div>
                   <span className={`badge ${getStatusColor(deal.status)}`}>{getStatusLabel(deal.status)}</span>
                 </div>
-                <p className="text-sm text-muted-foreground mb-4">{deal.client?.name}</p>
+                <div className="flex items-center justify-between mb-4">
+                  <p className="text-sm text-muted-foreground">{deal.client?.name}</p>
+                  <p className="text-[11px] text-muted-foreground" title={deal.updatedAt ? new Date(deal.updatedAt).toLocaleString() : ""}>
+                    {deal.updatedAt ? `Updated ${formatRelativeTime(deal.updatedAt)}` : ""}
+                  </p>
+                </div>
                 <div className="grid grid-cols-3 gap-3 pt-3 border-t border-border">
                   <div>
                     <p className="text-xs text-muted-foreground">Fee</p>
