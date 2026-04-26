@@ -48,3 +48,9 @@ id = "tKUOsDMFCMv_3cJGPlbGO"
 uri = "file://replit-project-rigor-playbook.md"
 type = "text"
 title = "Replit Project Rigor Playbook"
+
+[[outputs]]
+id = "8DZuGMWkdba06tY3FqlCU"
+uri = "file://attached_assets/DealPad_Stakeholder_Questions.xlsx"
+type = "table"
+title = "DealPad Stakeholder Questions Workbook"

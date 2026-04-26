@@ -574,7 +574,7 @@ grant_type=client_credentials
     auth: {
       tokenEndpoint: "https://identity.intapp.com/oauth2/token",
       scope: "intake.read intake.write screening.read screening.write matters.read matters.write",
-      header: "Authorization: Bearer <token>  ·  X-Tenant-Id: armanino",
+      audit: "intake_events + intapp_events (per-module, append-only) u2014 surfaced via /api/intake/events and /api/intapp/events; cross-module mirroring into activity_log is a forward-looking gap (currently only deal-lifecycle events land in activity_log)",
       secrets: ["INTAPP_API_TOKEN", "INTAPP_TENANT_ID", "INTAPP_BASE_URL", "INTAPP_OAUTH_CLIENT_ID", "INTAPP_OAUTH_CLIENT_SECRET"],
       tokenSample: `POST /oauth2/token  HTTP/1.1
 Host: identity.intapp.com
