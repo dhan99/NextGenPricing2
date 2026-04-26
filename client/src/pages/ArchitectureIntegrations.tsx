@@ -1,11 +1,12 @@
 import { useState } from "react";
 import {
   Building2, Briefcase, KeyRound, ArrowLeftRight, Code2, Map as MapIcon,
-  Download, FileText, ExternalLink, Workflow, ShieldCheck,
+  Download, FileText, ExternalLink, Workflow, ShieldCheck, Network,
 } from "lucide-react";
+import { IntappFederated } from "./ArchitectureIntappFederated";
 
-type ProviderId = "dynamics" | "workday";
-type SectionId = "overview" | "auth" | "endpoints" | "mapping" | "samples";
+type ProviderId = "dynamics" | "workday" | "intapp";
+type SectionId = "overview" | "auth" | "endpoints" | "mapping" | "samples" | "federated";
 
 interface Endpoint { method: string; path: string; purpose: string; }
 interface MapRow { internal: string; production: string; }
@@ -259,6 +260,215 @@ Authorization: Bearer eyJraWQiOi...`,
   },
 ];
 
+// ============================================================================
+// Intapp (Risk & Compliance · Intake + Screening)
+// Two cooperating modules under one provider:
+//   1) Intake     — federated client/matter onboarding workflow (intake_*)
+//   2) Screening  — conflicts / sanctions / PEP / independence (intapp_*)
+// Server impl: server/intake.ts + server/intapp.ts.
+// Deep federated narrative + diagrams live in ArchitectureIntappFederated.tsx
+// and render under the dedicated "Federated Model" section.
+// ============================================================================
+const INTAPP_READ: Endpoint[] = [
+  { method: "GET", path: "/api/intapp/settings",                    purpose: "Mode (simulated/live), tenant, screening defaults" },
+  { method: "GET", path: "/api/intapp/dashboard",                   purpose: "Cross-deal screening rollup (tier counts + open mitigations)" },
+  { method: "GET", path: "/api/intapp/screenings",                  purpose: "All screenings (filterable by deal / status / result)" },
+  { method: "GET", path: "/api/intapp/screenings/:id",              purpose: "Screening detail — hits + mitigations + history" },
+  { method: "GET", path: "/api/intapp/deals/:dealId/screening",     purpose: "Latest screening for a deal (drives the header pill)" },
+  { method: "GET", path: "/api/intapp/screenings/:id/mitigations",  purpose: "Mitigations attached to a screening" },
+  { method: "GET", path: "/api/intapp/events",                      purpose: "Recent screening events (last 100, or 200 when filtered by ?dealId=)" },
+  { method: "GET", path: "/api/intake/dashboard",                   purpose: "Intake rollup (open requests + per-stage counts)" },
+  { method: "GET", path: "/api/intake/requests",                    purpose: "All intake requests" },
+  { method: "GET", path: "/api/intake/requests/:id",                purpose: "Intake detail — extractions + approvals + screening + events" },
+  { method: "GET", path: "/api/intake/deals/:dealId/request",       purpose: "Intake record for a deal (drives the wizard side panel)" },
+  { method: "GET", path: "/api/intake/events",                      purpose: "Last 150 intake events (audit feed)" },
+];
+
+const INTAPP_WRITE: Endpoint[] = [
+  { method: "PATCH", path: "/api/intapp/settings",                       purpose: "Update mode / tenant / default screening sources" },
+  { method: "POST",  path: "/api/intapp/deals/:dealId/screen",           purpose: "Run a fresh screening for a deal" },
+  { method: "POST",  path: "/api/intapp/screenings/:id/recheck",         purpose: "Re-run an existing screening with the same payload" },
+  { method: "POST",  path: "/api/intapp/screenings/:id/mitigations",     purpose: "Attach a mitigation to a screening hit" },
+  { method: "PATCH", path: "/api/intapp/mitigations/:id",                purpose: "Resolve / waive / reject a mitigation" },
+  { method: "POST",  path: "/api/intapp/mitigations/:id/push",           purpose: "Manual outbound push of a mitigation status to Intapp" },
+  { method: "POST",  path: "/api/intapp/screenings/:id/push-outcome",    purpose: "Manual outbound push of a final screening outcome" },
+  { method: "POST",  path: "/api/intapp/screenings/:id/override",        purpose: "QRM override of a blocking screening result" },
+  { method: "POST",  path: "/api/intapp/deals/:dealId/override",         purpose: "QRM override at deal level (rare; full justification required)" },
+  { method: "POST",  path: "/api/intake/deals/:dealId/open",             purpose: "Open an intake request for a deal (auto-fired on deal create)" },
+  { method: "POST",  path: "/api/intake/extractions/:id/:action",        purpose: "Apply / dismiss an AI-extracted field" },
+  { method: "POST",  path: "/api/intake/approvals/:id/decide",           purpose: "Federated reviewer decision on a gate (approve / reject / waive)" },
+  { method: "POST",  path: "/api/intake/requests/:id/pricing-packet",    purpose: "Post the priced packet to Intake — recomputes Pricing Committee gate" },
+  { method: "POST",  path: "/api/intake/requests/:id/accept",            purpose: "Accept the intake request (final join with DealPad approval)" },
+  { method: "POST",  path: "/api/intake/requests/:id/reject",            purpose: "Reject the intake request with a reason" },
+];
+
+const INTAPP_MAP: MapRow[] = [
+  { internal: "GET /api/intake/requests/:id",                production: "GET /intake/requests/{externalRef}?include=extractions,approvals,events" },
+  { internal: "POST /api/intake/deals/:dealId/open",         production: "POST /intake/requests" },
+  { internal: "POST /api/intake/extractions/:id/:action",    production: "POST /intake/extractions/{id}/{action}" },
+  { internal: "POST /api/intake/approvals/:id/decide",       production: "POST /intake/approvals/{id}/decision" },
+  { internal: "POST /api/intake/requests/:id/pricing-packet", production: "POST /intake/requests/{ref}/pricing-packet (recomputes matrix)" },
+  { internal: "POST /api/intake/requests/:id/accept",        production: "POST /intake/requests/{ref}/accept" },
+  { internal: "POST /api/intake/requests/:id/reject",        production: "POST /intake/requests/{ref}/reject" },
+  { internal: "GET /api/intapp/screenings/:id",              production: "GET /screenings/{externalRef}?include=hits,mitigations" },
+  { internal: "POST /api/intapp/deals/:dealId/screen",       production: "POST /screenings  (with deal payload)" },
+  { internal: "POST /api/intapp/screenings/:id/recheck",     production: "POST /screenings/{ref}/recheck" },
+  { internal: "POST /api/intapp/screenings/:id/push-outcome", production: "POST /matters/{ref}/decision  (outbound auto-push)" },
+  { internal: "POST /api/intapp/mitigations/:id/push",       production: "POST /matters/{ref}/mitigations/{id}  (outbound auto-push)" },
+  { internal: "POST /api/intapp/screenings/:id/override",    production: "DealPad-internal audit (override fields + actor)" },
+];
+
+const INTAPP_FIELDS: FieldRow[] = [
+  { dealpad: "intake_requests.externalRef",     system: "intake.requests[].id",                   notes: "Stable ID, used for all subsequent calls" },
+  { dealpad: "intake_requests.stage",           system: "intake.requests[].workflow_stage",       notes: "draft → screening → policy → approval → accepted/rejected" },
+  { dealpad: "intake_requests.riskTier",        system: "intake.requests[].risk_assessment.tier", notes: "low / medium / high (drives reviewer matrix)" },
+  { dealpad: "intake_extractions.fieldKey + value + confidence", system: "intake.extractions[]",  notes: "AI-extracted fields with source doc + confidence" },
+  { dealpad: "intake_approvals.reviewerRole",   system: "intake.approvals[].reviewer_role",       notes: "gc / aml / ethics / independence_partner / jurisdictional_counsel / pricing_committee" },
+  { dealpad: "intake_approvals.status",         system: "intake.approvals[].decision",            notes: "pending / approved / rejected / waived" },
+  { dealpad: "intapp_screenings.externalRef",   system: "screenings[].id",                        notes: "1:1 with the Intapp screening record" },
+  { dealpad: "intapp_screenings.result",        system: "screenings[].result",                    notes: "clear / review / conflict — drives the header pill" },
+  { dealpad: "intapp_hits.hitType",             system: "screenings[].hits[].type",               notes: "sanctions_watchlist / industry_restriction / pep / independence / conflict_of_interest / regulatory_review / fee_threshold (auto-added when fee >= $500k)" },
+  { dealpad: "intapp_hits.severity",            system: "screenings[].hits[].severity",           notes: "high / medium / low — drives the rolled-up screening result tier" },
+  { dealpad: "intapp_mitigations.status",       system: "matters[].mitigations[].status",         notes: "open / resolved / waived / rejected" },
+];
+
+const INTAPP_SAMPLES: Sample[] = [
+  {
+    method: "POST", path: "/api/intake/deals/:dealId/open", purpose: "Open (or re-open) an intake request for a deal — the same code path that ensureIntakeRequest() runs inside POST /api/deals",
+    request: `POST /api/intake/deals/204/open
+{ "userName": "Marcus Chen", "role": "pdl" }
+
+# Production equivalent:
+POST /intake/requests
+Authorization: Bearer $INTAPP_API_TOKEN
+X-Tenant-Id: armanino
+{
+  "client_name": "Crestwood Holdings",
+  "service_line": "Audit",
+  "jurisdiction": "DE-US",
+  "estimated_fee": 412000,
+  "source_documents": ["RFP_v2.pdf", "ScopingCall_Notes.docx"]
+}`,
+    response: `{
+  "id": 47,
+  "externalRef": "INT-2026-000204",
+  "stage": "screening",
+  "riskTier": "medium",
+  "extractions": 6,
+  "approvalMatrix": [
+    { "reviewerRole": "gc",                     "status": "pending" },
+    { "reviewerRole": "independence_partner",   "status": "pending" },
+    { "reviewerRole": "pricing_committee",      "status": "pending" }
+  ],
+  "events": ["intake_opened", "extractions_proposed", "screening_requested"]
+}`,
+  },
+  {
+    method: "POST", path: "/api/intake/approvals/:id/decide", purpose: "Federated reviewer decides a single gate",
+    request: `POST /api/intake/approvals/188/decide
+{
+  "decision": "approved",
+  "notes": "Independence checklist signed. Partner rotation not required (5y < 7y limit).",
+  "userName": "Dana Rios",
+  "role": "qrm"
+}
+
+# Layered RBAC:
+#   route guard:    requirePerm("viewRiskSummary")     — coarse
+#   handler check:  REVIEWER_ROLE_MAP[reviewerRole]    — fine
+#   gate is "independence_partner" → allowed: ["qrm"]`,
+    response: `{
+  "id": 188,
+  "reviewerRole": "independence_partner",
+  "status": "approved",
+  "decidedBy": "Dana Rios",
+  "decidedAt": "2026-04-25T14:11Z",
+  "remainingGates": 2
+}
+
+# 403 case (wrong role):
+{ "error": "Role 'sll' may not decide reviewer gate 'independence_partner'. Allowed: qrm.",
+  "code":  "reviewer_role_forbidden" }`,
+  },
+  {
+    method: "POST", path: "/api/intapp/deals/:dealId/screen", purpose: "Run a screening (called automatically + on demand)",
+    request: `POST /api/intapp/deals/204/screen
+{ "trigger": "wizard_setup_complete", "userName": "Marcus Chen" }
+
+# Production:
+POST /screenings
+{
+  "client_name": "Crestwood Holdings",
+  "ubo": ["John Crestwood", "Anna Crestwood"],
+  "industry": "real_estate_investment",
+  "jurisdiction": "DE-US",
+  "policy_version": "2026.04.A"
+}`,
+    response: `{
+  "id": 312,
+  "externalRef": "SCR-2026-000312",
+  "result": "review",
+  "riskTier": "medium",
+  "hits": [
+    { "hitType": "independence",
+      "severity": "medium",
+      "description": "Long-standing relationship plus prior non-attest services may impair independence.",
+      "recommendation": "Validate independence checklist with QRM; rotate engagement partner if required." }
+  ],
+  "policyVersion": "2026.04.A",
+  "narrative": "1 medium hit on independence; no sanctions or PEP exposure."
+}`,
+  },
+  {
+    method: "POST", path: "/api/intapp/screenings/:id/push-outcome", purpose: "Outbound push to Intapp on final approval (fire-and-forget)",
+    request: `POST /api/intapp/screenings/312/push-outcome
+{ "decision": "approved", "userName": "Lisa Park", "role": "fin" }
+
+# Fired automatically by autoPushIntappOutcome() in server/intapp.ts
+# when a deal's approval status transitions to approved/rejected.
+# Production equivalent (Live mode):
+POST /matters/SCR-2026-000312/decision
+Authorization: Bearer $INTAPP_API_TOKEN
+X-Tenant-Id: armanino
+{ "decision": "approved", "decided_by": "lisa.park@armanino.com" }`,
+    response: `# Simulated mode (default today):
+{ "ok": true,
+  "externalRef": "OUT-SCR-2026-000312-APP",
+  "message": "Screening outcome 'approved' pushed to Intapp Risk (OUT-SCR-2026-000312-APP)." }
+
+# Live mode (intapp_settings.mode='live') — current LiveIntappProvider stub:
+{ "ok": false,
+  "message": "Live Intapp provider not configured. pushOutcome → POST /matters/{ref}/decision will activate when INTAPP_API_TOKEN is set." }
+
+# Failure of the outbound push is caught and logged; the original
+# deal-approval decision is NOT rolled back. Server-side dedupe of
+# repeat pushes is a known forward-looking gap (see Federated Model tab).`,
+  },
+  {
+    method: "POST", path: "/api/intake/requests/:id/accept", purpose: "Final accept gate (the single synchronous join)",
+    request: `POST /api/intake/requests/47/accept
+{ "userName": "Dana Rios", "role": "qrm" }`,
+    response: `# Happy path:
+{ "id": 47, "stage": "accepted", "acceptedAt": "2026-04-25T14:42Z" }
+
+# Blocked path (today's contract — minimal payload; the full
+# reviewer list is already in the request payload returned by
+# GET /api/intake/requests/:id, which the wizard polls every 5s):
+HTTP/1.1 409 Conflict
+{
+  "error": "Cannot accept: not all federated approvers have signed off.",
+  "code":  "approvers_pending"
+}
+
+# Or, if conflicts screening is not yet clear/mitigated:
+HTTP/1.1 409 Conflict
+{
+  "error": "Cannot accept: conflicts screening is not clear/mitigated.",
+  "code":  "screening_not_clear"
+}`,
+  },
+];
+
 const PROVIDERS = {
   dynamics: {
     label: "Microsoft Dynamics 365",
@@ -339,13 +549,71 @@ grant_type=client_credentials
     fields: WD_FIELDS,
     samples: WD_SAMPLES,
   },
+  intapp: {
+    label: "Intapp",
+    short: "Intapp",
+    role: "Risk & Compliance · Federated client/matter Intake + Screening (conflicts, sanctions, PEP, independence)",
+    icon: ShieldCheck,
+    accent: "from-violet-50 to-purple-50",
+    accentText: "text-violet-700",
+    accentBorder: "border-violet-200",
+    overview: {
+      direction: "Bi-directional · two cooperating modules (Intake + Screening) running on a parallel non-blocking track",
+      api: "Intapp Open API (Intake + OnePlace) — REST/JSON",
+      auth: "OAuth 2.0 client credentials + tenant scoping (X-Tenant-Id)",
+      gates: "Submission gate at the final accept join (POST /api/intake/requests/:id/accept). Screening 'conflict' tier blocks submit unless QRM overrides.",
+      audit: "intake_events + intapp_events (per-module, append-only) — surfaced via /api/intake/events and /api/intapp/events; cross-module mirroring into activity_log is a forward-looking gap (currently only deal-lifecycle events land in activity_log)",
+      triggers: [
+        "Auto-open on deal create — POST /api/deals calls ensureIntakeRequest() server-side before responding. The intake row, extractions and reviewer matrix are ready by the time the wizard renders step 2.",
+        "Status pill in the deal header polls /api/intapp/deals/:dealId/screening every 5s — non-blocking, pauses when the tab is hidden.",
+        "Outbound auto-push (fire-and-forget): autoPushIntappOutcome() on deal approval/rejection; autoPushMitigation() on mitigation status change. Failures are logged but do not roll back the user's decision.",
+        "Manual override routes for ops re-push (POST /api/intapp/screenings/:id/push-outcome, POST /api/intapp/mitigations/:id/push) without re-running the original action.",
+        "Final synchronous join: POST /api/intake/requests/:id/accept returns 409 approvers_pending if any federated gate is unsigned.",
+      ],
+    },
+    auth: {
+      tokenEndpoint: "https://identity.intapp.com/oauth2/token",
+      scope: "intake.read intake.write screening.read screening.write matters.read matters.write",
+      header: "Authorization: Bearer <token>  ·  X-Tenant-Id: armanino",
+      secrets: ["INTAPP_API_TOKEN", "INTAPP_TENANT_ID", "INTAPP_BASE_URL", "INTAPP_OAUTH_CLIENT_ID", "INTAPP_OAUTH_CLIENT_SECRET"],
+      tokenSample: `POST /oauth2/token  HTTP/1.1
+Host: identity.intapp.com
+Content-Type: application/x-www-form-urlencoded
+
+grant_type=client_credentials
+&client_id=$INTAPP_OAUTH_CLIENT_ID
+&client_secret=$INTAPP_OAUTH_CLIENT_SECRET
+&scope=intake.read intake.write screening.read screening.write matters.write
+&tenant=$INTAPP_TENANT_ID
+
+# Provider selection (see getProvider() in server/intapp.ts + server/intake.ts):
+#   intappSettings.mode === "live"      → LiveIntappProvider / LiveIntakeProvider
+#   intappSettings.mode === "simulated" → simulated provider (default)
+#
+# Provider selection is mode-driven only; PATCH /api/intapp/settings does NOT
+# enforce token presence today. The Live provider is currently a stub — every
+# method returns a "not configured" message until INTAPP_API_TOKEN is provisioned
+# and the real REST client is wired in. No call-site changes — every read/write
+# goes through the provider interface.`,
+    },
+    read: INTAPP_READ,
+    write: INTAPP_WRITE,
+    map: INTAPP_MAP,
+    fields: INTAPP_FIELDS,
+    samples: INTAPP_SAMPLES,
+  },
 } as const;
 
-const SECTIONS: { id: SectionId; label: string; icon: typeof Workflow }[] = [
-  { id: "overview",  label: "Overview",       icon: Workflow },
+// Sections are rendered as pills under the provider switch. The "federated"
+// section is Intapp-specific deep-dive content (architecture narrative +
+// diagrams + reviewer matrix); the others are the standard 5 columns shared
+// by every provider.
+const SECTIONS: { id: SectionId; label: string; icon: typeof Workflow; intappOnly?: boolean }[] = [
+  { id: "overview",  label: "Overview",        icon: Workflow },
+  { id: "federated", label: "Federated Model", icon: Network, intappOnly: true },
   { id: "auth",      label: "Auth & Security", icon: KeyRound },
-  { id: "endpoints", label: "Endpoints",      icon: ArrowLeftRight },
-  { id: "mapping",   label: "Field Mapping",  icon: MapIcon },
+  { id: "endpoints", label: "Endpoints",       icon: ArrowLeftRight },
+  { id: "mapping",   label: "Field Mapping",   icon: MapIcon },
   { id: "samples",   label: "Sample Payloads", icon: Code2 },
 ];
 
@@ -597,6 +865,12 @@ export function ArchitectureIntegrations() {
   const [provider, setProvider] = useState<ProviderId>("dynamics");
   const [section, setSection] = useState<SectionId>("overview");
   const p = PROVIDERS[provider];
+  const visibleSections = SECTIONS.filter(s => !s.intappOnly || provider === "intapp");
+  const handleProviderSwitch = (id: ProviderId) => {
+    setProvider(id);
+    // "federated" is Intapp-only — fall back to overview when leaving Intapp
+    if (id !== "intapp" && section === "federated") setSection("overview");
+  };
 
   return (
     <div className="space-y-6">
@@ -604,7 +878,7 @@ export function ArchitectureIntegrations() {
         <div>
           <h2 className="text-xl font-bold text-foreground">External Integrations</h2>
           <p className="text-sm text-muted-foreground mt-1">
-            Microsoft Dynamics 365 (CRM) and Workday (HCM / Financial Management) — endpoints, auth, mapping, and sample payloads.
+            Microsoft Dynamics 365 (CRM), Workday (HCM / Financial Management), and Intapp (Risk &amp; Compliance · Intake + Screening) — endpoints, auth, mapping, sample payloads, and (for Intapp) the federated parallel-track architecture.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -644,7 +918,7 @@ export function ArchitectureIntegrations() {
           return (
             <button
               key={id}
-              onClick={() => setProvider(id)}
+              onClick={() => handleProviderSwitch(id)}
               data-testid={`tab-provider-${id}`}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
                 active ? "bg-white text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
@@ -659,7 +933,7 @@ export function ArchitectureIntegrations() {
 
       {/* Section pills */}
       <div className="flex flex-wrap gap-2 border-b border-stone-200 pb-0">
-        {SECTIONS.map((s) => {
+        {visibleSections.map((s) => {
           const active = section === s.id;
           return (
             <button
@@ -681,6 +955,7 @@ export function ArchitectureIntegrations() {
 
       <div>
         {section === "overview"  && <ProviderOverview  p={p} />}
+        {section === "federated" && provider === "intapp" && <IntappFederated />}
         {section === "auth"      && <ProviderAuth      p={p} />}
         {section === "endpoints" && <ProviderEndpoints p={p} />}
         {section === "mapping"   && <ProviderMapping   p={p} />}

@@ -42,7 +42,7 @@ shared/              - Shared code
 - `/analytics` - Analytics dashboard with charts, trends, service line breakdown
 - `/admin/rate-cards` - Rate card management
 - `/admin/scope-catalog` - Scope catalog browser
-- `/architecture` - Architecture Hub (4-tab: Overview, Interactive, AI Chat, Document)
+- `/architecture` - Architecture Hub (4-tab: Overview, Interactive, AI Chat, Document). The Interactive tab's "External Integrations" sub-page now hosts three providers — Dynamics 365, Workday, and **Intapp**. Selecting Intapp reveals an extra "Federated Model" pill that renders the deep-dive component `client/src/pages/ArchitectureIntappFederated.tsx` (Intake/Screening explainer, AI confidence-routed extraction, parallel-tracks SVG, reviewer matrix, outbound push narrative with server-side dedupe called out as a forward-looking gap).
 
 ## API Endpoints
 - `GET /api/dashboard/summary` - KPI summary
