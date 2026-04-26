@@ -170,7 +170,7 @@ const contexts: BoundedContext[] = [
     responsibilities: [
       "Enforces the approval state machine (no skipping, no reopening)",
       "Routes to the right approver tier (Lead vs BU)",
-      "Triggers downstream pushes (Dynamics, Workday, Intapp, Conga) on finalization",
+      "Triggers downstream pushes on finalization: Dynamics + Intapp outcome on approved/rejected, Workday project + committed-budget reserve on approved-only. Conga letter generation + delivery is a separate explicit flow, not an approval trigger.",
     ],
     keyEntities: ["approvals", "change_orders", "activity_log"],
     endpoints: [
@@ -203,7 +203,7 @@ const contexts: BoundedContext[] = [
     ],
     responsibilities: [
       "Owns the screening lifecycle and mitigation workflow",
-      "Pushes outcomes back to Intapp Risk on every approval finalization",
+      "Cooperates with two Intapp modules: Intake (federated onboarding + reviewer matrix) and Screening (conflict / independence). Outbound: outcome push fires on approval finalization; mitigation push fires on each mitigation resolve/waive/reject event",
       "Maintains the audit trail required by QRM",
     ],
     keyEntities: ["intapp_screenings", "intapp_mitigations", "intapp_settings"],
@@ -346,7 +346,7 @@ const aiPrinciples = [
   {
     icon: ScrollText,
     title: "Events at the seams = clean automation",
-    body: "When the Approval Context says 'deal_approved', the Resource and Documents contexts react. AI agents subscribe to those same events instead of polling — which is how an autonomous 'engagement-letter agent' becomes possible without rewriting anything.",
+    body: "When the Approval Context emits 'deal_approved'/'deal_rejected', the Resource & Budget and Risk & Compliance contexts react automatically (Workday project + budget reserve on approved-only; Dynamics + Intapp outcome on either). The Documents context stays an explicit, user-initiated generate + deliver flow — Conga is never auto-triggered by approval — which is exactly the seam an autonomous 'engagement-letter agent' can subscribe to later without rewiring approval logic.",
   },
   {
     icon: Lightbulb,
@@ -361,7 +361,7 @@ const contextRelations = [
   { from: "Pricing", to: "Approval", label: "submit-for-approval" },
   { from: "Approval", to: "Risk & Compliance", label: "outcome push" },
   { from: "Approval", to: "Resource & Budget", label: "project + budget reserve" },
-  { from: "Approval", to: "Engagement Documents", label: "trigger letter" },
+  { from: "Engagement Documents", to: "Conga CLM", label: "explicit generate + deliver (not approval-triggered)" },
   { from: "Catalog & Config", to: "All", label: "shared kernel (read-only)" },
   { from: "All", to: "Analytics", label: "read-only aggregation" },
 ];

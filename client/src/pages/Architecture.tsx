@@ -32,8 +32,19 @@ function SystemDiagram() {
       details: ["Cost-center & worker pull", "Project push on approval", "Atomic committed-budget reserve"],
     },
     intapp: {
-      title: "Intapp Risk",
-      details: ["Conflict / independence screening", "Mitigation tracking", "Outcome push on approval"],
+      title: "Intapp (Intake + Screening)",
+      details: [
+        "Intake — federated onboarding workflow",
+        "  · AI extraction from RFP / engagement notes",
+        "  · Federated reviewer matrix (GC, Ethics, AML, Independence, Jurisdictional, Pricing)",
+        "  · Final accept gate joins the parallel tracks",
+        "Screening — conflict / independence / PEP / sanctions",
+        "  · 5s status pill polled in deal header",
+        "  · Mitigation lifecycle (open / resolved / waived / rejected)",
+        "Outbound pushes (non-blocking)",
+        "  · Outcome push fires on deal approval / rejection",
+        "  · Mitigation push fires on each resolve / waive / reject event",
+      ],
     },
     conga: {
       title: "Conga CLM",
@@ -131,23 +142,26 @@ function SystemDiagram() {
             <text x="782" y="135" textAnchor="middle" fontSize="11" fontWeight="500" fill="#1c1917" {...textStyle("workday")}>Workday</text>
             <text x="782" y="149" textAnchor="middle" fontSize="8" fill="#78716c" {...textStyle("workday")}>Pull + project push</text>
 
-            <rect x="705" y="170" width="155" height="44" rx="8" filter="url(#shadow)"
-              {...boxStyle("intapp", "#fff")} stroke={hoveredNode === "intapp" ? "#DA720F" : "#e7e5e4"} strokeWidth={hoveredNode === "intapp" ? 2 : 1}
+            <rect x="705" y="170" width="155" height="68" rx="8" filter="url(#shadow)"
+              {...boxStyle("intapp", "#faf5ff")} stroke={hoveredNode === "intapp" ? "#DA720F" : "#e9d5ff"} strokeWidth={hoveredNode === "intapp" ? 2 : 1}
               onMouseEnter={() => setHoveredNode("intapp")} onMouseLeave={() => setHoveredNode(null)} />
-            <text x="782" y="190" textAnchor="middle" fontSize="11" fontWeight="500" fill="#1c1917" {...textStyle("intapp")}>Intapp Risk</text>
-            <text x="782" y="204" textAnchor="middle" fontSize="8" fill="#78716c" {...textStyle("intapp")}>Screen + outcome push</text>
+            <text x="782" y="187" textAnchor="middle" fontSize="11" fontWeight="600" fill="#5b21b6" {...textStyle("intapp")}>Intapp</text>
+            <line x1="717" y1="195" x2="847" y2="195" stroke="#e9d5ff" strokeWidth="0.75" {...textStyle("intapp")} />
+            <text x="782" y="209" textAnchor="middle" fontSize="8" fill="#6d28d9" {...textStyle("intapp")}>Intake — federated onboarding</text>
+            <text x="782" y="221" textAnchor="middle" fontSize="8" fill="#6d28d9" {...textStyle("intapp")}>Screening — conflict / independence</text>
+            <text x="782" y="232" textAnchor="middle" fontSize="7.5" fill="#7c3aed" fontWeight="500" {...textStyle("intapp")}>Outcome + mitigation push</text>
 
-            <rect x="705" y="225" width="155" height="44" rx="8" filter="url(#shadow)"
+            <rect x="705" y="248" width="155" height="44" rx="8" filter="url(#shadow)"
               {...boxStyle("conga", "#fff")} stroke={hoveredNode === "conga" ? "#DA720F" : "#e7e5e4"} strokeWidth={hoveredNode === "conga" ? 2 : 1}
               onMouseEnter={() => setHoveredNode("conga")} onMouseLeave={() => setHoveredNode(null)} />
-            <text x="782" y="245" textAnchor="middle" fontSize="11" fontWeight="500" fill="#1c1917" {...textStyle("conga")}>Conga CLM</text>
-            <text x="782" y="259" textAnchor="middle" fontSize="8" fill="#78716c" {...textStyle("conga")}>Generate + deliver push</text>
+            <text x="782" y="268" textAnchor="middle" fontSize="11" fontWeight="500" fill="#1c1917" {...textStyle("conga")}>Conga CLM</text>
+            <text x="782" y="282" textAnchor="middle" fontSize="8" fill="#78716c" {...textStyle("conga")}>Generate + deliver push</text>
 
-            <line x1="700" y1="200" x2="700" y2="82" stroke="#a8a29e" strokeWidth="1" strokeDasharray="3 3" {...lineStyle(["crm"])} />
+            <line x1="700" y1="82" x2="700" y2="270" stroke="#a8a29e" strokeWidth="1" strokeDasharray="3 3" {...lineStyle(["crm", "workday", "intapp", "conga"])} />
             <line x1="700" y1="82" x2="705" y2="82" stroke="#a8a29e" strokeWidth="1" strokeDasharray="3 3" {...lineStyle(["crm"])} />
             <line x1="700" y1="137" x2="705" y2="137" stroke="#a8a29e" strokeWidth="1" strokeDasharray="3 3" {...lineStyle(["workday"])} />
-            <line x1="700" y1="192" x2="705" y2="192" stroke="#a8a29e" strokeWidth="1" strokeDasharray="3 3" {...lineStyle(["intapp"])} />
-            <line x1="700" y1="247" x2="705" y2="247" stroke="#a8a29e" strokeWidth="1" strokeDasharray="3 3" {...lineStyle(["conga"])} />
+            <line x1="700" y1="204" x2="705" y2="204" stroke="#a8a29e" strokeWidth="1" strokeDasharray="3 3" {...lineStyle(["intapp"])} />
+            <line x1="700" y1="270" x2="705" y2="270" stroke="#a8a29e" strokeWidth="1" strokeDasharray="3 3" {...lineStyle(["conga"])} />
 
             <rect x="600" y="400" width="260" height="90" rx="12" filter="url(#shadow)"
               {...boxStyle("azure", "#eff6ff")} stroke={hoveredNode === "azure" ? "#DA720F" : "#bfdbfe"} strokeWidth={hoveredNode === "azure" ? 2 : 1}
@@ -352,7 +366,7 @@ export function Architecture() {
                 {[
                   { name: "Microsoft Dynamics 365", type: "Bi-directional (auto-push on approval)" },
                   { name: "Workday", type: "Bi-directional (project + budget reserve)" },
-                  { name: "Intapp Risk", type: "Bi-directional (screening + outcome)" },
+                  { name: "Intapp (Intake + Screening)", type: "Bi-directional (federated intake + screening + outcome push)" },
                   { name: "Conga CLM", type: "Bi-directional (letter + delivery)" },
                 ].map((integration) => (
                   <div key={integration.name} className="border border-border rounded-lg p-3 text-center">

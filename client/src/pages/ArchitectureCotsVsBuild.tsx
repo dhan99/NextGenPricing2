@@ -14,14 +14,14 @@ const BUILD_PILLARS = [
   { title: "AI intelligence layer", body: "Five calibrated use cases — deal similarity, effort estimation, margin advisor, scenario recommendation, risk summary — grounded in Armanino's own historical data, not a generic vendor model." },
   { title: "Scenario engine", body: "Auto-generated Standard / Premium / Value scenarios with AI reasoning attached, side-by-side comparable. Absent from the COTS set for service-hour pricing." },
   { title: "Multi-persona RBAC + approval workflow", body: "Six personas (PDL, SLL, PO, FIN, QRM, IT) with per-feature permissions, status state-machine, AI-narrative-attached approvals, per-deal audit trail." },
-  { title: "Integration backbone", body: "Provider-pattern abstraction (simulated → live by configuration) for Dynamics, Workday, Intapp, Conga, Power BI; auto-push on approval transitions; per-integration audit log." },
+  { title: "Integration backbone", body: "Provider-pattern abstraction (simulated → live by configuration) for Dynamics, Workday, Intapp (Intake + Screening), Conga, Power BI. Outbound is event-driven, with each integration on its own trigger: Dynamics + Intapp outcome push fire on deal approval/rejection; Workday project push fires on approval only (with atomic committed-budget reserve); Intapp mitigation push fires on each mitigation resolve/waive/reject; Conga is an explicit letter-generation + delivery flow (not an approval-outcome push). Per-integration audit log throughout." },
   { title: "ISO/IEC 42001 AIMS as a moat", body: "Owned AI Management System with per-tenant evidence (model purpose, dataset lineage, monitoring, override capture). Horizontal SaaS vendors carry a vendor-scoped AIMS, not a firm-specific one." },
 ];
 
 const DECISIONS = [
   { area: "Account & opportunity CRM", decision: "Buy + Integrate", system: "Dynamics 365", kind: "buy" as const },
   { area: "Cost centers, workers, standard cost rates", decision: "Buy + Integrate", system: "Workday", kind: "buy" as const },
-  { area: "Conflicts, independence, engagement acceptance", decision: "Buy + Integrate", system: "Intapp Risk", kind: "buy" as const },
+  { area: "Conflicts, independence, engagement acceptance", decision: "Buy + Integrate", system: "Intapp (Intake + Screening)", kind: "buy" as const },
   { area: "Engagement-letter document assembly & e-sign", decision: "Buy + Integrate", system: "Conga Composer / CLM", kind: "buy" as const },
   { area: "Pipeline & forecast analytics", decision: "Buy + Integrate", system: "Dynamics + Power BI", kind: "buy" as const },
   { area: "Scope-to-fee engine, role pricing, complexity multipliers", decision: "Build", system: "DealPad", kind: "build" as const },
