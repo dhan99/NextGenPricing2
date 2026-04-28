@@ -60,3 +60,9 @@ id = "YicE5pTl1peuy87DWRF3S"
 uri = "file://attached_assets/DealPad_10min_PS_Demo.pptx"
 type = "slides"
 title = "DealPad — 10-min Stakeholder Demo (Product & Solutioning)"
+
+[[outputs]]
+id = "y3cpZBR1zVVPsjLB5eb4I"
+uri = "file://attached_assets/DealPad_10min_PS_Demo_Lite.pptx"
+type = "slides"
+title = "DealPad — 10-min Demo (Concise)"
