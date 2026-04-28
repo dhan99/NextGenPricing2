@@ -794,6 +794,56 @@ export async function assertSubmissionAllowed(
 }
 
 /**
+ * Synchronous gating helper used by the approval-finalization route BEFORE
+ * the deal is set to "approved". Mirrors `assertSubmissionAllowed` but is
+ * triggered at the approval-decision point so that:
+ *   - a conflict surfaced by the nightly re-screen between submit and approve
+ *     cannot slip through, and
+ *   - the screening attached to the final outcome push-back is guaranteed
+ *     fresh (not the stale one captured at submit time).
+ *
+ * Returns `{ allow: false }` when a blocking conflict is present and gating
+ * is enabled. The route MUST honor `allow=false` and short-circuit with HTTP
+ * 409 instead of mutating state. QRM overrides (`override_approved`) and
+ * accepted mitigations (`mitigated`) bypass the re-run, matching the submit
+ * gate's contract.
+ */
+export async function assertApprovalAllowed(
+  dealId: number,
+  requestedBy?: string,
+): Promise<{ allow: boolean; reason?: string; screening?: any }> {
+  const settings = await getSettings();
+  if (!settings.autoScreenOnSubmit) return { allow: true };
+
+  const prior = await getLatestScreening(dealId);
+  if (prior?.result === "override_approved" || prior?.result === "mitigated") {
+    return { allow: true, screening: prior };
+  }
+
+  try {
+    await runScreeningForDeal(dealId, requestedBy, "deal_approved");
+  } catch (e: any) {
+    if (settings.mode === "live") {
+      return {
+        allow: false,
+        reason: `Intapp provider error during approval gating: ${e?.message || e}`,
+      };
+    }
+    return { allow: true, reason: `Screening provider warning: ${e?.message || e}` };
+  }
+  const fresh = await getLatestScreening(dealId);
+  if (!fresh) return { allow: true };
+  if (fresh.result === "conflict" && settings.blockSubmitOnConflict) {
+    return {
+      allow: false,
+      reason: `Intapp Risk screening returned a CONFLICT (${fresh.riskTier} tier, ${fresh.hitCount} finding(s)) on re-screen at approval time. Resolve mitigations or obtain a QRM override before approving.`,
+      screening: fresh,
+    };
+  }
+  return { allow: true, screening: fresh };
+}
+
+/**
  * Trigger fired when a client record changes (industry/region/relationship).
  * Re-screens any non-archived deals attached to that client when the
  * `autoScreenOnClientChange` setting is enabled.

@@ -559,6 +559,7 @@ import {
   registerIntappRoutes,
   onDealSubmittedTrigger,
   assertSubmissionAllowed,
+  assertApprovalAllowed,
   onClientChangedTrigger,
   startNightlyRescreenLoop,
 } from "./intapp";
@@ -925,6 +926,22 @@ export function registerRoutes(app: Express) {
     const dealId = parseInt(req.params.id);
     const [prior] = await db.select().from(deals).where(eq(deals.id, dealId));
     if (!prior) return res.status(404).json({ error: "Deal not found" });
+    // SERVER-SIDE GATING: terminal status transitions (`approved` / `rejected`) MUST
+    // go through the approval workflow (POST /api/deals/:dealId/approvals followed
+    // by PATCH /api/approvals/:id), which runs the Intapp re-screen and the
+    // approval state machine. Refuse to set those statuses directly here so a
+    // caller with editDeals can't bypass the approval gate.
+    if (
+      (req.body?.status === "approved" || req.body?.status === "rejected") &&
+      prior.status !== req.body.status
+    ) {
+      return res.status(409).json({
+        error: "direct_status_transition_forbidden",
+        message: `Deals cannot be moved to "${req.body.status}" directly. Use the approval workflow.`,
+        from: prior.status,
+        to: req.body.status,
+      });
+    }
     // SERVER-SIDE GATING: a status transition to "submitted" must pass Intapp screening.
     if (req.body?.status === "submitted" && prior.status !== "submitted") {
       const actor = (req.header("x-user-name") || req.body?.userName || "Unknown").trim();
@@ -2512,7 +2529,44 @@ export function registerRoutes(app: Express) {
     // Without this, repeated PATCHes to an already-approved row would re-fire pushes.
     const isTransition = !!next && next !== existing.status;
     const isFinal = isTransition && (next === "approved" || next === "rejected");
-    const patch: any = { ...req.body };
+
+    // SERVER-SIDE GATING at the approval-decision point: re-verify the latest
+    // Intapp Risk screening before allowing the deal to flip to "approved".
+    // Mirrors the submission gate; closes the gap where a conflict surfaced
+    // by the nightly re-screen between submit and approve could otherwise
+    // slip through unchecked. Rejections are NEVER gated — you should always
+    // be able to reject a deal regardless of screening state.
+    if (isTransition && next === "approved" && existing.dealId) {
+      const actor = (req.header("x-user-name") || req.body?.userName || req.body?.approverName || "Approver").toString();
+      const intappGate = await assertApprovalAllowed(existing.dealId, actor);
+      if (!intappGate.allow) {
+        return res.status(409).json({
+          error: intappGate.reason,
+          code: "intapp_conflict",
+          screening: intappGate.screening,
+        });
+      }
+    }
+
+    // Whitelist mutable fields. Crucially, never let the request rewrite
+    // `dealId` or `id` — otherwise a caller could screen one deal in the
+    // gate above and then retarget the post-approval status flip to a
+    // different deal. Identity columns and audit timestamps are server-set.
+    // Field set is aligned with the `approvals` table in shared/schema.ts.
+    const ALLOWED_PATCH_FIELDS = new Set([
+      "status",
+      "approverName",
+      "approverRole",
+      "approverEmail",
+      "comments",
+      "riskSummary",
+      "aiNarrative",
+      "scenarioId",
+    ]);
+    const patch: any = {};
+    for (const [k, v] of Object.entries(req.body || {})) {
+      if (ALLOWED_PATCH_FIELDS.has(k)) patch[k] = v;
+    }
     if (isFinal) patch.decidedAt = new Date();
 
     // Compare-and-set: only update the row if its status is still what we read above.
