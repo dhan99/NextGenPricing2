@@ -54,3 +54,9 @@ id = "8DZuGMWkdba06tY3FqlCU"
 uri = "file://attached_assets/DealPad_Stakeholder_Questions.xlsx"
 type = "table"
 title = "DealPad Stakeholder Questions"
+
+[[outputs]]
+id = "YicE5pTl1peuy87DWRF3S"
+uri = "file://attached_assets/DealPad_10min_PS_Demo.pptx"
+type = "slides"
+title = "DealPad — 10-min Stakeholder Demo (Product & Solutioning)"
