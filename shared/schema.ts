@@ -435,6 +435,28 @@ export const batchAdjustmentRules = pgTable("batch_adjustment_rules", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
+// ============ DOMAIN EVENTS OUTBOX (F1.4) ============
+// Outbox for the DDD strangler-fig refactor. Application services write
+// aggregate state + outbox rows in a single transaction; an in-process
+// dispatcher publishes them to subscribers. The table is the durable
+// source for replay and debugging — subscribers must be idempotent.
+//
+// `published_at` is set by the dispatcher when delivery completes;
+// rows where it stays null after a restart are picked up on next boot.
+// `payload` is the raw event JSON so we can replay even if the
+// deserializer evolves; `version` lets subscribers fan out by schema.
+export const domainEventsOutbox = pgTable("domain_events_outbox", {
+  id: serial("id").primaryKey(),
+  type: text("type").notNull(),                       // e.g. "DealSubmitted"
+  version: integer("version").notNull(),              // event schema version
+  aggregateType: text("aggregate_type").notNull(),    // e.g. "Deal"
+  aggregateId: integer("aggregate_id").notNull(),
+  payload: jsonb("payload").notNull(),                // full event including ts + actor
+  occurredAt: timestamp("occurred_at").notNull(),     // when the domain event happened
+  publishedAt: timestamp("published_at"),             // null until dispatched
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 // ============ DYNAMICS 365 SIMULATION (persistent) ============
 export const dynamicsOwners = pgTable("dynamics_owners", {
   id: serial("id").primaryKey(),

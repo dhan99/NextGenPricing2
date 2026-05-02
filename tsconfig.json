@@ -13,8 +13,14 @@
     "noEmit": true,
     "paths": {
       "@/*": ["./client/src/*"],
-      "@shared/*": ["./shared/*"]
+      "@shared/*": ["./shared/*"],
+      "@dealpad/domain": ["./packages/domain/src/index.ts"],
+      "@dealpad/domain/*": ["./packages/domain/src/*"],
+      "@dealpad/application": ["./packages/application/src/index.ts"],
+      "@dealpad/application/*": ["./packages/application/src/*"],
+      "@dealpad/infrastructure": ["./packages/infrastructure/src/index.ts"],
+      "@dealpad/infrastructure/*": ["./packages/infrastructure/src/*"]
     }
   },
-  "include": ["client/src/**/*", "server/**/*", "shared/**/*"]
+  "include": ["client/src/**/*", "server/**/*", "shared/**/*", "packages/*/src/**/*", "tests/**/*"]
 }

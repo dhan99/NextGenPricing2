@@ -41,6 +41,9 @@ export default defineConfig({
     alias: {
       "@": path.resolve(__dirname, "./client/src"),
       "@shared": path.resolve(__dirname, "./shared"),
+      "@dealpad/domain": path.resolve(__dirname, "./packages/domain/src/index.ts"),
+      "@dealpad/application": path.resolve(__dirname, "./packages/application/src/index.ts"),
+      "@dealpad/infrastructure": path.resolve(__dirname, "./packages/infrastructure/src/index.ts"),
     },
   },
 });
