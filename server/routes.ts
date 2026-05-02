@@ -3715,6 +3715,51 @@ export function registerRoutes(app: Express) {
       });
     }
 
+    // F4.4.3 — narrative + executive recommendation via llm.ts.
+    // Suggestions list stays heuristic + deterministic (the math
+    // matters); narrative summarizes for the practice lead.
+    const NarrativeSchema = llmZ.object({
+      narrative: llmZ.string().min(20),
+      callToAction: llmZ.string(),
+    });
+    const heuristicNarrative =
+      currentMargin >= targetMargin
+        ? `Current margin of ${currentMargin.toFixed(1)}% meets the ${targetMargin}% target (${targetSource}). The pricing structure is well-balanced; no adjustment needed.`
+        : `Current margin of ${currentMargin.toFixed(1)}% is below the ${targetMargin}% target (${targetSource}). ${suggestions.length} suggestion(s) below show the highest-leverage moves.`;
+    const heuristicCta =
+      currentMargin >= targetMargin
+        ? "No changes needed."
+        : suggestions.find((s) => s.priority === "high")
+          ? "Apply the highest-priority suggestion first."
+          : "Review the suggestions and pick the one that fits delivery constraints.";
+
+    const actor = (headerStr(req, "x-user-name") || "Unknown").trim();
+    let llmEnriched: { narrative: string; callToAction: string };
+    try {
+      const llmResult = await completeStructured({
+        operation: "margin_advisor",
+        systemPrompt:
+          "You are a Pricing Operations advisor. Summarize the margin posture in plain English; reference the actual numbers + suggestions.",
+        userPrompt: JSON.stringify({
+          currentMargin,
+          targetMargin,
+          targetSource,
+          totalFee,
+          totalCost,
+          suggestionCount: suggestions.length,
+          highPrioritySuggestions: suggestions.filter((s) => s.priority === "high").map((s) => s.title),
+        }),
+        schema: NarrativeSchema,
+        schemaHint: '{ narrative: string (1 paragraph), callToAction: string (one line) }',
+        simulatedStub: { narrative: heuristicNarrative, callToAction: heuristicCta },
+        dealId: dealId ? parseInt(String(dealId)) : null,
+        actor,
+      });
+      llmEnriched = llmResult.data;
+    } catch (err) {
+      llmEnriched = { narrative: heuristicNarrative, callToAction: heuristicCta };
+    }
+
     res.json({
       currentMargin: currentMargin.toFixed(1),
       targetMargin,
@@ -3723,6 +3768,8 @@ export function registerRoutes(app: Express) {
       totalCost,
       isOnTarget: currentMargin >= targetMargin,
       suggestions,
+      narrative: llmEnriched.narrative,
+      callToAction: llmEnriched.callToAction,
     });
   });
 
