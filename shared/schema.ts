@@ -476,6 +476,40 @@ export const batchAdjustmentRules = pgTable("batch_adjustment_rules", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
+// ============ TIME ENTRIES (F2.3) ============
+// One row per logged increment of work against a deal. The
+// BudgetMonitorService heuristic falls back to pricing-line
+// projection when no time entries exist; once a deal has any
+// `time_entries` rows for a period, sums of those rows become the
+// authoritative actuals.
+export const timeEntries = pgTable("time_entries", {
+  id: serial("id").primaryKey(),
+  dealId: integer("deal_id").references(() => deals.id).notNull(),
+  // Who logged it. Currently the persona name (we have no real auth);
+  // future migration will swap to a userId once that lands.
+  userName: text("user_name").notNull(),
+  // Calendar date the work happened, NOT the date the row was created.
+  // Stored as text in YYYY-MM-DD form for portability with the wizard's
+  // existing string-date convention (deals.startDate / endDate).
+  workDate: text("work_date").notNull(),
+  hours: decimal("hours", { precision: 6, scale: 2 }).notNull(),
+  // Optional join to the firm's role taxonomy so cost rollups can use
+  // the right rate. Nullable because intake / spike work doesn't
+  // always map to a billable role.
+  roleId: integer("role_id").references(() => roles.id),
+  description: text("description"),
+  // Where the entry came from:
+  //   manual  — user typed it
+  //   graph   — pulled from Microsoft Graph (calendar / Teams)
+  //   ai      — suggestion accepted from /api/time/suggest
+  //   import  — bulk loader / CSV
+  source: text("source").notNull().default("manual"),
+  // Free-form context: meeting id, attachment refs, AI prompt fingerprint, etc.
+  metadata: jsonb("metadata"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
 // ============ BUDGET ACTUALS + ALERTS (F2.2) ============
 // Periodic snapshot of actual hours/cost vs budget for a deal. The
 // BudgetMonitorService writes one row per (deal, period) at compute

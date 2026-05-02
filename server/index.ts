@@ -590,6 +590,25 @@ async function pushSchema() {
       updated_at TIMESTAMP DEFAULT NOW() NOT NULL
     );
 
+    -- Time entries (F2.3). Authoritative source for "actuals" once
+    -- populated; BudgetMonitorService prefers a sum-of-time-entries
+    -- over the pricing-line projection when both are available.
+    CREATE TABLE IF NOT EXISTS time_entries (
+      id SERIAL PRIMARY KEY,
+      deal_id INTEGER NOT NULL REFERENCES deals(id),
+      user_name TEXT NOT NULL,
+      work_date TEXT NOT NULL,
+      hours DECIMAL(6,2) NOT NULL,
+      role_id INTEGER REFERENCES roles(id),
+      description TEXT,
+      source TEXT NOT NULL DEFAULT 'manual',
+      metadata JSONB,
+      created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+      updated_at TIMESTAMP DEFAULT NOW() NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS time_entries_deal_idx ON time_entries (deal_id, work_date DESC);
+    CREATE INDEX IF NOT EXISTS time_entries_user_idx ON time_entries (user_name, work_date DESC);
+
     -- Budget actuals (F2.2). Periodic snapshot rows; one per (deal,
     -- period). Variance percent columns are nullable (null when the
     -- budget value is zero — avoids divide-by-zero garbage).
