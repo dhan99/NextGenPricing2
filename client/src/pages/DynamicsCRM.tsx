@@ -1088,11 +1088,14 @@ function NewOpportunityModal({ onClose }: { onClose: () => void }) {
   const { data: templates = [] } = useDynamicsScopeTemplates();
   const create = useCreateOpportunity();
   const { persona } = useAuth();
-  const [form, setForm] = useState({
+  // Lazy initializer so Date.now() runs once on mount, not on every render.
+  // Plain `useState({...Date.now()...})` evaluates the initial-value object
+  // each render and trips react-hooks/components-and-hooks-must-be-pure.
+  const [form, setForm] = useState(() => ({
     accountId: "", name: "", estimatedValue: "", stage: "Qualify",
     estimatedCloseDate: new Date(Date.now() + 90 * 86400 * 1000).toISOString().slice(0, 10),
     ownerName: "", scopeTemplateKey: "",
-  });
+  }));
   const seedScope = !!form.scopeTemplateKey;
   const tmpl = templates.find((t: any) => t.key === form.scopeTemplateKey);
 
