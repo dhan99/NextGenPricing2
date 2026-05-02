@@ -1,6 +1,6 @@
 import { Express, Request, Response } from "express";
 import { db } from "./db";
-import { clients, deals, dealEntities, scopeCatalog, dealScopeItems, scopeTemplates, scopeTemplateItems, assemblyTemplates, assemblyComponents, roles, rateCards, rateCardEntries, pricingLines, scenarios, approvals, promptResponses, activityLog, changeOrders, dynamicsOpportunities, promptSets, promptSetItems, marginTargets, batchRenewalJobs, batchRenewalItems, batchAdjustmentRules, budgetActuals, budgetAlerts, timeEntries, portalInvites, scopeCreepSignals, voiceTranscripts } from "../shared/schema";
+import { clients, deals, dealEntities, scopeCatalog, dealScopeItems, scopeTemplates, scopeTemplateItems, assemblyTemplates, assemblyComponents, roles, rateCards, rateCardEntries, pricingLines, scenarios, approvals, promptResponses, activityLog, changeOrders, dynamicsOpportunities, promptSets, promptSetItems, marginTargets, batchRenewalJobs, batchRenewalItems, batchAdjustmentRules, budgetActuals, budgetAlerts, timeEntries, portalInvites, scopeCreepSignals, voiceTranscripts, rateOptimizationRuns } from "../shared/schema";
 import { evaluatePracticeLeadTrigger, resolveMarginTarget, type MarginTargetRow, type DealLike } from "../shared/policy";
 import { eq, desc, sql, and, count, isNull, isNotNull, asc, inArray } from "drizzle-orm";
 import { requirePerm, requireAnyPerm } from "./rbac";
@@ -348,6 +348,7 @@ import {
   transcribeAndExtract as voiceTranscribeAndExtract,
   applyExtractions as voiceApplyExtractions,
 } from "./services/VoiceToScopeService";
+import { runOptimizer as runRateOptimizer } from "./services/RateOptimizerService";
 import {
   ensureSession as ensureCollabSession,
   persistDocumentState as persistCollabDocumentState,
@@ -5798,6 +5799,73 @@ export function registerRoutes(app: Express) {
       const e = err as { message?: string };
       res.status(500).json({ error: e?.message || "Suggestion failed", code: "time_suggest_error" });
     }
+  });
+
+  // ========== RATE OPTIMIZATION (F3.6) ==========
+  // Heuristic recommendations today; ML model plugs in via the
+  // RateOptimizerService.evaluate() seam.
+
+  app.get("/api/rate-optimization/runs", requirePerm("manageRateCards"), async (req: Request, res: Response) => {
+    const status = typeof req.query.status === "string" ? req.query.status : null;
+    const where = status ? eq(rateOptimizationRuns.status, status) : undefined;
+    const rows = await db
+      .select()
+      .from(rateOptimizationRuns)
+      .where(where as any)
+      .orderBy(desc(rateOptimizationRuns.createdAt))
+      .limit(50);
+    res.json(rows);
+  });
+
+  app.post("/api/rate-optimization/runs", requirePerm("manageRateCards"), async (req: Request, res: Response) => {
+    const body = req.body || {};
+    const scope = String(body.scope ?? "firm");
+    if (!["firm", "bu", "serviceLine", "role"].includes(scope)) {
+      return res.status(400).json({ error: "scope must be firm | bu | serviceLine | role", field: "scope" });
+    }
+    const targetWindowStart = String(body.targetWindowStart ?? "").trim();
+    const targetWindowEnd = String(body.targetWindowEnd ?? "").trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(targetWindowStart) || !/^\d{4}-\d{2}-\d{2}$/.test(targetWindowEnd)) {
+      return res.status(400).json({ error: "targetWindowStart/End must be YYYY-MM-DD", field: "targetWindowStart" });
+    }
+    const actor = (headerStr(req, "x-user-name") || "Unknown").trim();
+    const created = await runRateOptimizer({
+      scope: scope as "firm" | "bu" | "serviceLine" | "role",
+      scopeKey: body.scopeKey ?? null,
+      targetWindowStart,
+      targetWindowEnd,
+      createdBy: actor,
+    });
+    res.status(201).json(created);
+  });
+
+  app.patch("/api/rate-optimization/runs/:id", requirePerm("manageRateCards"), async (req: Request, res: Response) => {
+    const id = paramInt(req, "id");
+    const [existing] = await db.select().from(rateOptimizationRuns).where(eq(rateOptimizationRuns.id, id));
+    if (!existing) return res.status(404).json({ error: "Run not found" });
+    const next = String(req.body?.status ?? "").trim();
+    const ALLOWED: Record<string, string[]> = {
+      draft: ["published", "discarded"],
+      published: ["applied", "discarded"],
+      applied: [],
+      discarded: [],
+    };
+    if (!next) return res.status(400).json({ error: "status required", field: "status" });
+    if (!(ALLOWED[existing.status] || []).includes(next)) {
+      return res.status(409).json({
+        error: "illegal_run_transition",
+        from: existing.status,
+        to: next,
+      });
+    }
+    const actor = (headerStr(req, "x-user-name") || "Unknown").trim();
+    const patch: Record<string, unknown> = { status: next };
+    if (next === "applied") {
+      patch.appliedBy = actor;
+      patch.appliedAt = new Date();
+    }
+    const [updated] = await db.update(rateOptimizationRuns).set(patch).where(eq(rateOptimizationRuns.id, id)).returning();
+    res.json(updated);
   });
 
   // ========== VOICE-TO-SCOPE (F3.4) ==========
