@@ -47,6 +47,15 @@ export const deals = pgTable("deals", {
   // firm/BU/serviceLine defaults from the margin_targets table. Captured by
   // the pricing lead during the wizard's Pricing step (Task #33).
   targetMarginPercent: decimal("target_margin_percent", { precision: 5, scale: 2 }),
+  // F2.1 — Deal fingerprint. Structured features extracted from a deal
+  // (BU, serviceLine, scope-item count, fee bucket, complexity, etc.)
+  // used as a fast cache key for the similarity engine. The fingerprint
+  // is a JSONB blob so the schema doesn't lock us into a specific
+  // feature set; the IntelligenceEngine writes it on the same path that
+  // computes the deal's embedding. NULL until first compute. The
+  // matching `embedding vector(1536)` column lands in F2.1.2 (gated on
+  // pgvector being installed in the cluster).
+  fingerprint: jsonb("fingerprint"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

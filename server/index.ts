@@ -448,6 +448,10 @@ async function pushSchema() {
     ALTER TABLE deals ADD COLUMN IF NOT EXISTS workday_cost_center_id INTEGER;
     ALTER TABLE deals ADD COLUMN IF NOT EXISTS engagement_inputs JSONB;
     ALTER TABLE deals ADD COLUMN IF NOT EXISTS target_margin_percent DECIMAL(5,2);
+    -- F2.1.1 — Deal fingerprint (JSONB). Cache key + feature snapshot for
+    -- the similarity engine. Embedding column is intentionally omitted
+    -- here; it lands in F2.1.2 once pgvector is installed in the cluster.
+    ALTER TABLE deals ADD COLUMN IF NOT EXISTS fingerprint JSONB;
 
     -- Per-step rate override (shared/schema.ts:137-145). Captured baseline +
     -- audit metadata so the variance badge can render "$X over standard, by Y".
