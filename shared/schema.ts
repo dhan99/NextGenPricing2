@@ -364,6 +364,77 @@ export const changeOrders = pgTable("change_orders", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+// F1.3 — Batch renewal processing. Tax season needs 1,000+ renewal deals
+// turned around in <2 days. Today there's only a single-deal /api/deals/:id
+// /clone endpoint; F1.3 adds the orchestrator + per-item variance flagging
+// + adjustment-rule application so an operator can renew a year's worth
+// of deals in one job. The worker runs synchronous TS in the route layer
+// (slice 2) for sub-100-deal batches; the Python+Celery+Redis worker
+// (slice 5) handles production-scale parallelism.
+export const batchRenewalJobs = pgTable("batch_renewal_jobs", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),                                    // "Tax Season 2027 — Renewals"
+  status: text("status").notNull().default("pending"),             // pending | running | completed | failed | cancelled
+  // Filter that produced the candidate source deals — captured so a
+  // failed batch can be re-run with the same input set, and so the
+  // audit trail tells you "this batch came from these deals".
+  sourceFilter: jsonb("source_filter"),
+  totalItems: integer("total_items").notNull().default(0),
+  processedItems: integer("processed_items").notNull().default(0),
+  failedItems: integer("failed_items").notNull().default(0),
+  flaggedItems: integer("flagged_items").notNull().default(0),     // above variance threshold
+  // Items with variance >= this threshold get status='flagged' instead
+  // of 'completed'; an operator must explicitly accept them. Default
+  // 10% pulled from BACKLOG.md F1.3 done-when ("flagged for review").
+  varianceThresholdPct: decimal("variance_threshold_pct", { precision: 5, scale: 2 }).notNull().default("10.00"),
+  // IDs of batch_adjustment_rules to apply to every item in the job.
+  // Stored as JSONB array of integers for cheap lookup; FK enforcement
+  // is at the orchestrator layer.
+  adjustmentRuleIds: jsonb("adjustment_rule_ids"),
+  notes: text("notes"),
+  createdBy: text("created_by"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  startedAt: timestamp("started_at"),
+  completedAt: timestamp("completed_at"),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const batchRenewalItems = pgTable("batch_renewal_items", {
+  id: serial("id").primaryKey(),
+  jobId: integer("job_id").references(() => batchRenewalJobs.id).notNull(),
+  sourceDealId: integer("source_deal_id").references(() => deals.id).notNull(),
+  // Set after the orchestrator successfully clones + adjusts.
+  newDealId: integer("new_deal_id").references(() => deals.id),
+  status: text("status").notNull().default("pending"),             // pending | running | completed | flagged | failed
+  // Computed variance: (new_total_fee - source_total_fee) / source_total_fee × 100.
+  // Stored even on flagged items so the operator's review UI can sort.
+  variancePct: decimal("variance_pct", { precision: 6, scale: 2 }),
+  varianceReason: text("variance_reason"),                          // e.g. "scope mix changed; 3 items dropped"
+  error: text("error"),                                             // populated on status=failed
+  processedAt: timestamp("processed_at"),
+}, (t) => ({
+  uniqJobSource: uniqueIndex("batch_renewal_items_job_source_uniq").on(t.jobId, t.sourceDealId),
+}));
+
+export const batchAdjustmentRules = pgTable("batch_adjustment_rules", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  scope: text("scope").notNull().default("firm"),                  // firm | bu | serviceLine
+  scopeKey: text("scope_key"),
+  // Rule kind. Each kind has a different `parameters` shape:
+  //   rate_uplift          { factor: 1.05 }              — multiply per-line rate by factor
+  //   hour_adjustment      { factor: 0.95 }              — multiply per-line hours by factor
+  //   margin_target_override { percent: 38 }             — set deal targetMarginPercent
+  //   tech_admin_fee_override { percent: 7 }             — set engagementInputs.techAdminFeePct
+  ruleType: text("rule_type").notNull(),
+  parameters: jsonb("parameters").notNull(),
+  isActive: boolean("is_active").notNull().default(true),
+  notes: text("notes"),
+  createdBy: text("created_by"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
 // ============ DYNAMICS 365 SIMULATION (persistent) ============
 export const dynamicsOwners = pgTable("dynamics_owners", {
   id: serial("id").primaryKey(),
