@@ -1,6 +1,6 @@
 import { Express, Request, Response } from "express";
-import { db } from "./db";
-import { clients, deals, dealEntities, scopeCatalog, dealScopeItems, scopeTemplates, scopeTemplateItems, assemblyTemplates, assemblyComponents, roles, rateCards, rateCardEntries, pricingLines, scenarios, approvals, promptResponses, activityLog, changeOrders, dynamicsOpportunities, promptSets, promptSetItems, marginTargets, batchRenewalJobs, batchRenewalItems, batchAdjustmentRules, budgetActuals, budgetAlerts, timeEntries, portalInvites, scopeCreepSignals, voiceTranscripts, rateOptimizationRuns } from "../shared/schema";
+import { db, pool } from "./db";
+import { clients, deals, dealEntities, scopeCatalog, dealScopeItems, scopeTemplates, scopeTemplateItems, assemblyTemplates, assemblyComponents, roles, rateCards, rateCardEntries, pricingLines, scenarios, approvals, promptResponses, activityLog, changeOrders, dynamicsOpportunities, promptSets, promptSetItems, marginTargets, batchRenewalJobs, batchRenewalItems, batchAdjustmentRules, budgetActuals, budgetAlerts, timeEntries, portalInvites, scopeCreepSignals, voiceTranscripts, rateOptimizationRuns, aiTelemetry } from "../shared/schema";
 import { evaluatePracticeLeadTrigger, resolveMarginTarget, type MarginTargetRow, type DealLike } from "../shared/policy";
 import { eq, desc, sql, and, count, isNull, isNotNull, asc, inArray } from "drizzle-orm";
 import { requirePerm, requireAnyPerm } from "./rbac";
@@ -349,6 +349,7 @@ import {
   applyExtractions as voiceApplyExtractions,
 } from "./services/VoiceToScopeService";
 import { runOptimizer as runRateOptimizer } from "./services/RateOptimizerService";
+import { recordAi } from "./middleware/aiTelemetry";
 import {
   ensureSession as ensureCollabSession,
   persistDocumentState as persistCollabDocumentState,
@@ -3363,6 +3364,9 @@ export function registerRoutes(app: Express) {
   // ========== AI ENDPOINTS ==========
 
   app.post("/api/ai/deal-similarity", requirePerm("runAI"), async (req: Request, res: Response) => {
+    const __aiStart = Date.now();
+    const __aiActor = (headerStr(req, "x-user-name") || "Unknown").trim();
+    const __aiDealId = req.body?.dealId != null ? parseInt(String(req.body.dealId), 10) : null;
     // F2.1.4: pgvector k-NN via IntelligenceEngine.
     //
     // Request:
@@ -3506,6 +3510,21 @@ export function registerRoutes(app: Express) {
 
     const avgMargin = results.reduce((s, r) => s + parseFloat(r.marginPercent || "0"), 0) / (results.length || 1);
     const avgFee = results.reduce((s, r) => s + parseFloat(r.totalFee || "0"), 0) / (results.length || 1);
+
+    // F4.5.1 — telemetry: fire-and-forget, never blocks the response.
+    recordAi({
+      operation: "deal_similarity",
+      mode: mode === "knn" ? "pgvector" : "heuristic",
+      status: "ok",
+      latencyMs: Date.now() - __aiStart,
+      dealId: Number.isFinite(__aiDealId as number) ? __aiDealId : null,
+      actor: __aiActor,
+      metadata: {
+        resultCount: results.length,
+        kRequested: k,
+        onlyApproved: onlyApprovedBool,
+      },
+    }).catch(() => { /* swallow */ });
 
     res.json({
       similarDeals: results,
@@ -5799,6 +5818,77 @@ export function registerRoutes(app: Express) {
       const e = err as { message?: string };
       res.status(500).json({ error: e?.message || "Suggestion failed", code: "time_suggest_error" });
     }
+  });
+
+  // ========== AI TELEMETRY (F4.5) ==========
+  // Read-only dashboard surface. The recordAi() call sites live in
+  // each AI service.
+
+  app.get("/api/ai-telemetry", requirePerm("viewDashboard"), async (req: Request, res: Response) => {
+    const operation = typeof req.query.operation === "string" ? req.query.operation : null;
+    const status = typeof req.query.status === "string" ? req.query.status : null;
+    const limitRaw = parseInt(String(req.query.limit ?? "100"), 10);
+    const limit = Number.isFinite(limitRaw) ? Math.max(1, Math.min(500, limitRaw)) : 100;
+    const conds: any[] = [];
+    if (operation) conds.push(eq(aiTelemetry.operation, operation));
+    if (status) conds.push(eq(aiTelemetry.status, status));
+    const where = conds.length === 0 ? undefined : (conds.length === 1 ? conds[0] : and(...conds));
+    const rows = await db
+      .select()
+      .from(aiTelemetry)
+      .where(where as any)
+      .orderBy(desc(aiTelemetry.createdAt))
+      .limit(limit);
+    res.json(rows);
+  });
+
+  // Aggregates per-operation: count, p50/p95 latency, error rate,
+  // total tokens, total cost USD. Window is the last 7 days by
+  // default (configurable via ?windowDays=).
+  app.get("/api/ai-telemetry/summary", requirePerm("viewDashboard"), async (req: Request, res: Response) => {
+    const windowRaw = parseInt(String(req.query.windowDays ?? "7"), 10);
+    const windowDays = Number.isFinite(windowRaw) ? Math.max(1, Math.min(90, windowRaw)) : 7;
+    const cutoff = new Date(Date.now() - windowDays * 24 * 60 * 60 * 1000);
+    const result = await pool.query<{
+      operation: string;
+      mode: string;
+      total_calls: string;
+      error_calls: string;
+      avg_latency_ms: string | null;
+      p95_latency_ms: string | null;
+      total_tokens: string | null;
+      total_cost_usd: string | null;
+    }>(
+      `SELECT
+         operation,
+         mode,
+         COUNT(*)::text AS total_calls,
+         COUNT(*) FILTER (WHERE status != 'ok')::text AS error_calls,
+         AVG(latency_ms)::text AS avg_latency_ms,
+         (PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY latency_ms))::text AS p95_latency_ms,
+         SUM(total_tokens)::text AS total_tokens,
+         SUM(cost_usd)::text AS total_cost_usd
+       FROM ai_telemetry
+       WHERE created_at >= $1
+       GROUP BY operation, mode
+       ORDER BY operation, mode`,
+      [cutoff],
+    );
+    res.json({
+      windowDays,
+      generatedAt: new Date().toISOString(),
+      groups: result.rows.map((r) => ({
+        operation: r.operation,
+        mode: r.mode,
+        totalCalls: Number(r.total_calls),
+        errorCalls: Number(r.error_calls),
+        errorRate: Number(r.total_calls) === 0 ? 0 : Number(r.error_calls) / Number(r.total_calls),
+        avgLatencyMs: r.avg_latency_ms == null ? null : Math.round(parseFloat(r.avg_latency_ms)),
+        p95LatencyMs: r.p95_latency_ms == null ? null : Math.round(parseFloat(r.p95_latency_ms)),
+        totalTokens: r.total_tokens == null ? 0 : Number(r.total_tokens),
+        totalCostUsd: r.total_cost_usd == null ? 0 : Number(r.total_cost_usd),
+      })),
+    });
   });
 
   // ========== RATE OPTIMIZATION (F3.6) ==========

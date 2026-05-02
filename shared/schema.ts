@@ -496,6 +496,50 @@ export const batchAdjustmentRules = pgTable("batch_adjustment_rules", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
+// ============ AI TELEMETRY (F4.5) ============
+// One row per call to an /api/ai/* endpoint or LLM-backed service.
+// Captures the structured execution profile so we can build cost +
+// latency + error dashboards without scraping logs.
+//
+// Token counts are nullable because not every code path reports
+// them — heuristic endpoints have no tokens; LLM calls populate
+// them at request completion.
+export const aiTelemetry = pgTable("ai_telemetry", {
+  id: serial("id").primaryKey(),
+  // Logical operation: deal_similarity | effort_estimation |
+  // margin_advisor | scenario_recommendation | risk_summary |
+  // architecture_chat | ask_dealpad | embedding | …
+  operation: text("operation").notNull(),
+  // Backing implementation when known: simulated | anthropic |
+  // openai | azure_openai | pgvector | heuristic. Helps split
+  // dashboards by mode.
+  mode: text("mode").notNull().default("heuristic"),
+  // Status: ok | error | timeout | rate_limited.
+  status: text("status").notNull(),
+  // Optional model identifier when an LLM was called
+  // (claude-opus-4-7, gpt-4o, text-embedding-3-small, …).
+  model: text("model"),
+  promptTokens: integer("prompt_tokens"),
+  completionTokens: integer("completion_tokens"),
+  // Total tokens (prompt + completion). Stored explicitly so a
+  // single SUM() over the column is enough for the cost panel.
+  totalTokens: integer("total_tokens"),
+  // Estimated USD cost. Computed at write time from a small
+  // pricing table baked into the telemetry middleware so
+  // dashboards don't need to know per-model rates.
+  costUsd: decimal("cost_usd", { precision: 10, scale: 6 }),
+  latencyMs: integer("latency_ms").notNull(),
+  // Optional links to the deal + actor for per-deal/per-user views.
+  dealId: integer("deal_id").references(() => deals.id),
+  actor: text("actor"),
+  errorCode: text("error_code"),
+  errorMessage: text("error_message"),
+  // Free-form structured request/response context for debugging.
+  // Limited to ~32KB by the routes layer; never store secrets.
+  metadata: jsonb("metadata"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 // ============ RATE OPTIMIZATION (F3.6) ============
 // Rate-card-level recommendations driven by capacity utilization +
 // LTV proxy + seasonality. Heuristic mode today; ML model plugs

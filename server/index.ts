@@ -602,6 +602,31 @@ async function pushSchema() {
       updated_at TIMESTAMP DEFAULT NOW() NOT NULL
     );
 
+    -- AI telemetry (F4.5). One row per call to an /api/ai/*
+    -- endpoint or llm.ts function. Cost + tokens + latency for
+    -- dashboards.
+    CREATE TABLE IF NOT EXISTS ai_telemetry (
+      id SERIAL PRIMARY KEY,
+      operation TEXT NOT NULL,
+      mode TEXT NOT NULL DEFAULT 'heuristic',
+      status TEXT NOT NULL,
+      model TEXT,
+      prompt_tokens INTEGER,
+      completion_tokens INTEGER,
+      total_tokens INTEGER,
+      cost_usd DECIMAL(10,6),
+      latency_ms INTEGER NOT NULL,
+      deal_id INTEGER REFERENCES deals(id),
+      actor TEXT,
+      error_code TEXT,
+      error_message TEXT,
+      metadata JSONB,
+      created_at TIMESTAMP DEFAULT NOW() NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS ai_telemetry_op_idx ON ai_telemetry (operation, created_at DESC);
+    CREATE INDEX IF NOT EXISTS ai_telemetry_mode_idx ON ai_telemetry (mode, created_at DESC);
+    CREATE INDEX IF NOT EXISTS ai_telemetry_status_idx ON ai_telemetry (status) WHERE status != 'ok';
+
     -- Rate optimization runs (F3.6). One row per recommendation
     -- run; status flips on apply/discard.
     CREATE TABLE IF NOT EXISTS rate_optimization_runs (
