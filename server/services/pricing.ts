@@ -129,8 +129,16 @@ export async function backfillDealTotals(): Promise<{ updated: number; linesFixe
       for (const l of lines) {
         const hours = parseFloat(l.hours || "0");
         const storedRate = parseFloat(l.rate || "0");
-        const standard = parseFloat(l.standardRate || l.rate || "0");
+        const persistedStandard = parseFloat(l.standardRate || "0");
         const costRate = parseFloat(l.costRate || "0");
+
+        // F0.10 idempotency: when standard_rate is empty, back-derive it
+        // from (rate / factor) once, persist it, and use the persisted
+        // value on every subsequent run. Pre-fix, every backfill on a
+        // legacy row compounded the factor again.
+        const standard = persistedStandard > 0
+          ? persistedStandard
+          : storedRate / Math.max(factor, 0.0001);
 
         // Decide the canonical adjusted rate. Honor manual overrides; for
         // everything else, the rate must be standardRate × factor so the
@@ -143,13 +151,17 @@ export async function backfillDealTotals(): Promise<{ updated: number; linesFixe
         const rateDrift = Math.abs(parseFloat(reconciled.rate) - storedRate) > 0.01;
         const feeDrift = Math.abs(parseFloat(reconciled.fee) - storedFee) > 0.01;
         const costDrift = Math.abs(parseFloat(reconciled.cost) - storedCost) > 0.01;
+        const stdMissing = persistedStandard <= 0 && standard > 0;
 
-        if (rateDrift || feeDrift || costDrift) {
+        if (rateDrift || feeDrift || costDrift || stdMissing) {
           await db.update(pricingLines).set({
             rate: reconciled.rate,
             fee: reconciled.fee,
             cost: reconciled.cost,
             margin: reconciled.margin,
+            // Heal missing standard_rate. Already-populated rows pass
+            // through unchanged (standard === persistedStandard).
+            standardRate: standard.toFixed(2),
           }).where(eq(pricingLines.id, l.id));
           linesFixed++;
         }
@@ -235,10 +247,19 @@ export async function recalcPricingFromScope(dealId: number) {
       const role = roleMap.get(line.roleId!);
       const pct = role ? (dist[role.name] || (1 / allRoles.length)) : (1 / existingLines.length);
       const hours = Math.max(Math.round(totalHours * pct), 1);
-      // The standard rate is the rate-card baseline; the displayed rate is
-      // that baseline times the T&M adjustment factor. We persist the
-      // adjusted rate so the UI's "rate × hours" math always lands on fee.
-      const baseRate = parseFloat(line.standardRate || line.rate || "300");
+
+      // Idempotency fix (F0.10): the standard rate must be persisted so
+      // subsequent recalcs don't compound the T&M factor. Pre-fix, if
+      // `line.standardRate` was empty, baseRate fell back to `line.rate`
+      // — which on the SECOND call already carried the previous run's
+      // adjustment, so each call multiplied rate by `rateAdjustmentFactor`
+      // again. Now: when standardRate is missing, back-derive it from
+      // (rate / factor) and persist on this same write so future calls
+      // read it back and the math stays stable.
+      const persistedStandard = parseFloat(line.standardRate || "0");
+      const baseRate = persistedStandard > 0
+        ? persistedStandard
+        : parseFloat(line.rate || "300") / Math.max(rateAdjustmentFactor, 0.0001);
       const rate = baseRate * rateAdjustmentFactor;
       const costRate = parseFloat(line.costRate || "150");
       const reconciled = reconcileLine(hours, rate, costRate);
@@ -248,6 +269,9 @@ export async function recalcPricingFromScope(dealId: number) {
         fee: reconciled.fee,
         cost: reconciled.cost,
         margin: reconciled.margin,
+        // Persist the back-derived standard the first time we see an
+        // empty value. Already-populated rows pass through unchanged.
+        standardRate: baseRate.toFixed(2),
       }).where(eq(pricingLines.id, line.id));
     }
   }
