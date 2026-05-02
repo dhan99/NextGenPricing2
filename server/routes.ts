@@ -2841,26 +2841,33 @@ export function registerRoutes(app: Express) {
   app.post("/api/deals/:dealId/approvals", requirePerm("editDeals"), async (req: Request, res: Response) => {
     const dealId = paramInt(req, "dealId");
     const actor = (headerStr(req, "x-user-name") || req.body?.submittedBy || req.body?.userName || "Unknown").trim();
-    // SERVER-SIDE GATING: refuse to create the approval (and refuse to flip
-    // the deal to "submitted") if the latest Intapp screening is a conflict
-    // and gating is enabled. Override path is /api/intapp/.../override.
-    const intappGate = await assertSubmissionAllowed(dealId, actor);
-    if (!intappGate.allow) {
-      return res.status(409).json({
-        error: intappGate.reason,
-        code: "intapp_conflict",
-        screening: intappGate.screening,
-      });
-    }
 
-    // Workday pre-submit gating: blocks if budget or staffing fails AND not yet overridden
-    const wdGate = await onDealSubmitted(dealId, actor);
-    if (wdGate.blocked) {
-      return res.status(409).json({
-        error: "WORKDAY_VALIDATION_BLOCKED",
-        message: wdGate.reason,
-        validationId: wdGate.validationId,
-      });
+    // F1.4.6: deal-status flip + Intapp + Workday gating now run via
+    // SubmitDealService (the variant with Workday gate enabled). The
+    // approval-row creation + practice-lead trigger calc + activity-log
+    // entry stay inline because they describe the approval row, not
+    // the deal.
+    const { submitDealServiceForApprovalsEndpoint } = getDealServices();
+    const submission = await submitDealServiceForApprovalsEndpoint.execute({ dealId, actor });
+    if (!submission.ok) {
+      if (submission.kind === "not_found") {
+        return res.status(404).json({ error: "Deal not found" });
+      }
+      if (submission.kind === "intapp") {
+        return res.status(409).json({
+          error: submission.reason,
+          code: submission.code,
+          screening: submission.screening,
+        });
+      }
+      if (submission.kind === "workday") {
+        return res.status(409).json({
+          error: "WORKDAY_VALIDATION_BLOCKED",
+          message: submission.reason,
+          validationId: submission.validationId,
+        });
+      }
+      return res.status(409).json({ error: "Submission blocked" });
     }
 
     // Apply shared approval policy so the approver routed here matches what
@@ -2888,16 +2895,6 @@ export function registerRoutes(app: Express) {
     }
 
     const [approval] = await db.insert(approvals).values(approvalPayload).returning();
-
-    // Advance the persisted wizard step to "Approvals" (6) so when the user
-    // navigates back to the deal detail (e.g. from the Renewal Leadsheet)
-    // they land on the approvals tab instead of being bounced back to
-    // whatever step they last edited (Scope/Pricing/etc.).
-    await db.update(deals)
-      .set({ status: "submitted", currentStep: 6 })
-      .where(eq(deals.id, dealId));
-    autoPushDeal(dealId, ["status"], actor).catch(() => {});
-    onDealSubmittedTrigger(dealId, actor).catch(() => {});
 
     await db.insert(activityLog).values({
       dealId,
@@ -2943,21 +2940,60 @@ export function registerRoutes(app: Express) {
     const isTransition = !!next && next !== existing.status;
     const isFinal = isTransition && (next === "approved" || next === "rejected");
 
-    // SERVER-SIDE GATING at the approval-decision point: re-verify the latest
-    // Intapp Risk screening before allowing the deal to flip to "approved".
-    // Mirrors the submission gate; closes the gap where a conflict surfaced
-    // by the nightly re-screen between submit and approve could otherwise
-    // slip through unchecked. Rejections are NEVER gated — you should always
-    // be able to reject a deal regardless of screening state.
-    if (isTransition && next === "approved" && existing.dealId) {
+    // F1.4.6: terminal deal-status transitions go through ApproveDealService /
+    // RejectDealService. The service runs the Intapp re-screen (approve only;
+    // rejections are never gated), persists the deal status + outbox event in
+    // one TX, and publishes DealApproved/DealRejected to subscribers
+    // (activity_log + autoPushDeal + autoPushIntappOutcome + autoPushWorkdayProject).
+    if (isFinal && existing.dealId) {
       const actor = (headerStr(req, "x-user-name") || req.body?.userName || req.body?.approverName || "Approver").toString();
-      const intappGate = await assertApprovalAllowed(existing.dealId, actor);
-      if (!intappGate.allow) {
-        return res.status(409).json({
-          error: intappGate.reason,
-          code: "intapp_conflict",
-          screening: intappGate.screening,
-        });
+      const { approveDealService, rejectDealService } = getDealServices();
+      try {
+        if (next === "approved") {
+          const result = await approveDealService.execute({
+            dealId: existing.dealId,
+            actor,
+            approvalId: id,
+            scenarioId: typeof req.body?.scenarioId === "number" ? req.body.scenarioId : null,
+          });
+          if (!result.ok) {
+            if (result.kind === "intapp") {
+              return res.status(409).json({
+                error: result.reason,
+                code: result.code,
+                screening: result.screening,
+              });
+            }
+            if (result.kind === "not_found") {
+              return res.status(404).json({ error: "Deal not found" });
+            }
+          }
+        } else {
+          // rejected
+          const result = await rejectDealService.execute({
+            dealId: existing.dealId,
+            actor,
+            approvalId: id,
+            reason: typeof req.body?.comments === "string" ? req.body.comments : null,
+          });
+          if (!result.ok && result.kind === "not_found") {
+            return res.status(404).json({ error: "Deal not found" });
+          }
+        }
+      } catch (err: unknown) {
+        // The aggregate's state machine refused the transition (e.g. trying
+        // to approve a deal that's already approved). Surface as a structured
+        // 409 so the client can recover.
+        const e = err as { code?: string; from?: string; to?: string; message?: string };
+        if (e?.code === "illegal_state_transition") {
+          return res.status(409).json({
+            error: "illegal_state_transition",
+            message: e.message,
+            from: e.from,
+            to: e.to,
+          });
+        }
+        throw err;
       }
     }
 
@@ -2995,21 +3031,11 @@ export function registerRoutes(app: Express) {
     }
 
     if (updated && updated.dealId) {
-      if (isFinal) {
-        await db.update(deals).set({ status: req.body.status }).where(eq(deals.id, updated.dealId));
-        await db.insert(activityLog).values({
-          dealId: updated.dealId,
-          action: `deal_${req.body.status}`,
-          description: `Deal ${req.body.status} by ${updated.approverName || "reviewer"}`,
-          userName: updated.approverName || "System",
-        });
-        // Bi-directional fan-out: push outcome back to all integration platforms.
-        autoPushDeal(updated.dealId, ["status"], updated.approverName || undefined).catch(() => {});
-        autoPushIntappOutcome(updated.dealId, req.body.status as any, updated.approverName || undefined).catch(() => {});
-        if (req.body.status === "approved") {
-          autoPushWorkdayProject(updated.dealId, "approval", updated.approverName || undefined).catch(() => {});
-        }
-      } else if (req.body.status === "pending_bu_approval") {
+      // Final-state side effects (deal status flip, deal_<status> activity
+      // log entry, auto-pushes) are handled by the F1.4 services + bus
+      // subscribers above. The "approval_advanced" entry stays inline
+      // because it's about the approval row's stage, not the deal status.
+      if (!isFinal && req.body.status === "pending_bu_approval") {
         await db.insert(activityLog).values({
           dealId: updated.dealId,
           action: "approval_advanced",

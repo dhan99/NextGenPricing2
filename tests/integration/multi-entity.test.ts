@@ -14,7 +14,7 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import express from "express";
 import cors from "cors";
 import request from "supertest";
-import { eq } from "drizzle-orm";
+import { eq, asc, isNotNull } from "drizzle-orm";
 import { registerRoutes } from "../../server/routes";
 import { attachRole } from "../../server/rbac";
 import { db } from "../../server/db";
@@ -45,14 +45,22 @@ describe("F1.1 — multi-entity routes", () => {
     app.use(attachRole);
     registerRoutes(app);
 
-    // Use any existing seeded deal — these tests don't need a private deal,
-    // they just need a valid deal_id to scope entity rows under. We never
-    // mutate the deal itself.
-    const [first] = await db.select({ id: deals.id }).from(deals).limit(1);
-    if (!first) {
-      throw new Error("No deals in DB — run the seed before running F1.1 integration tests.");
+    // Use the lowest-id deal that has at least one entity row. F1.4
+    // tests now create their own throwaway deals without entities,
+    // and an unordered LIMIT 1 was nondeterministically picking those
+    // up. Ordering by id ASC + filtering for an existing entity ties
+    // us back to a long-lived seeded deal.
+    const seeded = await db
+      .select({ id: deals.id })
+      .from(deals)
+      .innerJoin(dealEntities, eq(dealEntities.dealId, deals.id))
+      .where(isNotNull(dealEntities.id))
+      .orderBy(asc(deals.id))
+      .limit(1);
+    if (seeded.length === 0) {
+      throw new Error("No deals with entities in DB — run the seed + multi-entity backfill before running F1.1 integration tests.");
     }
-    dealId = first.id;
+    dealId = seeded[0].id;
   });
 
   afterAll(async () => {
