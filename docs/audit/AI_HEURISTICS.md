@@ -2,9 +2,9 @@
 
 This document captures **exactly** what each `/api/ai/*` endpoint does today. Phase 4 of the roadmap replaces these heuristics with LLMs and trained ML models. To A/B test those replacements honestly, we need a precise baseline.
 
-Every entry below is sourced from `server/routes.ts` and `server/dynamics.ts` at the commit audited in `docs/audit/CURRENT_STATE_AUDIT.md`. Line numbers are stable as of audit time.
+Every entry below is sourced from `server/routes.ts` and `server/dynamics.ts`. Line numbers were re-validated during F0.7 (Day 7 of `PHASE0_RUNBOOK.md`) after the F0.5 pricing extraction shifted line numbers in `routes.ts` by ~219 lines. They will drift again as the refactor progresses; trust the symbol names over the numbers and re-run `python3 scripts/audit/extract_endpoints.py` if you suspect drift.
 
-The phrase **"AI"** in the codebase today means **deterministic heuristic**. No LLM is called; no model is loaded; all outputs are produced by rule-based code paths. This is openly stated in `replit-project-rigor-playbook.md` and in the architecture-chat answer at `server/routes.ts:4061`.
+The phrase **"AI"** in the codebase today means **deterministic heuristic**. No LLM is called; no model is loaded; all outputs are produced by rule-based code paths. This is openly stated in `replit-project-rigor-playbook.md` and in the architecture-chat handler.
 
 ---
 
@@ -12,7 +12,7 @@ The phrase **"AI"** in the codebase today means **deterministic heuristic**. No 
 
 **Endpoint**: `POST /api/ai/deal-similarity`
 **Permission**: `runAI`
-**Code**: `server/routes.ts:2889-2926`
+**Code**: `server/routes.ts:2670-2707`
 
 ### Input shape
 
@@ -59,7 +59,7 @@ The phrase **"AI"** in the codebase today means **deterministic heuristic**. No 
 
 **Endpoint**: `POST /api/ai/effort-estimation`
 **Permission**: `runAI`
-**Code**: `server/routes.ts:2928-2998`
+**Code**: `server/routes.ts:2709-2779`
 
 ### Input shape
 
@@ -123,7 +123,7 @@ The phrase **"AI"** in the codebase today means **deterministic heuristic**. No 
 
 **Endpoint**: `POST /api/ai/margin-advisor`
 **Permission**: `runAI`
-**Code**: `server/routes.ts:3000-3091`
+**Code**: `server/routes.ts:2781-2872`
 
 ### Input shape
 
@@ -172,7 +172,7 @@ The phrase **"AI"** in the codebase today means **deterministic heuristic**. No 
 
 **Endpoint**: `POST /api/ai/scenario-recommendation`
 **Permission**: `runAI`
-**Code**: `server/routes.ts:3093-3123`
+**Code**: `server/routes.ts:2874-2904`
 
 ### Input shape
 
@@ -213,7 +213,7 @@ The phrase **"AI"** in the codebase today means **deterministic heuristic**. No 
 
 **Endpoint**: `POST /api/ai/risk-summary`
 **Permission**: `runAI`
-**Code**: `server/routes.ts:3125-3176`
+**Code**: `server/routes.ts:2906-2957`
 
 ### Input shape
 
@@ -268,7 +268,7 @@ Same path as UC-4 — structured LLM call with deal context, asking for a calibr
 
 **Endpoint**: `POST /api/ai/architecture-chat`
 **Permission**: `viewArchitecture`
-**Code**: `server/routes.ts` — large keyword-router with ~600 lines of hardcoded answers around lines 4036–4516
+**Code**: `server/routes.ts:3767-3911` — keyword-router with ~150 lines of hardcoded answers (the "~600 lines" in the original audit included ancillary helpers; the handler itself is tighter than that estimate)
 
 ### Algorithm
 
@@ -291,7 +291,7 @@ Topics covered (~11):
 ### Limitations
 
 - Keyword router. Anything unanticipated falls through to a generic response.
-- Answers are **hand-authored** — they reflect a snapshot in time. They may drift from reality. (The audit already caught this: `replit.md` says 13 tables, schema has 42; the architecture chat probably has similar drift.)
+- Answers are **hand-authored** — they reflect a snapshot in time. They may drift from reality. (Concrete drift caught during the audit: `replit.md` claimed 13 tables when the schema has 42 — fixed in F0.7. The architecture-chat answers may have similar staleness; sweep on next read.)
 - No grounding in the live database. Several answers claim live DB stats but those numbers are baked in.
 
 ### Replacement target
@@ -304,7 +304,7 @@ This is a candidate for an LLM replacement with a tool-call to a `repo_introspec
 
 **Endpoint**: `POST /api/dynamics/opportunities/:id/agent-draft`
 **Permission**: `createDeals`
-**Code**: `server/routes.ts:3183-` (very large handler) and reference: `docs/autonomous-agent-sequence.md`
+**Code**: `server/routes.ts:2964-` (very large handler — runs to ~line 3580) and reference: `docs/autonomous-agent-sequence.md`
 
 This is the most sophisticated of the agentic flows and the one most likely to feel "AI-like" to a stakeholder. It is **also entirely deterministic**.
 
