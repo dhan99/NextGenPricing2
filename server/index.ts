@@ -449,9 +449,29 @@ async function pushSchema() {
     ALTER TABLE deals ADD COLUMN IF NOT EXISTS engagement_inputs JSONB;
     ALTER TABLE deals ADD COLUMN IF NOT EXISTS target_margin_percent DECIMAL(5,2);
     -- F2.1.1 — Deal fingerprint (JSONB). Cache key + feature snapshot for
-    -- the similarity engine. Embedding column is intentionally omitted
-    -- here; it lands in F2.1.2 once pgvector is installed in the cluster.
+    -- the similarity engine.
     ALTER TABLE deals ADD COLUMN IF NOT EXISTS fingerprint JSONB;
+
+    -- F2.1.2 — pgvector + deal embedding column. CREATE EXTENSION is a
+    -- no-op once installed; the dealpad role doesn't have permission to
+    -- create extensions, so this is wrapped in DO/EXCEPTION so a missing
+    -- extension is logged but doesn't abort startup. In that case the
+    -- ALTER TABLE below also no-ops because the type doesn't exist.
+    DO $$
+    BEGIN
+      CREATE EXTENSION IF NOT EXISTS vector;
+    EXCEPTION
+      WHEN insufficient_privilege THEN
+        RAISE NOTICE '[pushSchema] vector extension not present and dealpad role cannot create it; embedding column skipped. Run "psql -d dealpad -c ''CREATE EXTENSION IF NOT EXISTS vector''" as a superuser once.';
+    END
+    $$;
+    DO $$
+    BEGIN
+      IF EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'vector') THEN
+        EXECUTE 'ALTER TABLE deals ADD COLUMN IF NOT EXISTS embedding vector(1536)';
+      END IF;
+    END
+    $$;
 
     -- Per-step rate override (shared/schema.ts:137-145). Captured baseline +
     -- audit metadata so the variance badge can render "$X over standard, by Y".
