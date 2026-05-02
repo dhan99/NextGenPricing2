@@ -1,6 +1,6 @@
 import { Express, Request, Response } from "express";
 import { db } from "./db";
-import { clients, deals, dealEntities, scopeCatalog, dealScopeItems, scopeTemplates, scopeTemplateItems, assemblyTemplates, assemblyComponents, roles, rateCards, rateCardEntries, pricingLines, scenarios, approvals, promptResponses, activityLog, changeOrders, dynamicsOpportunities, promptSets, promptSetItems, marginTargets, batchRenewalJobs, batchRenewalItems, batchAdjustmentRules, budgetActuals, budgetAlerts } from "../shared/schema";
+import { clients, deals, dealEntities, scopeCatalog, dealScopeItems, scopeTemplates, scopeTemplateItems, assemblyTemplates, assemblyComponents, roles, rateCards, rateCardEntries, pricingLines, scenarios, approvals, promptResponses, activityLog, changeOrders, dynamicsOpportunities, promptSets, promptSetItems, marginTargets, batchRenewalJobs, batchRenewalItems, batchAdjustmentRules, budgetActuals, budgetAlerts, timeEntries } from "../shared/schema";
 import { evaluatePracticeLeadTrigger, resolveMarginTarget, type MarginTargetRow, type DealLike } from "../shared/policy";
 import { eq, desc, sql, and, count, isNull, isNotNull, asc, inArray } from "drizzle-orm";
 import { requirePerm, requireAnyPerm } from "./rbac";
@@ -331,6 +331,7 @@ import {
   monitorAll,
   persistAndAlert,
 } from "./services/BudgetMonitorService";
+import { suggestTimeEntry, snapToQuarterHour } from "./services/TimeEntryService";
 
 // (former inline definitions of DealTotals / computeDealTotalsFromLines /
 // reconcileLine / backfillDealTotals / persistDealTotals / recalcPricingFromScope
@@ -5547,6 +5548,160 @@ export function registerRoutes(app: Express) {
       .where(eq(budgetAlerts.id, id))
       .returning();
     res.json(updated);
+  });
+
+  // ========== TIME ENTRIES (F2.3) ==========
+  // CRUD + AI suggest. The BudgetMonitorService swap to prefer
+  // sum-of-time-entries over the pricing-line projection lands once
+  // a deal accumulates entries; until then, both sources coexist.
+
+  // List entries for one deal. Optional ?from / ?to date window
+  // (YYYY-MM-DD), ?source filter, ?limit.
+  app.get("/api/deals/:dealId/time-entries", requirePerm("viewDeals"), async (req: Request, res: Response) => {
+    const dealId = paramInt(req, "dealId");
+    const from = typeof req.query.from === "string" ? req.query.from : null;
+    const to = typeof req.query.to === "string" ? req.query.to : null;
+    const source = typeof req.query.source === "string" ? req.query.source : null;
+    const limitRaw = parseInt(String(req.query.limit ?? "100"), 10);
+    const limit = Number.isFinite(limitRaw) ? Math.max(1, Math.min(500, limitRaw)) : 100;
+    const conds = [eq(timeEntries.dealId, dealId)];
+    if (from) conds.push(sql`${timeEntries.workDate} >= ${from}`);
+    if (to) conds.push(sql`${timeEntries.workDate} <= ${to}`);
+    if (source) conds.push(eq(timeEntries.source, source));
+    const rows = await db
+      .select()
+      .from(timeEntries)
+      .where(and(...conds))
+      .orderBy(desc(timeEntries.workDate), desc(timeEntries.id))
+      .limit(limit);
+    res.json(rows);
+  });
+
+  // Per-deal totals — for the BudgetMonitorService swap + the UI
+  // header on the Time tab. Returns total hours, plus a daily
+  // bucket count (small surface; tabular UI computes its own
+  // grouping if needed).
+  app.get("/api/deals/:dealId/time-entries/summary", requirePerm("viewDeals"), async (req: Request, res: Response) => {
+    const dealId = paramInt(req, "dealId");
+    const from = typeof req.query.from === "string" ? req.query.from : null;
+    const to = typeof req.query.to === "string" ? req.query.to : null;
+    const conds = [eq(timeEntries.dealId, dealId)];
+    if (from) conds.push(sql`${timeEntries.workDate} >= ${from}`);
+    if (to) conds.push(sql`${timeEntries.workDate} <= ${to}`);
+    const [totals] = await db
+      .select({
+        totalHours: sql<string>`COALESCE(SUM(${timeEntries.hours}), 0)::text`,
+        entryCount: count(),
+      })
+      .from(timeEntries)
+      .where(and(...conds));
+    res.json({
+      totalHours: parseFloat(totals.totalHours),
+      entryCount: Number(totals.entryCount),
+    });
+  });
+
+  // Create a manual entry. AI-suggested entries route through the
+  // /suggest endpoint and POST back here with source='ai' to commit.
+  app.post("/api/deals/:dealId/time-entries", requirePerm("editDeals"), async (req: Request, res: Response) => {
+    const dealId = paramInt(req, "dealId");
+    const body = req.body || {};
+    const workDate = String(body.workDate ?? "").trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(workDate)) {
+      return res.status(400).json({ error: "workDate must be YYYY-MM-DD", field: "workDate" });
+    }
+    const hoursRaw = parseFloat(String(body.hours ?? ""));
+    if (!Number.isFinite(hoursRaw) || hoursRaw <= 0) {
+      return res.status(400).json({ error: "hours must be a positive number", field: "hours" });
+    }
+    const hours = snapToQuarterHour(hoursRaw);
+    const userName = (headerStr(req, "x-user-name") || body.userName || "Unknown").toString().trim();
+    const source = String(body.source ?? "manual");
+    const ALLOWED_SOURCES = new Set(["manual", "graph", "ai", "import"]);
+    if (!ALLOWED_SOURCES.has(source)) {
+      return res.status(400).json({ error: `source must be one of: ${[...ALLOWED_SOURCES].join(", ")}`, field: "source" });
+    }
+    let roleId: number | null = null;
+    if (body.roleId != null) {
+      const parsed = parseInt(String(body.roleId), 10);
+      if (Number.isFinite(parsed) && parsed > 0) roleId = parsed;
+    }
+    const [created] = await db
+      .insert(timeEntries)
+      .values({
+        dealId,
+        userName,
+        workDate,
+        hours: String(hours),
+        roleId,
+        description: body.description ?? null,
+        source,
+        metadata: body.metadata ?? null,
+      })
+      .returning();
+    res.status(201).json(created);
+  });
+
+  // Update a single entry (hours / description / source). dealId
+  // and userName are immutable to keep the audit trail honest.
+  app.patch("/api/time-entries/:id", requirePerm("editDeals"), async (req: Request, res: Response) => {
+    const id = paramInt(req, "id");
+    const [existing] = await db.select().from(timeEntries).where(eq(timeEntries.id, id));
+    if (!existing) return res.status(404).json({ error: "Time entry not found" });
+    const body = req.body || {};
+    const patch: Record<string, unknown> = { updatedAt: new Date() };
+    if (body.hours != null) {
+      const h = parseFloat(String(body.hours));
+      if (!Number.isFinite(h) || h <= 0) {
+        return res.status(400).json({ error: "hours must be positive", field: "hours" });
+      }
+      patch.hours = String(snapToQuarterHour(h));
+    }
+    if (body.description !== undefined) patch.description = body.description;
+    if (body.metadata !== undefined) patch.metadata = body.metadata;
+    if (body.workDate !== undefined) {
+      const wd = String(body.workDate);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(wd)) {
+        return res.status(400).json({ error: "workDate must be YYYY-MM-DD", field: "workDate" });
+      }
+      patch.workDate = wd;
+    }
+    const [updated] = await db.update(timeEntries).set(patch).where(eq(timeEntries.id, id)).returning();
+    res.json(updated);
+  });
+
+  app.delete("/api/time-entries/:id", requirePerm("editDeals"), async (req: Request, res: Response) => {
+    const id = paramInt(req, "id");
+    const [deleted] = await db.delete(timeEntries).where(eq(timeEntries.id, id)).returning();
+    if (!deleted) return res.status(404).json({ error: "Time entry not found" });
+    res.json({ deleted: true, id });
+  });
+
+  // AI-assisted suggest. Returns a candidate entry without writing
+  // — UI shows it for confirm/edit, then POSTs to the create route
+  // with source='ai' to commit. Backed by TimeEntryService which
+  // currently runs in `simulated` mode (deterministic heuristic).
+  app.post("/api/time/suggest", requirePerm("editDeals"), async (req: Request, res: Response) => {
+    const body = req.body || {};
+    const dealId = parseInt(String(body.dealId ?? ""), 10);
+    if (!Number.isFinite(dealId) || dealId <= 0) {
+      return res.status(400).json({ error: "dealId is required", field: "dealId" });
+    }
+    const [exists] = await db.select({ id: deals.id }).from(deals).where(eq(deals.id, dealId));
+    if (!exists) return res.status(404).json({ error: "Deal not found" });
+    const userName = (headerStr(req, "x-user-name") || body.userName || "Unknown").toString().trim();
+    try {
+      const suggestion = await suggestTimeEntry({
+        dealId,
+        workDate: typeof body.workDate === "string" ? body.workDate : undefined,
+        hint: typeof body.hint === "string" ? body.hint : undefined,
+        userName,
+      });
+      res.json(suggestion);
+    } catch (err: unknown) {
+      const e = err as { message?: string };
+      res.status(500).json({ error: e?.message || "Suggestion failed", code: "time_suggest_error" });
+    }
   });
 
   // ========== PROPOSAL GENERATION ==========
