@@ -538,6 +538,7 @@ async function recalcPricingFromScope(dealId: number) {
   await db.delete(scenarios).where(eq(scenarios.dealId, dealId));
 }
 
+import { paramInt, paramStr, headerStr } from "./lib/req";
 import { registerDynamicsRoutes, autoPushDeal, pickTemplateForName, tmplKey, linkDealToOpportunity, unlinkOpportunity } from "./dynamics";
 import { ERP_TEMPLATE_NAME, ERP_SERVICE_LINE, scaleErpItems, summarizeErpInputs, parseErpInputs, validateErpInputs } from "./erp-scaling";
 import {
@@ -587,7 +588,7 @@ export function registerRoutes(app: Express) {
         error: "Reseed endpoint disabled: set ADMIN_RESEED_TOKEN to enable.",
       });
     }
-    const provided = req.header("x-admin-token") || req.body?.token;
+    const provided = headerStr(req, "x-admin-token") || req.body?.token;
     if (provided !== expected) {
       return res.status(401).json({ error: "Unauthorized" });
     }
@@ -640,7 +641,7 @@ export function registerRoutes(app: Express) {
   // Returns the resolved target for a given deal — used by the client so
   // every surface lines up with what the server enforces.
   app.get("/api/deals/:id/margin-target", requirePerm("viewMargins"), async (req: Request, res: Response) => {
-    const dealId = parseInt(req.params.id);
+    const dealId = paramInt(req, "id");
     const [d] = await db.select().from(deals).where(eq(deals.id, dealId));
     if (!d) return res.status(404).json({ error: "Deal not found" });
     const resolved = await resolveTargetForDeal(d);
@@ -737,7 +738,7 @@ export function registerRoutes(app: Express) {
   });
 
   app.patch("/api/margin-targets/overrides/:id", requirePerm("manageRateCards"), async (req: Request, res: Response) => {
-    const id = parseInt(req.params.id);
+    const id = paramInt(req, "id");
     const patch: Record<string, any> = { updatedAt: new Date() };
     if ("percent" in (req.body || {})) {
       const v = validatePercent(req.body.percent);
@@ -759,7 +760,7 @@ export function registerRoutes(app: Express) {
   });
 
   app.delete("/api/margin-targets/overrides/:id", requirePerm("manageRateCards"), async (req: Request, res: Response) => {
-    const id = parseInt(req.params.id);
+    const id = paramInt(req, "id");
     const result = await db.delete(marginTargets)
       .where(and(eq(marginTargets.id, id), isNotNull(marginTargets.scopeKey)))
       .returning();
@@ -803,13 +804,13 @@ export function registerRoutes(app: Express) {
   });
 
   app.get("/api/clients/:id", requirePerm("viewDeals"), async (req: Request, res: Response) => {
-    const [result] = await db.select().from(clients).where(eq(clients.id, parseInt(req.params.id)));
+    const [result] = await db.select().from(clients).where(eq(clients.id, paramInt(req, "id")));
     if (!result) return res.status(404).json({ error: "Client not found" });
     res.json(result);
   });
 
   app.patch("/api/clients/:id", requirePerm("editDeals"), async (req: Request, res: Response) => {
-    const id = parseInt(req.params.id);
+    const id = paramInt(req, "id");
     const [prior] = await db.select().from(clients).where(eq(clients.id, id));
     if (!prior) return res.status(404).json({ error: "Client not found" });
     const [updated] = await db.update(clients).set(req.body).where(eq(clients.id, id)).returning();
@@ -817,7 +818,7 @@ export function registerRoutes(app: Express) {
     const watched = ["industry", "region", "relationshipYears", "name"];
     const changed = watched.some(k => req.body?.[k] !== undefined && (prior as any)[k] !== updated[k as keyof typeof updated]);
     if (changed) {
-      const actor = (req.header("x-user-name") || "Client Edit").trim();
+      const actor = (headerStr(req, "x-user-name") || "Client Edit").trim();
       onClientChangedTrigger(id, actor).catch(() => {});
     }
     res.json(updated);
@@ -846,7 +847,7 @@ export function registerRoutes(app: Express) {
 
   app.get("/api/deals/:id", requirePerm("viewDeals"), async (req: Request, res: Response) => {
     const result = await db.query.deals.findFirst({
-      where: eq(deals.id, parseInt(req.params.id)),
+      where: eq(deals.id, paramInt(req, "id")),
       with: {
         client: true,
         scopeItems: { with: { scopeItem: true } },
@@ -871,7 +872,7 @@ export function registerRoutes(app: Express) {
   // Lightweight: re-sum pricing lines and write totals back to the deal header.
   // Used by the Review checklist "Recalculate" action to clear calc-parity mismatches.
   app.post("/api/deals/:id/recalc-totals", requirePerm("editDeals"), async (req: Request, res: Response) => {
-    const dealId = parseInt(req.params.id);
+    const dealId = paramInt(req, "id");
     if (isNaN(dealId)) return res.status(400).json({ error: "Invalid deal id" });
     // Single source of truth: persistDealTotals applies T&M / Tech & Admin /
     // line rounding via the shared helper, so this endpoint can no longer
@@ -923,7 +924,7 @@ export function registerRoutes(app: Express) {
   });
 
   app.patch("/api/deals/:id", requirePerm("editDeals"), async (req: Request, res: Response) => {
-    const dealId = parseInt(req.params.id);
+    const dealId = paramInt(req, "id");
     const [prior] = await db.select().from(deals).where(eq(deals.id, dealId));
     if (!prior) return res.status(404).json({ error: "Deal not found" });
     // SERVER-SIDE GATING: terminal status transitions (`approved` / `rejected`) MUST
@@ -944,7 +945,7 @@ export function registerRoutes(app: Express) {
     }
     // SERVER-SIDE GATING: a status transition to "submitted" must pass Intapp screening.
     if (req.body?.status === "submitted" && prior.status !== "submitted") {
-      const actor = (req.header("x-user-name") || req.body?.userName || "Unknown").trim();
+      const actor = (headerStr(req, "x-user-name") || req.body?.userName || "Unknown").trim();
       const gate = await assertSubmissionAllowed(dealId, actor);
       if (!gate.allow) {
         return res.status(409).json({ error: gate.reason, code: "intapp_conflict", screening: gate.screening });
@@ -1001,7 +1002,7 @@ export function registerRoutes(app: Express) {
     }
     autoPushDeal(dealId, changedFields, req.body?.userName).catch(() => {});
     if (prior.status !== "submitted" && finalRow.status === "submitted") {
-      const actor = (req.header("x-user-name") || req.body?.userName || "Unknown").trim();
+      const actor = (headerStr(req, "x-user-name") || req.body?.userName || "Unknown").trim();
       onDealSubmittedTrigger(dealId, actor).catch(() => {});
     }
     res.json(finalRow);
@@ -1058,7 +1059,7 @@ export function registerRoutes(app: Express) {
   }
 
   app.post("/api/deals/:id/archive", requirePerm("editDeals"), async (req: Request, res: Response) => {
-    const dealId = parseInt(req.params.id);
+    const dealId = paramInt(req, "id");
     const userName = req.body?.userName || "System";
     const [updated] = await db.update(deals)
       .set({ archivedAt: new Date(), archivedBy: userName, updatedAt: new Date() })
@@ -1083,7 +1084,7 @@ export function registerRoutes(app: Express) {
   });
 
   app.post("/api/deals/:id/restore", requirePerm("editDeals"), async (req: Request, res: Response) => {
-    const dealId = parseInt(req.params.id);
+    const dealId = paramInt(req, "id");
     const userName = req.body?.userName || "System";
     const [updated] = await db.update(deals)
       .set({ archivedAt: null, archivedBy: null, updatedAt: new Date() })
@@ -1103,8 +1104,8 @@ export function registerRoutes(app: Express) {
   // route from the UI instead of PATCHing status directly.
   // ------------------------------------------------------------------
   app.post("/api/deals/:id/submit", requirePerm("editDeals"), async (req: Request, res: Response) => {
-    const dealId = parseInt(req.params.id);
-    const actor = (req.header("x-user-name") || req.body?.userName || "Unknown").trim();
+    const dealId = paramInt(req, "id");
+    const actor = (headerStr(req, "x-user-name") || req.body?.userName || "Unknown").trim();
     const gate = await assertSubmissionAllowed(dealId, actor);
     if (!gate.allow) {
       return res.status(409).json({
@@ -1124,7 +1125,7 @@ export function registerRoutes(app: Express) {
 
   app.post("/api/deals/:id/clone", requirePerm("createDeals"), async (req: Request, res: Response) => {
     const source = await db.query.deals.findFirst({
-      where: eq(deals.id, parseInt(req.params.id)),
+      where: eq(deals.id, paramInt(req, "id")),
       with: { client: true, scopeItems: true, pricingLines: true, promptResponses: true },
     });
     if (!source) return res.status(404).json({ error: "Source deal not found" });
@@ -1236,7 +1237,7 @@ export function registerRoutes(app: Express) {
   });
 
   app.post("/api/deals/:id/reset-pricing", requirePerm("editPricing"), async (req: Request, res: Response) => {
-    const dealId = parseInt(req.params.id);
+    const dealId = paramInt(req, "id");
     const deal = await db.query.deals.findFirst({ where: eq(deals.id, dealId) });
     if (!deal) return res.status(404).json({ error: "Deal not found" });
     if (!deal.parentDealId) return res.status(400).json({ error: "Deal has no parent to reset from" });
@@ -1292,7 +1293,7 @@ export function registerRoutes(app: Express) {
   });
 
   app.post("/api/deals/:id/rate-adjust", requirePerm("editPricing"), async (req: Request, res: Response) => {
-    const dealId = parseInt(req.params.id);
+    const dealId = paramInt(req, "id");
     const factor = parseFloat(req.body.factor);
     if (!factor || factor <= 0) return res.status(400).json({ error: "Invalid factor" });
 
@@ -1453,7 +1454,7 @@ export function registerRoutes(app: Express) {
   };
 
   app.get("/api/engagement-input-spec/:serviceLine", requirePerm("viewDeals"), async (req: Request, res: Response) => {
-    const sl = req.params.serviceLine;
+    const sl = paramStr(req, "serviceLine");
     const preset = ENGAGEMENT_INPUT_PRESETS[sl] || ENGAGEMENT_INPUT_PRESETS["_generic"];
 
     // Overlay any per-service-line policy overrides set in Margin Targets admin
@@ -1528,7 +1529,7 @@ export function registerRoutes(app: Express) {
   // Re-apply Complex Tax parametric scaling using the deal's current
   // engagement_inputs. Reviewer-callable for explicit "recompute" actions.
   app.post("/api/deals/:id/tax-rescale", requirePerm("editDeals"), async (req: Request, res: Response) => {
-    const dealId = parseInt(req.params.id);
+    const dealId = paramInt(req, "id");
     if (Number.isNaN(dealId)) return res.status(400).json({ error: "Invalid id" });
     const [deal] = await db.select().from(deals).where(eq(deals.id, dealId));
     if (!deal) return res.status(404).json({ error: "Deal not found" });
@@ -1545,7 +1546,7 @@ export function registerRoutes(app: Express) {
       dealId,
       action: "tax_rescale",
       description: `[Tax] Rescaled ${updated} scope item(s): ${inputs.entities} entities · ${inputs.jurisdictions.length} jurisdictions · ${inputs.returnsPerYear} returns · ${inputs.tpTransactions} TP txns`,
-      userName: req.body?.userName || req.header("x-user-name") || "Reviewer",
+      userName: req.body?.userName || headerStr(req, "x-user-name") || "Reviewer",
       metadata: { inputs, taxRollup, updatedCount: updated },
     });
 
@@ -1629,7 +1630,7 @@ export function registerRoutes(app: Express) {
 
   app.patch("/api/scope-catalog/:id", requirePerm("manageScopeCatalog"), async (req: Request, res: Response) => {
     try {
-      const id = parseInt(req.params.id);
+      const id = paramInt(req, "id");
       if (Number.isNaN(id)) return res.status(400).json({ error: "Invalid id" });
       const body = req.body || {};
       const [current] = await db.select().from(scopeCatalog).where(eq(scopeCatalog.id, id));
@@ -1706,7 +1707,7 @@ export function registerRoutes(app: Express) {
   });
 
   app.delete("/api/scope-catalog/:id", requirePerm("manageScopeCatalog"), async (req: Request, res: Response) => {
-    const id = parseInt(req.params.id);
+    const id = paramInt(req, "id");
     const userName = (req.body?.userName as string) || null;
     // Always soft-delete (deactivate) — preserve historical references on existing deals
     const [row] = await db.update(scopeCatalog).set({ isActive: false }).where(eq(scopeCatalog.id, id)).returning();
@@ -1723,14 +1724,14 @@ export function registerRoutes(app: Express) {
   // ========== DEAL SCOPE ITEMS ==========
   app.get("/api/deals/:dealId/scope-items", requirePerm("viewDeals"), async (req: Request, res: Response) => {
     const result = await db.query.dealScopeItems.findMany({
-      where: eq(dealScopeItems.dealId, parseInt(req.params.dealId)),
+      where: eq(dealScopeItems.dealId, paramInt(req, "dealId")),
       with: { scopeItem: true },
     });
     res.json(result);
   });
 
   app.post("/api/deals/:dealId/scope-items", requirePerm("editDeals"), async (req: Request, res: Response) => {
-    const dealId = parseInt(req.params.dealId);
+    const dealId = paramInt(req, "dealId");
     const cascade = req.body?.cascade !== false; // default true
     const [check] = await db.select({ isActive: scopeCatalog.isActive, code: scopeCatalog.code })
       .from(scopeCatalog).where(eq(scopeCatalog.id, req.body.scopeItemId));
@@ -1803,8 +1804,8 @@ export function registerRoutes(app: Express) {
   });
 
   app.post("/api/deals/:dealId/apply-template/:templateId", requirePerm("editDeals"), async (req: Request, res: Response) => {
-    const dealId = parseInt(req.params.dealId);
-    const templateId = parseInt(req.params.templateId);
+    const dealId = paramInt(req, "dealId");
+    const templateId = paramInt(req, "templateId");
     const items = await db.select().from(scopeTemplateItems).where(eq(scopeTemplateItems.templateId, templateId));
     if (items.length === 0) return res.status(404).json({ error: "Template has no items" });
     const [tplPre] = await db.select().from(scopeTemplates).where(eq(scopeTemplates.id, templateId));
@@ -1904,7 +1905,7 @@ export function registerRoutes(app: Express) {
   // notes (rationale). Module-deselected items are removed; module-selected
   // items missing from the deal are added back. Pricing is then recalculated.
   app.post("/api/deals/:dealId/erp-rescale", requirePerm("editDeals"), async (req: Request, res: Response) => {
-    const dealId = parseInt(req.params.dealId);
+    const dealId = paramInt(req, "dealId");
     if (isNaN(dealId)) return res.status(400).json({ error: "Invalid id" });
     const [deal] = await db.select().from(deals).where(eq(deals.id, dealId));
     if (!deal) return res.status(404).json({ error: "Deal not found" });
@@ -1976,7 +1977,7 @@ export function registerRoutes(app: Express) {
       dealId,
       action: "erp_rescaled",
       description: `ERP scaling re-applied (${summarizeErpInputs(deal.engagementInputs || {})}). +${added} / Δ${updated} / −${removed} items.`,
-      userName: req.header("x-user-name") || req.body?.userName || null,
+      userName: headerStr(req, "x-user-name") || req.body?.userName || null,
       metadata: { added, updated, removed, inputs: parseErpInputs(deal.engagementInputs || {}) },
     }).catch(() => {});
 
@@ -1988,9 +1989,9 @@ export function registerRoutes(app: Express) {
   });
 
   app.delete("/api/deals/:dealId/scope-items/:id", requirePerm("editDeals"), async (req: Request, res: Response) => {
-    const dealId = parseInt(req.params.dealId);
+    const dealId = paramInt(req, "dealId");
     await db.delete(dealScopeItems).where(
-      and(eq(dealScopeItems.id, parseInt(req.params.id)), eq(dealScopeItems.dealId, dealId))
+      and(eq(dealScopeItems.id, paramInt(req, "id")), eq(dealScopeItems.dealId, dealId))
     );
     await recalcPricingFromScope(dealId);
     res.json({ success: true });
@@ -2020,14 +2021,14 @@ export function registerRoutes(app: Express) {
       roleLevel: roles.level,
     }).from(rateCardEntries)
       .innerJoin(roles, eq(rateCardEntries.roleId, roles.id))
-      .where(eq(rateCardEntries.rateCardId, parseInt(req.params.id)))
+      .where(eq(rateCardEntries.rateCardId, paramInt(req, "id")))
       .orderBy(roles.sortOrder);
     res.json(result);
   });
 
   // ========== PRICING LINES ==========
   app.get("/api/deals/:dealId/pricing", requirePerm("viewPricing"), async (req: Request, res: Response) => {
-    const dealId = parseInt(req.params.dealId);
+    const dealId = paramInt(req, "dealId");
     let result = await db.query.pricingLines.findMany({
       where: eq(pricingLines.dealId, dealId),
       with: { role: true },
@@ -2108,7 +2109,7 @@ export function registerRoutes(app: Express) {
   });
 
   app.post("/api/deals/:dealId/pricing", requirePerm("editPricing"), async (req: Request, res: Response) => {
-    const dealId = parseInt(req.params.dealId);
+    const dealId = paramInt(req, "dealId");
     const hours = parseFloat(req.body.hours || "0");
     const rate = parseFloat(req.body.rate || "0");
     const costRate = parseFloat(req.body.costRate || "0");
@@ -2128,15 +2129,15 @@ export function registerRoutes(app: Express) {
   });
 
   app.delete("/api/deals/:dealId/pricing", requirePerm("editPricing"), async (req: Request, res: Response) => {
-    const dealId = parseInt(req.params.dealId);
+    const dealId = paramInt(req, "dealId");
     await db.delete(pricingLines).where(eq(pricingLines.dealId, dealId));
     await persistDealTotals(dealId);
     res.json({ success: true });
   });
 
   app.patch("/api/deals/:dealId/pricing/:id", requirePerm("editPricing"), async (req: Request, res: Response) => {
-    const dealId = parseInt(req.params.dealId);
-    const lineId = parseInt(req.params.id);
+    const dealId = paramInt(req, "dealId");
+    const lineId = paramInt(req, "id");
 
     // Load existing line so we know the standardRate baseline and can detect
     // a rate-override transition (none -> overridden, overridden -> reset).
@@ -2270,7 +2271,7 @@ export function registerRoutes(app: Express) {
 
   // ========== SCENARIOS ==========
   app.get("/api/deals/:dealId/scenarios", requirePerm("viewMargins"), async (req: Request, res: Response) => {
-    const dealId = parseInt(req.params.dealId);
+    const dealId = paramInt(req, "dealId");
     let result = await db.select().from(scenarios)
       .where(eq(scenarios.dealId, dealId))
       .orderBy(scenarios.createdAt);
@@ -2332,8 +2333,8 @@ export function registerRoutes(app: Express) {
   });
 
   app.post("/api/deals/:dealId/scenarios/:id/select", requirePerm("editPricing"), async (req: Request, res: Response) => {
-    const dealId = parseInt(req.params.dealId);
-    const scenarioId = parseInt(req.params.id);
+    const dealId = paramInt(req, "dealId");
+    const scenarioId = paramInt(req, "id");
 
     // Validate scenario belongs to this deal BEFORE mutating any state.
     const target = await db.query.scenarios.findFirst({
@@ -2420,14 +2421,14 @@ export function registerRoutes(app: Express) {
   // ========== APPROVALS ==========
   app.get("/api/deals/:dealId/approvals", requirePerm("viewDeals"), async (req: Request, res: Response) => {
     const result = await db.select().from(approvals)
-      .where(eq(approvals.dealId, parseInt(req.params.dealId)))
+      .where(eq(approvals.dealId, paramInt(req, "dealId")))
       .orderBy(desc(approvals.submittedAt));
     res.json(result);
   });
 
   app.post("/api/deals/:dealId/approvals", requirePerm("editDeals"), async (req: Request, res: Response) => {
-    const dealId = parseInt(req.params.dealId);
-    const actor = (req.header("x-user-name") || req.body?.submittedBy || req.body?.userName || "Unknown").trim();
+    const dealId = paramInt(req, "dealId");
+    const actor = (headerStr(req, "x-user-name") || req.body?.submittedBy || req.body?.userName || "Unknown").trim();
     // SERVER-SIDE GATING: refuse to create the approval (and refuse to flip
     // the deal to "submitted") if the latest Intapp screening is a conflict
     // and gating is enabled. Override path is /api/intapp/.../override.
@@ -2497,7 +2498,7 @@ export function registerRoutes(app: Express) {
   });
 
   app.patch("/api/approvals/:id", requirePerm("approveDeals"), async (req: Request, res: Response) => {
-    const id = parseInt(req.params.id);
+    const id = paramInt(req, "id");
     const existing = await db.query.approvals.findFirst({ where: eq(approvals.id, id) });
     if (!existing) return res.status(404).json({ error: "approval_not_found" });
 
@@ -2537,7 +2538,7 @@ export function registerRoutes(app: Express) {
     // slip through unchecked. Rejections are NEVER gated — you should always
     // be able to reject a deal regardless of screening state.
     if (isTransition && next === "approved" && existing.dealId) {
-      const actor = (req.header("x-user-name") || req.body?.userName || req.body?.approverName || "Approver").toString();
+      const actor = (headerStr(req, "x-user-name") || req.body?.userName || req.body?.approverName || "Approver").toString();
       const intappGate = await assertApprovalAllowed(existing.dealId, actor);
       if (!intappGate.allow) {
         return res.status(409).json({
@@ -2611,7 +2612,7 @@ export function registerRoutes(app: Express) {
 
   // ========== PROMPT RESPONSES ==========
   app.get("/api/deals/:dealId/prompts", requirePerm("viewDeals"), async (req: Request, res: Response) => {
-    const dealId = parseInt(req.params.dealId);
+    const dealId = paramInt(req, "dealId");
     let result = await db.select().from(promptResponses)
       .where(eq(promptResponses.dealId, dealId))
       .orderBy(promptResponses.sortOrder);
@@ -2629,17 +2630,17 @@ export function registerRoutes(app: Express) {
 
   app.post("/api/deals/:dealId/prompts", requirePerm("editDeals"), async (req: Request, res: Response) => {
     const [prompt] = await db.insert(promptResponses).values({
-      dealId: parseInt(req.params.dealId),
+      dealId: paramInt(req, "dealId"),
       ...req.body,
     }).returning();
     res.status(201).json(prompt);
   });
 
   app.patch("/api/deals/:dealId/prompts/:id", requirePerm("editDeals"), async (req: Request, res: Response) => {
-    const dealId = parseInt(req.params.dealId);
+    const dealId = paramInt(req, "dealId");
     const [updated] = await db.update(promptResponses)
       .set({ answer: req.body.answer, impactMultiplier: req.body.impactMultiplier })
-      .where(eq(promptResponses.id, parseInt(req.params.id)))
+      .where(eq(promptResponses.id, paramInt(req, "id")))
       .returning();
     if (!updated) return res.status(404).json({ error: "Prompt not found" });
     await recalcPricingFromScope(dealId);
@@ -2673,7 +2674,7 @@ export function registerRoutes(app: Express) {
   });
 
   app.get("/api/prompt-sets/:id", requireAnyPerm("viewDeals", "manageScopeCatalog"), async (req: Request, res: Response) => {
-    const id = parseInt(req.params.id);
+    const id = paramInt(req, "id");
     const [set] = await db.select().from(promptSets).where(eq(promptSets.id, id));
     if (!set) return res.status(404).json({ error: "Prompt set not found" });
     const items = await db.select().from(promptSetItems)
@@ -2686,7 +2687,7 @@ export function registerRoutes(app: Express) {
   app.post("/api/prompt-sets", requirePerm("manageScopeCatalog"), async (req: Request, res: Response) => {
     const { name, businessUnit, serviceLine, notes, version } = req.body || {};
     if (!name || typeof name !== "string") return res.status(400).json({ error: "name is required" });
-    const createdBy = (req.header("x-user-name") || "Unknown").trim();
+    const createdBy = (headerStr(req, "x-user-name") || "Unknown").trim();
     const [created] = await db.insert(promptSets).values({
       name, businessUnit: businessUnit || null, serviceLine: serviceLine || null,
       notes: notes || null, version: Number.isFinite(version) ? Math.max(1, parseInt(String(version))) : 1,
@@ -2697,7 +2698,7 @@ export function registerRoutes(app: Express) {
 
   // Update draft metadata (cannot edit published sets — clone instead).
   app.patch("/api/prompt-sets/:id", requirePerm("manageScopeCatalog"), async (req: Request, res: Response) => {
-    const id = parseInt(req.params.id);
+    const id = paramInt(req, "id");
     const [existing] = await db.select().from(promptSets).where(eq(promptSets.id, id));
     if (!existing) return res.status(404).json({ error: "Prompt set not found" });
     if (existing.status !== "draft") {
@@ -2714,7 +2715,7 @@ export function registerRoutes(app: Express) {
 
   // Delete a draft set (cascades to items). Published/archived sets cannot be deleted.
   app.delete("/api/prompt-sets/:id", requirePerm("manageScopeCatalog"), async (req: Request, res: Response) => {
-    const id = parseInt(req.params.id);
+    const id = paramInt(req, "id");
     const [existing] = await db.select().from(promptSets).where(eq(promptSets.id, id));
     if (!existing) return res.status(404).json({ error: "Prompt set not found" });
     if (existing.status !== "draft") {
@@ -2726,7 +2727,7 @@ export function registerRoutes(app: Express) {
 
   // Publish a draft. Auto-archives any prior published set with same (BU, serviceLine).
   app.post("/api/prompt-sets/:id/publish", requirePerm("manageScopeCatalog"), async (req: Request, res: Response) => {
-    const id = parseInt(req.params.id);
+    const id = paramInt(req, "id");
     const [existing] = await db.select().from(promptSets).where(eq(promptSets.id, id));
     if (!existing) return res.status(404).json({ error: "Prompt set not found" });
     if (existing.status !== "draft") {
@@ -2736,7 +2737,7 @@ export function registerRoutes(app: Express) {
     if (items.length === 0) {
       return res.status(400).json({ error: "Cannot publish an empty set — add at least one prompt." });
     }
-    const actor = (req.header("x-user-name") || "Unknown").trim();
+    const actor = (headerStr(req, "x-user-name") || "Unknown").trim();
     // Wrap archive-prior + publish-new in a single transaction so concurrent
     // publishes for the same (BU, SL) tuple cannot leave two published rows.
     // The unique partial index uq_prompt_sets_published_tuple is the ultimate
@@ -2759,7 +2760,7 @@ export function registerRoutes(app: Express) {
 
   // Clone a set as a new draft with version = max(version)+1 for that (BU, serviceLine).
   app.post("/api/prompt-sets/:id/clone", requirePerm("manageScopeCatalog"), async (req: Request, res: Response) => {
-    const id = parseInt(req.params.id);
+    const id = paramInt(req, "id");
     const [src] = await db.select().from(promptSets).where(eq(promptSets.id, id));
     if (!src) return res.status(404).json({ error: "Prompt set not found" });
     const sameTuple: any[] = [];
@@ -2767,7 +2768,7 @@ export function registerRoutes(app: Express) {
     sameTuple.push(src.serviceLine ? eq(promptSets.serviceLine, src.serviceLine) : isNull(promptSets.serviceLine));
     const siblings = await db.select({ version: promptSets.version }).from(promptSets).where(and(...sameTuple));
     const nextVersion = (siblings.reduce((m, r) => Math.max(m, r.version || 1), 0) || 0) + 1;
-    const createdBy = (req.header("x-user-name") || "Unknown").trim();
+    const createdBy = (headerStr(req, "x-user-name") || "Unknown").trim();
     const [cloned] = await db.insert(promptSets).values({
       name: src.name,
       businessUnit: src.businessUnit,
@@ -2794,8 +2795,8 @@ export function registerRoutes(app: Express) {
 
   // Manually archive any set (publishers may want to retire without replacement).
   app.post("/api/prompt-sets/:id/archive", requirePerm("manageScopeCatalog"), async (req: Request, res: Response) => {
-    const id = parseInt(req.params.id);
-    const actor = (req.header("x-user-name") || "Unknown").trim();
+    const id = paramInt(req, "id");
+    const actor = (headerStr(req, "x-user-name") || "Unknown").trim();
     const [updated] = await db.update(promptSets)
       .set({ status: "archived", archivedAt: new Date(), archivedBy: actor, updatedAt: new Date() })
       .where(eq(promptSets.id, id))
@@ -2828,7 +2829,7 @@ export function registerRoutes(app: Express) {
   }
 
   app.post("/api/prompt-sets/:id/items", requirePerm("manageScopeCatalog"), async (req: Request, res: Response) => {
-    const setId = parseInt(req.params.id);
+    const setId = paramInt(req, "id");
     const guard = await assertDraftSet(setId);
     if (guard.error) return res.status(guard.status!).json({ error: guard.error });
     const { question, category, helpText, options, sortOrder, enabled } = req.body || {};
@@ -2849,8 +2850,8 @@ export function registerRoutes(app: Express) {
   });
 
   app.patch("/api/prompt-sets/:id/items/:itemId", requirePerm("manageScopeCatalog"), async (req: Request, res: Response) => {
-    const setId = parseInt(req.params.id);
-    const itemId = parseInt(req.params.itemId);
+    const setId = paramInt(req, "id");
+    const itemId = paramInt(req, "itemId");
     const guard = await assertDraftSet(setId);
     if (guard.error) return res.status(guard.status!).json({ error: guard.error });
     const patch: any = {};
@@ -2874,8 +2875,8 @@ export function registerRoutes(app: Express) {
   });
 
   app.delete("/api/prompt-sets/:id/items/:itemId", requirePerm("manageScopeCatalog"), async (req: Request, res: Response) => {
-    const setId = parseInt(req.params.id);
-    const itemId = parseInt(req.params.itemId);
+    const setId = paramInt(req, "id");
+    const itemId = paramInt(req, "itemId");
     const guard = await assertDraftSet(setId);
     if (guard.error) return res.status(guard.status!).json({ error: guard.error });
     await db.delete(promptSetItems)
@@ -3181,9 +3182,9 @@ export function registerRoutes(app: Express) {
   // pendingReviewAgent state for human review. Each step is logged to
   // activityLog with a structured metadata.agentRun payload.
   app.post("/api/dynamics/opportunities/:id/agent-draft", requirePerm("createDeals"), async (req: Request, res: Response) => {
-    const oppId = parseInt(req.params.id);
+    const oppId = paramInt(req, "id");
     if (isNaN(oppId)) return res.status(400).json({ error: "Invalid id" });
-    const userName = (req.header("x-user-name") || req.body?.userName || "Agent").toString();
+    const userName = (headerStr(req, "x-user-name") || req.body?.userName || "Agent").toString();
 
     const [opp] = await db.select().from(dynamicsOpportunities).where(eq(dynamicsOpportunities.id, oppId));
     if (!opp) return res.status(404).json({ error: "Opportunity not found" });
@@ -3702,7 +3703,7 @@ export function registerRoutes(app: Express) {
       const latest = await getLatestScreening(dealId);
       checklist.intapp = {
         result: screen.response.result,
-        riskLevel: screen.response.riskLevel,
+        riskTier: screen.response.riskTier,
         hitCount: latest?.hits?.length || 0,
         screeningId: latest?.id,
       };
@@ -3785,8 +3786,8 @@ export function registerRoutes(app: Express) {
   // existing routing in shared/policy.ts may upgrade to Practice Lead) and
   // flips the deal to "submitted". Mirrors the wizard's Approve step.
   app.post("/api/deals/:id/agent-approve", requirePerm("createDeals"), async (req: Request, res: Response) => {
-    const dealId = parseInt(req.params.id);
-    const userName = (req.header("x-user-name") || req.body?.userName || "Reviewer").toString();
+    const dealId = paramInt(req, "id");
+    const userName = (headerStr(req, "x-user-name") || req.body?.userName || "Reviewer").toString();
     const [deal] = await db.select().from(deals).where(eq(deals.id, dealId));
     if (!deal) return res.status(404).json({ error: "Deal not found" });
     if (deal.status !== "pendingReviewAgent") {
@@ -3828,7 +3829,6 @@ export function registerRoutes(app: Express) {
       dealId,
       approverName: deal.pdlName || userName,
       approverRole,
-      submittedBy: userName,
       status: "pending",
       riskSummary: trigger.required ? trigger.reason : null,
     }).returning();
@@ -3849,8 +3849,8 @@ export function registerRoutes(app: Express) {
   // Discard an agent-drafted deal — archives it (which also unlinks the D365
   // opportunity so it can be re-scoped or re-run).
   app.post("/api/deals/:id/agent-discard", requirePerm("createDeals"), async (req: Request, res: Response) => {
-    const dealId = parseInt(req.params.id);
-    const userName = (req.header("x-user-name") || req.body?.userName || "Reviewer").toString();
+    const dealId = paramInt(req, "id");
+    const userName = (headerStr(req, "x-user-name") || req.body?.userName || "Reviewer").toString();
     const [deal] = await db.select().from(deals).where(eq(deals.id, dealId));
     if (!deal) return res.status(404).json({ error: "Deal not found" });
     if (deal.status !== "pendingReviewAgent") {
@@ -3885,8 +3885,8 @@ export function registerRoutes(app: Express) {
   // back to 1 and snapshots the pre-edit state to the activity log so the
   // original draft can be compared after Resubmit.
   app.post("/api/deals/:id/agent-open-wizard", requirePerm("editDeals"), async (req: Request, res: Response) => {
-    const dealId = parseInt(req.params.id);
-    const userName = (req.header("x-user-name") || req.body?.userName || "Reviewer").toString();
+    const dealId = paramInt(req, "id");
+    const userName = (headerStr(req, "x-user-name") || req.body?.userName || "Reviewer").toString();
     const deal = await db.query.deals.findFirst({
       where: eq(deals.id, dealId),
       with: { scopeItems: { with: { scopeItem: true } }, pricingLines: true, promptResponses: true },
@@ -3930,8 +3930,8 @@ export function registerRoutes(app: Express) {
   // pendingReviewAgent so the badge persists). Re-runs the risk narrative
   // against the edited values and logs the resubmission.
   app.post("/api/deals/:id/agent-resubmit", requirePerm("editDeals"), async (req: Request, res: Response) => {
-    const dealId = parseInt(req.params.id);
-    const userName = (req.header("x-user-name") || req.body?.userName || "Reviewer").toString();
+    const dealId = paramInt(req, "id");
+    const userName = (headerStr(req, "x-user-name") || req.body?.userName || "Reviewer").toString();
     const [deal] = await db.select().from(deals).where(eq(deals.id, dealId));
     if (!deal) return res.status(404).json({ error: "Deal not found" });
     if (deal.status !== "pendingReviewAgent") {
@@ -4202,7 +4202,7 @@ export function registerRoutes(app: Express) {
     if (!question || typeof question !== "string" || !question.trim()) {
       return res.status(400).json({ error: "question is required" });
     }
-    const rawRole = role || req.headers["x-user-role"];
+    const rawRole = role || headerStr(req, "x-user-role");
     if (!rawRole) {
       return res.status(401).json({ error: "Authentication required: select a persona to use Ask DealPad AI" });
     }
@@ -4617,7 +4617,7 @@ export function registerRoutes(app: Express) {
 
   // ========== CHANGE ORDERS ==========
   app.get("/api/deals/:dealId/change-orders", requirePerm("viewDeals"), async (req: Request, res: Response) => {
-    const dealId = parseInt(req.params.dealId);
+    const dealId = paramInt(req, "dealId");
     const result = await db.select().from(changeOrders)
       .where(eq(changeOrders.dealId, dealId))
       .orderBy(desc(changeOrders.createdAt));
@@ -4625,7 +4625,7 @@ export function registerRoutes(app: Express) {
   });
 
   app.post("/api/deals/:dealId/change-orders", requirePerm("editDeals"), async (req: Request, res: Response) => {
-    const dealId = parseInt(req.params.dealId);
+    const dealId = paramInt(req, "dealId");
     const deal = await db.query.deals.findFirst({ where: eq(deals.id, dealId) });
     if (!deal) return res.status(404).json({ error: "Deal not found" });
 
@@ -4678,7 +4678,7 @@ export function registerRoutes(app: Express) {
   });
 
   app.patch("/api/change-orders/:id", requirePerm("editDeals"), async (req: Request, res: Response) => {
-    const id = parseInt(req.params.id);
+    const id = paramInt(req, "id");
     const { status, approvedBy } = req.body;
 
     const allowedStatuses = ["approved", "rejected"];
@@ -4839,7 +4839,7 @@ export function registerRoutes(app: Express) {
 
   // ========== PROPOSAL GENERATION ==========
   app.get("/api/deals/:dealId/proposal", requirePerm("viewDeals"), async (req: Request, res: Response) => {
-    const dealId = parseInt(req.params.dealId);
+    const dealId = paramInt(req, "dealId");
     const deal = await db.query.deals.findFirst({
       where: eq(deals.id, dealId),
       with: {

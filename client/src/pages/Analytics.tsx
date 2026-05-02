@@ -100,7 +100,7 @@ export function Analytics() {
               <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 12, fill: "#78716c" }} />
               <Tooltip
                 contentStyle={{ borderRadius: "12px", border: "1px solid #e7e5e4", fontSize: "12px" }}
-                formatter={(value: any, name: string) => [
+                formatter={(value: any, name: any) => [
                   name === "revenue" ? formatCurrency(value) : value,
                   name === "revenue" ? "Revenue" : name === "deals" ? "Deals" : "Avg Margin %"
                 ]}
@@ -122,7 +122,7 @@ export function Analytics() {
               <YAxis tick={{ fontSize: 12, fill: "#78716c" }} />
               <Tooltip
                 contentStyle={{ borderRadius: "12px", border: "1px solid #e7e5e4", fontSize: "12px" }}
-                formatter={(value: any, name: string) => [name === "revenue" ? formatCurrency(value) : value, name === "revenue" ? "Revenue" : "Count"]}
+                formatter={(value: any, name: any) => [name === "revenue" ? formatCurrency(value) : value, name === "revenue" ? "Revenue" : "Count"]}
               />
               <Bar dataKey="count" radius={[6, 6, 0, 0]}>
                 {pipelineData.map((entry, i) => (

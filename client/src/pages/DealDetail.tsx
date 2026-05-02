@@ -1369,7 +1369,7 @@ function ScopeBreakdownPanel({ dealId, pricingLines }: { dealId: number; pricing
 // the active rate plus a tiny baseline + variance subtitle when overridden.
 // =============================================================================
 function RateCell({ line, dealId, updateLine }: { line: any; dealId: number; updateLine: any }) {
-  const { user } = useAuth();
+  const { persona } = useAuth();
   const [open, setOpen] = useState(false);
   const standardRate = parseFloat(line.standardRate ?? line.rate ?? "0");
   const currentRate = parseFloat(line.rate ?? "0");
@@ -1404,7 +1404,7 @@ function RateCell({ line, dealId, updateLine }: { line: any; dealId: number; upd
         rate: String(newRate),
         costRate: line.costRate,
         overrideReason: isOverride ? draftReason.trim() : null,
-        overrideBy: isOverride ? (user?.name || "PDL") : null,
+        overrideBy: isOverride ? (persona?.name || "PDL") : null,
       },
     });
     setOpen(false);

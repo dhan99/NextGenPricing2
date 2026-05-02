@@ -1,6 +1,7 @@
 import type { Express, Request, Response } from "express";
 import { db } from "./db";
 import { requirePerm, requireAnyPerm } from "./rbac";
+import { paramInt, headerStr } from "./lib/req";
 import {
   deals, pricingLines, roles as rolesTable,
   workdaySettings, workdayCostCenters, workdayWorkers, workdayRateCards,
@@ -30,7 +31,11 @@ async function logEvent(e: {
   dealId?: number;
   status?: "success" | "failure" | "warning";
   source?: "simulated" | "live";
-  trigger?: "manual" | "auto" | "batch" | "save" | "submit";
+  // Union of every value any caller passes. The DB column is plain text
+  // (workday_events.trigger), so this is purely a TS exhaustiveness check.
+  // Domain-specific triggers: PushProjectArgs uses "approval"; ValidateOpts
+  // uses "nightly". Both flow through logEvent.
+  trigger?: "manual" | "auto" | "batch" | "save" | "submit" | "approval" | "nightly";
   message: string;
   fields?: any;
   actorName?: string;
@@ -665,15 +670,15 @@ export function registerWorkdayRoutes(app: Express) {
   // Bi-directional: push approved deal back to Workday as a Project record.
   app.post("/api/workday/deals/:id/push", requirePerm("editDeals"), async (req: Request, res: Response) => {
     // Identity is derived from trusted headers, NEVER request body.
-    const actorName = (req.header("x-user-name") || "").trim();
-    const role = (req.header("x-user-role") || "").trim().toLowerCase();
+    const actorName = headerStr(req, "x-user-name").trim();
+    const role = headerStr(req, "x-user-role").trim().toLowerCase();
     if (!actorName || !role) {
       return res.status(401).json({ error: "x-user-name and x-user-role headers are required." });
     }
     if (!["pdl", "sll", "po", "fin", "it"].includes(role)) {
       return res.status(403).json({ error: "Insufficient role to push to Workday." });
     }
-    const id = parseInt(req.params.id);
+    const id = paramInt(req, "id");
     if (isNaN(id)) return res.status(400).json({ error: "Invalid id" });
     const provider = await getProvider();
     const result = await provider.pushProject({
@@ -718,7 +723,7 @@ export function registerWorkdayRoutes(app: Express) {
     res.status(201).json(row);
   });
   app.patch("/api/workday/cost-centers/:id", requirePerm("manageRateCards"), async (req, res) => {
-    const id = parseInt(req.params.id);
+    const id = paramInt(req, "id");
     const allowed = ["name", "fiscalYear", "totalBudget", "committed", "businessUnit", "currency"];
     const patch: any = {};
     for (const k of allowed) if (req.body[k] !== undefined) patch[k] = ["totalBudget", "committed"].includes(k) ? String(req.body[k]) : req.body[k];
@@ -728,7 +733,7 @@ export function registerWorkdayRoutes(app: Express) {
     res.json(row);
   });
   app.delete("/api/workday/cost-centers/:id", requirePerm("manageRateCards"), async (req, res) => {
-    const id = parseInt(req.params.id);
+    const id = paramInt(req, "id");
     await db.delete(workdayCostCenters).where(eq(workdayCostCenters.id, id));
     res.json({ ok: true });
   });
@@ -753,7 +758,7 @@ export function registerWorkdayRoutes(app: Express) {
     res.status(201).json(row);
   });
   app.patch("/api/workday/workers/:id", requirePerm("manageRateCards"), async (req, res) => {
-    const id = parseInt(req.params.id);
+    const id = paramInt(req, "id");
     const allowed = ["name", "roleName", "region", "weeklyCapacityHours", "availableHours", "standardCostRate"];
     const patch: any = {};
     for (const k of allowed) if (req.body[k] !== undefined) {
@@ -764,7 +769,7 @@ export function registerWorkdayRoutes(app: Express) {
     res.json(row);
   });
   app.delete("/api/workday/workers/:id", requirePerm("manageRateCards"), async (req, res) => {
-    const id = parseInt(req.params.id);
+    const id = paramInt(req, "id");
     await db.delete(workdayWorkers).where(eq(workdayWorkers.id, id));
     res.json({ ok: true });
   });
@@ -774,7 +779,7 @@ export function registerWorkdayRoutes(app: Express) {
     res.json(await db.select().from(workdayRateCards).orderBy(workdayRateCards.roleName));
   });
   app.patch("/api/workday/rate-card/:id", requirePerm("manageRateCards"), async (req, res) => {
-    const id = parseInt(req.params.id);
+    const id = paramInt(req, "id");
     const patch: any = { updatedAt: new Date() };
     if (req.body.standardCostRate !== undefined) patch.standardCostRate = String(req.body.standardCostRate);
     if (req.body.effectiveDate !== undefined) patch.effectiveDate = req.body.effectiveDate;
@@ -799,7 +804,7 @@ export function registerWorkdayRoutes(app: Express) {
   });
 
   app.get("/api/workday/validations/:id", requirePerm("viewDeals"), async (req, res) => {
-    const id = parseInt(req.params.id);
+    const id = paramInt(req, "id");
     const [v] = await db.select().from(workdayValidations).where(eq(workdayValidations.id, id));
     if (!v) return res.status(404).json({ error: "Not found" });
     const findings = await db.select().from(workdayValidationFindings).where(eq(workdayValidationFindings.validationId, id));
@@ -807,7 +812,7 @@ export function registerWorkdayRoutes(app: Express) {
   });
 
   app.get("/api/workday/deals/:dealId/latest", requirePerm("viewDeals"), async (req, res) => {
-    const dealId = parseInt(req.params.dealId);
+    const dealId = paramInt(req, "dealId");
     const [v] = await db.select().from(workdayValidations)
       .where(eq(workdayValidations.dealId, dealId))
       .orderBy(desc(workdayValidations.requestedAt)).limit(1);
@@ -822,14 +827,14 @@ export function registerWorkdayRoutes(app: Express) {
   });
 
   app.post("/api/workday/deals/:dealId/validate", requirePerm("editDeals"), async (req, res) => {
-    const dealId = parseInt(req.params.dealId);
+    const dealId = paramInt(req, "dealId");
     const provider = await getProvider();
     const result = await provider.validateDeal(dealId, { trigger: "manual", actorName: req.body?.userName });
     res.json(result);
   });
 
   app.post("/api/workday/deals/:dealId/link", requirePerm("editDeals"), async (req, res) => {
-    const dealId = parseInt(req.params.dealId);
+    const dealId = paramInt(req, "dealId");
     const { costCenterId, userName } = req.body || {};
     const ccId = costCenterId ? parseInt(costCenterId) : null;
     await db.update(deals).set({ workdayCostCenterId: ccId, updatedAt: new Date() }).where(eq(deals.id, dealId));
@@ -850,7 +855,7 @@ export function registerWorkdayRoutes(app: Express) {
   });
 
   app.post("/api/workday/validations/:id/override", requirePerm("approveDeals"), async (req, res) => {
-    const id = parseInt(req.params.id);
+    const id = paramInt(req, "id");
     const { justification, userName, role } = req.body || {};
     if (!justification || justification.trim().length < 5) {
       return res.status(400).json({ error: "Justification (>=5 chars) required" });
