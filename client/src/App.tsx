@@ -11,6 +11,7 @@ import { ScopeCatalogAdmin } from "./pages/ScopeCatalogAdmin";
 import { PromptSetsAdmin } from "./pages/PromptSetsAdmin";
 import { CongaTemplatesAdmin } from "./pages/CongaTemplatesAdmin";
 import { MarginTargetsAdmin } from "./pages/MarginTargetsAdmin";
+import { BatchRenewals } from "./pages/BatchRenewals";
 import { Architecture } from "./pages/Architecture";
 import { ArchitectureInteractive } from "./pages/ArchitectureInteractive";
 import { ArchitectureHub } from "./pages/ArchitectureHub";
@@ -81,6 +82,9 @@ function AuthenticatedApp() {
           {hasPermission("manageRateCards") || hasPermission("viewAdminConfig")
             ? <MarginTargetsAdmin readOnly={!hasPermission("manageRateCards")} />
             : <NoAccess feature="margin target governance" />}
+        </Route>
+        <Route path="/admin/batch-renewals">
+          {hasPermission("viewDeals") ? <BatchRenewals /> : <NoAccess feature="batch renewals" />}
         </Route>
         <Route path="/analytics">
           {hasPermission("viewDeals") ? <Analytics /> : <NoAccess feature="analytics" />}

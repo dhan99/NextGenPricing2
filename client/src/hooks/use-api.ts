@@ -1227,3 +1227,60 @@ export function useDeletePromptSetItem() {
     onSuccess: (_d, vars) => qc.invalidateQueries({ queryKey: ["prompt-set", vars.setId] }),
   });
 }
+
+// F1.3 — batch renewal hooks. Backed by the routes in slice 3.
+export function useBatchRenewals() {
+  return useQuery({ queryKey: ["batch-renewals"], queryFn: () => fetchApi("/api/batch-renewals") });
+}
+
+export function useBatchRenewal(id: number | null | undefined) {
+  return useQuery({
+    queryKey: ["batch-renewal", id],
+    queryFn: () => fetchApi(`/api/batch-renewals/${id}`),
+    enabled: !!id,
+  });
+}
+
+export function useBatchRenewalItems(id: number | null | undefined, status?: string | null) {
+  const qs = status ? `?status=${encodeURIComponent(status)}` : "";
+  return useQuery({
+    queryKey: ["batch-renewal-items", id, status || "all"],
+    queryFn: () => fetchApi(`/api/batch-renewals/${id}/items${qs}`),
+    enabled: !!id,
+  });
+}
+
+export function useCreateBatchRenewal() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: any) => fetchApi("/api/batch-renewals", { method: "POST", body: JSON.stringify(data) }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["batch-renewals"] }),
+  });
+}
+
+export function useStartBatchRenewal() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id }: { id: number }) =>
+      fetchApi(`/api/batch-renewals/${id}/start`, { method: "POST", body: "{}" }),
+    onSuccess: (_, vars) => {
+      qc.invalidateQueries({ queryKey: ["batch-renewals"] });
+      qc.invalidateQueries({ queryKey: ["batch-renewal", vars.id] });
+      qc.invalidateQueries({ queryKey: ["batch-renewal-items", vars.id] });
+      qc.invalidateQueries({ queryKey: ["deals"] });
+      qc.invalidateQueries({ queryKey: ["activity"] });
+    },
+  });
+}
+
+export function useBatchAdjustmentRules() {
+  return useQuery({ queryKey: ["batch-adjustment-rules"], queryFn: () => fetchApi("/api/batch-adjustment-rules") });
+}
+
+export function useCreateBatchAdjustmentRule() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: any) => fetchApi("/api/batch-adjustment-rules", { method: "POST", body: JSON.stringify(data) }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["batch-adjustment-rules"] }),
+  });
+}

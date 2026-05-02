@@ -45,6 +45,7 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
     { name: "Prompt Sets", href: "/admin/prompt-sets", icon: MessageSquare, show: showCatalog },
     { name: "Engagement Letters", href: "/admin/engagement-letters", icon: FileText, show: showCatalog },
     { name: "Margin Targets", href: "/admin/margin-targets", icon: Target, show: showRates },
+    { name: "Batch Renewals", href: "/admin/batch-renewals", icon: Layers, show: showDeals },
   ];
   const showAdmin = adminNavigation.some(n => n.show);
 
