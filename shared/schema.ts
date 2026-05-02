@@ -496,6 +496,34 @@ export const batchAdjustmentRules = pgTable("batch_adjustment_rules", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
+// ============ VOICE-TO-SCOPE (F3.4) ============
+// Audio + transcription + extracted scope drafts. The audio file
+// itself is stored in object storage (S3/Azure Blob) keyed by
+// `audioStorageKey`; this row tracks the metadata and the
+// downstream extraction. transcription.text is the raw STT output;
+// extractions[] is the structured result the UI offers as
+// add-to-deal candidates.
+export const voiceTranscripts = pgTable("voice_transcripts", {
+  id: serial("id").primaryKey(),
+  dealId: integer("deal_id").references(() => deals.id),  // nullable: pre-deal capture
+  uploadedBy: text("uploaded_by").notNull(),
+  // Object-storage key. Plaintext audio never persists in the DB.
+  audioStorageKey: text("audio_storage_key"),
+  durationMs: integer("duration_ms"),
+  language: text("language").default("en-US"),
+  transcript: text("transcript"),                          // null until processed
+  // Structured extractions. Each item carries enough data for the
+  // UI to render a "add to scope" button without round-tripping.
+  // Shape (per item): { catalogCode?, name, defaultHours?, confidence }
+  extractions: jsonb("extractions"),
+  source: text("source").notNull().default("simulated"),   // simulated | azure | graph
+  status: text("status").notNull().default("pending"),     // pending | transcribed | extracted | applied | failed
+  errorMessage: text("error_message"),
+  metadata: jsonb("metadata"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
 // ============ SCOPE CREEP DETECTOR (F3.3) ============
 // Predictive scope-creep signals. Today the detector is heuristic
 // (delta-vs-baseline, hours-burn-rate, change-order density);
