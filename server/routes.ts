@@ -1,6 +1,6 @@
 import { Express, Request, Response } from "express";
 import { db } from "./db";
-import { clients, deals, dealEntities, scopeCatalog, dealScopeItems, scopeTemplates, scopeTemplateItems, assemblyTemplates, assemblyComponents, roles, rateCards, rateCardEntries, pricingLines, scenarios, approvals, promptResponses, activityLog, changeOrders, dynamicsOpportunities, promptSets, promptSetItems, marginTargets, batchRenewalJobs, batchRenewalItems, batchAdjustmentRules } from "../shared/schema";
+import { clients, deals, dealEntities, scopeCatalog, dealScopeItems, scopeTemplates, scopeTemplateItems, assemblyTemplates, assemblyComponents, roles, rateCards, rateCardEntries, pricingLines, scenarios, approvals, promptResponses, activityLog, changeOrders, dynamicsOpportunities, promptSets, promptSetItems, marginTargets, batchRenewalJobs, batchRenewalItems, batchAdjustmentRules, budgetActuals, budgetAlerts } from "../shared/schema";
 import { evaluatePracticeLeadTrigger, resolveMarginTarget, type MarginTargetRow, type DealLike } from "../shared/policy";
 import { eq, desc, sql, and, count, isNull, isNotNull, asc, inArray } from "drizzle-orm";
 import { requirePerm, requireAnyPerm } from "./rbac";
@@ -327,6 +327,10 @@ import {
   findSimilar,
   recomputeForDeal,
 } from "./services/IntelligenceEngine";
+import {
+  monitorAll,
+  persistAndAlert,
+} from "./services/BudgetMonitorService";
 
 // (former inline definitions of DealTotals / computeDealTotalsFromLines /
 // reconcileLine / backfillDealTotals / persistDealTotals / recalcPricingFromScope
@@ -5420,6 +5424,129 @@ export function registerRoutes(app: Express) {
       complexityBreakdown,
       monthlyTrend,
     });
+  });
+
+  // ========== BUDGET MONITOR (F2.2) ==========
+  // Per-deal snapshots + alerts. The compute heuristic in
+  // BudgetMonitorService.computeBudgetSnapshot will graduate from
+  // pricing-line-derived actuals to time-entry sums once F2.3 lands.
+
+  // List snapshots for one deal, newest first.
+  app.get("/api/deals/:dealId/budget-actuals", requirePerm("viewDeals"), async (req: Request, res: Response) => {
+    const dealId = paramInt(req, "dealId");
+    const limitRaw = parseInt(String(req.query.limit ?? "20"), 10);
+    const limit = Number.isFinite(limitRaw) ? Math.max(1, Math.min(200, limitRaw)) : 20;
+    const rows = await db
+      .select()
+      .from(budgetActuals)
+      .where(eq(budgetActuals.dealId, dealId))
+      .orderBy(desc(budgetActuals.periodEnd), desc(budgetActuals.id))
+      .limit(limit);
+    res.json(rows);
+  });
+
+  // List alerts for one deal. Optional ?status= filter (open|acknowledged|resolved|snoozed).
+  app.get("/api/deals/:dealId/budget-alerts", requirePerm("viewDeals"), async (req: Request, res: Response) => {
+    const dealId = paramInt(req, "dealId");
+    const status = typeof req.query.status === "string" ? req.query.status : null;
+    const where = status
+      ? and(eq(budgetAlerts.dealId, dealId), eq(budgetAlerts.status, status))
+      : eq(budgetAlerts.dealId, dealId);
+    const rows = await db
+      .select()
+      .from(budgetAlerts)
+      .where(where)
+      .orderBy(desc(budgetAlerts.createdAt))
+      .limit(100);
+    res.json(rows);
+  });
+
+  // Firm-wide open alert count for the dashboard badge.
+  app.get("/api/budget-alerts/open-count", requirePerm("viewDeals"), async (_req: Request, res: Response) => {
+    const [row] = await db
+      .select({ count: count() })
+      .from(budgetAlerts)
+      .where(eq(budgetAlerts.status, "open"));
+    res.json({ count: Number(row?.count ?? 0) });
+  });
+
+  // Manual recompute for one deal. Used by the Refresh button on
+  // the Budget tab and by the F2.2 monitor cron when it's first
+  // wired up via Celery beat.
+  app.post("/api/deals/:dealId/budget/recompute", requirePerm("editDeals"), async (req: Request, res: Response) => {
+    const dealId = paramInt(req, "dealId");
+    const body = req.body || {};
+    const ps = body.periodStart ? new Date(String(body.periodStart)) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const pe = body.periodEnd ? new Date(String(body.periodEnd)) : new Date();
+    const usageFactorRaw = parseFloat(String(body.usageFactor ?? ""));
+    const usageFactor = Number.isFinite(usageFactorRaw) && usageFactorRaw >= 0 ? usageFactorRaw : 1.0;
+    const result = await persistAndAlert({
+      dealId,
+      periodStart: ps,
+      periodEnd: pe,
+      usageFactor,
+    });
+    if (!result) return res.status(404).json({ error: "Deal not found" });
+    res.json(result);
+  });
+
+  // Sweeper across all approved deals. manageRateCards-gated; this is
+  // the endpoint Celery beat will hit nightly. Body lets caller pin
+  // the period; defaults to (now - 30d, now).
+  app.post("/api/admin/budget/monitor-all", requirePerm("manageRateCards"), async (req: Request, res: Response) => {
+    const body = req.body || {};
+    const ps = body.periodStart ? new Date(String(body.periodStart)) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const pe = body.periodEnd ? new Date(String(body.periodEnd)) : new Date();
+    const usageFactorRaw = parseFloat(String(body.usageFactor ?? ""));
+    const usageFactor = Number.isFinite(usageFactorRaw) && usageFactorRaw >= 0 ? usageFactorRaw : 1.0;
+    const statusFilter = Array.isArray(body.statusFilter) && body.statusFilter.length > 0
+      ? body.statusFilter.map((s: unknown) => String(s))
+      : ["approved"];
+    const result = await monitorAll({
+      periodStart: ps,
+      periodEnd: pe,
+      usageFactor,
+      statusFilter,
+    });
+    res.json(result);
+  });
+
+  // Acknowledge / resolve an alert.
+  app.patch("/api/budget-alerts/:id", requirePerm("editDeals"), async (req: Request, res: Response) => {
+    const id = paramInt(req, "id");
+    const [existing] = await db.select().from(budgetAlerts).where(eq(budgetAlerts.id, id));
+    if (!existing) return res.status(404).json({ error: "Alert not found" });
+    const next = String(req.body?.status ?? "").trim();
+    const ALLOWED: Record<string, string[]> = {
+      open: ["acknowledged", "resolved", "snoozed"],
+      acknowledged: ["resolved", "snoozed", "open"],
+      snoozed: ["acknowledged", "resolved", "open"],
+      resolved: [], // terminal
+    };
+    if (!next) return res.status(400).json({ error: "status is required", field: "status" });
+    if (!(ALLOWED[existing.status] || []).includes(next)) {
+      return res.status(409).json({
+        error: "illegal_alert_transition",
+        from: existing.status,
+        to: next,
+      });
+    }
+    const actor = (headerStr(req, "x-user-name") || "Unknown").trim();
+    const patch: Record<string, unknown> = { status: next };
+    if (next === "acknowledged") {
+      patch.acknowledgedBy = actor;
+      patch.acknowledgedAt = new Date();
+    }
+    if (next === "resolved") {
+      patch.resolvedBy = actor;
+      patch.resolvedAt = new Date();
+    }
+    const [updated] = await db
+      .update(budgetAlerts)
+      .set(patch)
+      .where(eq(budgetAlerts.id, id))
+      .returning();
+    res.json(updated);
   });
 
   // ========== PROPOSAL GENERATION ==========
