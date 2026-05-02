@@ -956,6 +956,24 @@ async function start() {
     console.log("[001_multi_entity_backfill] skipped (set RUN_MULTI_ENTITY_BACKFILL=1 to run on next boot)");
   }
 
+  // F1.4 strangler fig: build the deal-services container so the
+  // submit/approve/reject flows + their auto-push subscribers are
+  // wired before the first request arrives. Then drain any outbox
+  // rows that were committed but not delivered before the last
+  // process exit.
+  try {
+    const { getDealServices } = await import("./services/dealServices");
+    const services = getDealServices();
+    const drained = await services.outboxDispatcher.dispatchUnpublished();
+    if (drained.dispatched > 0 || drained.failed > 0) {
+      console.log(
+        `[outbox] dispatched ${drained.dispatched} unpublished event(s); ${drained.failed} failed`,
+      );
+    }
+  } catch (e) {
+    console.error("[F1.4] deal-services bootstrap error:", e);
+  }
+
   // Start nightly Intapp re-screen loop (no-op until enabled in settings)
   try {
     const { startNightlyRescreenLoop } = await import("./intapp");

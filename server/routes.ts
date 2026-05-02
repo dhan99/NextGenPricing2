@@ -319,6 +319,7 @@ import {
 } from "./services/pricing";
 import { expandAssembly } from "./services/AssemblyExpansionService";
 import { createBatchRenewalJob, runBatchRenewalJob } from "./services/BatchRenewalService";
+import { getDealServices } from "./services/dealServices";
 
 // (former inline definitions of DealTotals / computeDealTotalsFromLines /
 // reconcileLine / backfillDealTotals / persistDealTotals / recalcPricingFromScope
@@ -888,25 +889,33 @@ export function registerRoutes(app: Express) {
   // Submission gating: dedicated endpoint that runs Intapp screening
   // SYNCHRONOUSLY before transitioning a deal to "submitted". Use this
   // route from the UI instead of PATCHing status directly.
+  //
+  // F1.4.5: handler delegates to SubmitDealService (Intapp gate +
+  // domain transition + outbox + bus). Auto-push side effects run
+  // as DealSubmitted subscribers, not inline. Response shape is
+  // unchanged ({ deal, screening }) — verified by smoke test.
   // ------------------------------------------------------------------
   app.post("/api/deals/:id/submit", requirePerm("editDeals"), async (req: Request, res: Response) => {
     const dealId = paramInt(req, "id");
     const actor = (headerStr(req, "x-user-name") || req.body?.userName || "Unknown").trim();
-    const gate = await assertSubmissionAllowed(dealId, actor);
-    if (!gate.allow) {
-      return res.status(409).json({
-        error: gate.reason,
-        code: "intapp_conflict",
-        screening: gate.screening,
-      });
+    const { submitDealServiceForSubmitEndpoint } = getDealServices();
+    const result = await submitDealServiceForSubmitEndpoint.execute({ dealId, actor });
+    if (!result.ok) {
+      if (result.kind === "not_found") {
+        return res.status(404).json({ error: "Deal not found" });
+      }
+      if (result.kind === "intapp") {
+        return res.status(409).json({
+          error: result.reason,
+          code: result.code,
+          screening: result.screening,
+        });
+      }
+      // workday is wired but never returned here (NoOpWorkdayGate). Defensive default.
+      return res.status(409).json({ error: "Submission blocked" });
     }
-    const [updated] = await db.update(deals)
-      .set({ status: "submitted", updatedAt: new Date() })
-      .where(eq(deals.id, dealId)).returning();
-    if (!updated) return res.status(404).json({ error: "Deal not found" });
-    autoPushDeal(dealId, ["status"], actor).catch(() => {});
-    onDealSubmittedTrigger(dealId, actor).catch(() => {});
-    res.json({ deal: updated, screening: gate.screening });
+    const [updated] = await db.select().from(deals).where(eq(deals.id, dealId));
+    res.json({ deal: updated, screening: result.screening });
   });
 
   app.post("/api/deals/:id/clone", requirePerm("createDeals"), async (req: Request, res: Response) => {
