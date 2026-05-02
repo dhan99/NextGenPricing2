@@ -297,11 +297,14 @@ export {
   ROLE_DISTRIBUTION,
   COMPLEXITY_MULTIPLIERS,
   type DealTotals,
+  type EntityHourRollup,
   computeDealTotalsFromLines,
   reconcileLine,
   backfillDealTotals,
   persistDealTotals,
   recalcPricingFromScope,
+  aggregateScopeByEntity,
+  computeEntityTotalsForDeal,
 } from "./services/pricing";
 import {
   ROLE_DISTRIBUTION,
@@ -312,6 +315,7 @@ import {
   backfillDealTotals,
   persistDealTotals,
   recalcPricingFromScope,
+  computeEntityTotalsForDeal,
 } from "./services/pricing";
 
 // (former inline definitions of DealTotals / computeDealTotalsFromLines /
@@ -1755,6 +1759,19 @@ export function registerRoutes(app: Express) {
       metadata: { entityId: id, entityType: prior.entityType },
     });
     res.status(204).end();
+  });
+
+  // F1.1: per-entity hours rollup for a deal. Read-only — uses the same
+  // hour math as recalcPricingFromScope (so the UI never disagrees with
+  // the pricing engine on what an entity totals to). The deal totalHours
+  // returned here equals deals.total_hours after the next persist; if
+  // they ever drift, the pricing engine has a bug.
+  app.get("/api/deals/:dealId/entity-totals", requirePerm("viewDeals"), async (req: Request, res: Response) => {
+    const dealId = paramInt(req, "dealId");
+    const [deal] = await db.select({ id: deals.id }).from(deals).where(eq(deals.id, dealId));
+    if (!deal) return res.status(404).json({ error: "Deal not found" });
+    const rollup = await computeEntityTotalsForDeal(dealId);
+    res.json(rollup);
   });
 
   // ========== SCOPE TEMPLATES ==========

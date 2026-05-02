@@ -203,4 +203,56 @@ describe("F1.1 — multi-entity routes", () => {
       .send({ name: `${RUN_TAG}-rbac-blocked` });
     expect(res.status).toBe(403);
   });
+
+  // F1.1 slice 3: per-entity hours rollup endpoint.
+  describe("GET /api/deals/:dealId/entity-totals", () => {
+    it("returns the deal's entities with their hours rollup + a deal total", async () => {
+      const res = await request(app).get(`/api/deals/${dealId}/entity-totals`).set(HEADERS);
+      expect(res.status).toBe(200);
+      expect(res.body).toMatchObject({
+        entities: expect.any(Array),
+        unassignedHours: expect.any(Number),
+        totalHours: expect.any(Number),
+      });
+      // Σ entity hours + unassigned = deal total. Calc-parity invariant.
+      const sumOfEntities = res.body.entities.reduce((s: number, e: any) => s + e.totalHours, 0);
+      expect(sumOfEntities + res.body.unassignedHours).toBe(res.body.totalHours);
+    });
+
+    it("each entity row carries the labels the UI tab strip needs", async () => {
+      const res = await request(app).get(`/api/deals/${dealId}/entity-totals`).set(HEADERS);
+      expect(res.status).toBe(200);
+      // After the F1.1 backfill there's at least one Primary Entity per deal
+      // with scope, so the rollup is non-empty as long as the deal has scope.
+      if (res.body.entities.length > 0) {
+        const e = res.body.entities[0];
+        expect(e).toMatchObject({
+          entityId: expect.any(Number),
+          name: expect.any(String),
+          isPrimary: expect.any(Boolean),
+          sortOrder: expect.any(Number),
+          totalHours: expect.any(Number),
+        });
+        // entityType + jurisdiction can be null on backfilled rows
+        expect("entityType" in e).toBe(true);
+        expect("jurisdiction" in e).toBe(true);
+      }
+    });
+
+    it("entities are ordered primary-first (matches the GET .../entities ordering)", async () => {
+      const res = await request(app).get(`/api/deals/${dealId}/entity-totals`).set(HEADERS);
+      const entities: any[] = res.body.entities;
+      // Once we hit the first non-primary, no later entity may be primary.
+      let seenNonPrimary = false;
+      for (const e of entities) {
+        if (!e.isPrimary) seenNonPrimary = true;
+        else expect(seenNonPrimary).toBe(false);
+      }
+    });
+
+    it("unknown deal returns 404", async () => {
+      const res = await request(app).get("/api/deals/999999999/entity-totals").set(HEADERS);
+      expect(res.status).toBe(404);
+    });
+  });
 });
