@@ -1,6 +1,6 @@
 import { Express, Request, Response } from "express";
 import { db } from "./db";
-import { clients, deals, dealEntities, scopeCatalog, dealScopeItems, scopeTemplates, scopeTemplateItems, assemblyTemplates, assemblyComponents, roles, rateCards, rateCardEntries, pricingLines, scenarios, approvals, promptResponses, activityLog, changeOrders, dynamicsOpportunities, promptSets, promptSetItems, marginTargets, batchRenewalJobs, batchRenewalItems, batchAdjustmentRules, budgetActuals, budgetAlerts, timeEntries, portalInvites, scopeCreepSignals } from "../shared/schema";
+import { clients, deals, dealEntities, scopeCatalog, dealScopeItems, scopeTemplates, scopeTemplateItems, assemblyTemplates, assemblyComponents, roles, rateCards, rateCardEntries, pricingLines, scenarios, approvals, promptResponses, activityLog, changeOrders, dynamicsOpportunities, promptSets, promptSetItems, marginTargets, batchRenewalJobs, batchRenewalItems, batchAdjustmentRules, budgetActuals, budgetAlerts, timeEntries, portalInvites, scopeCreepSignals, voiceTranscripts } from "../shared/schema";
 import { evaluatePracticeLeadTrigger, resolveMarginTarget, type MarginTargetRow, type DealLike } from "../shared/policy";
 import { eq, desc, sql, and, count, isNull, isNotNull, asc, inArray } from "drizzle-orm";
 import { requirePerm, requireAnyPerm } from "./rbac";
@@ -344,6 +344,10 @@ import {
   type PortalContext,
 } from "./services/PortalAuthService";
 import { runForDeal as runScopeCreepForDeal } from "./services/ScopeCreepDetector";
+import {
+  transcribeAndExtract as voiceTranscribeAndExtract,
+  applyExtractions as voiceApplyExtractions,
+} from "./services/VoiceToScopeService";
 import {
   ensureSession as ensureCollabSession,
   persistDocumentState as persistCollabDocumentState,
@@ -5794,6 +5798,68 @@ export function registerRoutes(app: Express) {
       const e = err as { message?: string };
       res.status(500).json({ error: e?.message || "Suggestion failed", code: "time_suggest_error" });
     }
+  });
+
+  // ========== VOICE-TO-SCOPE (F3.4) ==========
+  // Two-phase: (1) create a transcript stub with audio metadata,
+  // (2) transcribeAndExtract runs the STT + extraction. Phase 1
+  // is a thin metadata write; phase 2 is the work.
+
+  app.get("/api/deals/:dealId/voice-transcripts", requirePerm("viewDeals"), async (req: Request, res: Response) => {
+    const dealId = paramInt(req, "dealId");
+    const rows = await db
+      .select()
+      .from(voiceTranscripts)
+      .where(eq(voiceTranscripts.dealId, dealId))
+      .orderBy(desc(voiceTranscripts.createdAt))
+      .limit(50);
+    res.json(rows);
+  });
+
+  app.post("/api/deals/:dealId/voice-transcripts", requirePerm("editDeals"), async (req: Request, res: Response) => {
+    const dealId = paramInt(req, "dealId");
+    const [exists] = await db.select({ id: deals.id }).from(deals).where(eq(deals.id, dealId));
+    if (!exists) return res.status(404).json({ error: "Deal not found" });
+    const body = req.body || {};
+    const uploadedBy = (headerStr(req, "x-user-name") || body.uploadedBy || "Unknown").trim();
+    const [created] = await db.insert(voiceTranscripts).values({
+      dealId,
+      uploadedBy,
+      audioStorageKey: body.audioStorageKey ?? null,
+      durationMs: Number.isFinite(parseInt(String(body.durationMs ?? ""), 10))
+        ? parseInt(String(body.durationMs), 10)
+        : null,
+      language: body.language ?? "en-US",
+      transcript: body.transcript ?? null, // simulated mode can pre-fill
+      source: body.source ?? "simulated",
+      status: "pending",
+      metadata: body.metadata ?? null,
+    }).returning();
+    res.status(201).json(created);
+  });
+
+  app.post("/api/voice-transcripts/:id/process", requirePerm("editDeals"), async (req: Request, res: Response) => {
+    const id = paramInt(req, "id");
+    try {
+      const result = await voiceTranscribeAndExtract({
+        transcriptId: id,
+        forceTranscript: typeof req.body?.transcript === "string" ? req.body.transcript : undefined,
+      });
+      if (!result) return res.status(404).json({ error: "Transcript not found" });
+      res.json(result);
+    } catch (err: unknown) {
+      const e = err as { message?: string };
+      res.status(500).json({ error: e?.message || "Processing failed", code: "voice_process_error" });
+    }
+  });
+
+  app.post("/api/voice-transcripts/:id/apply", requirePerm("editDeals"), async (req: Request, res: Response) => {
+    const id = paramInt(req, "id");
+    const accepted = Array.isArray(req.body?.acceptedCatalogIds) ? req.body.acceptedCatalogIds : [];
+    const ids = accepted.map((n: unknown) => parseInt(String(n), 10)).filter((n: number) => Number.isFinite(n));
+    const result = await voiceApplyExtractions({ transcriptId: id, acceptedCatalogIds: ids });
+    if (!result) return res.status(404).json({ error: "Transcript or its deal not found" });
+    res.json(result);
   });
 
   // ========== SCOPE CREEP DETECTOR (F3.3) ==========

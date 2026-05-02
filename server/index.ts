@@ -602,6 +602,28 @@ async function pushSchema() {
       updated_at TIMESTAMP DEFAULT NOW() NOT NULL
     );
 
+    -- Voice transcripts (F3.4). Audio metadata + transcription +
+    -- extracted scope candidates. Audio bytes live in object storage;
+    -- only the storage key persists here.
+    CREATE TABLE IF NOT EXISTS voice_transcripts (
+      id SERIAL PRIMARY KEY,
+      deal_id INTEGER REFERENCES deals(id),
+      uploaded_by TEXT NOT NULL,
+      audio_storage_key TEXT,
+      duration_ms INTEGER,
+      language TEXT DEFAULT 'en-US',
+      transcript TEXT,
+      extractions JSONB,
+      source TEXT NOT NULL DEFAULT 'simulated',
+      status TEXT NOT NULL DEFAULT 'pending',
+      error_message TEXT,
+      metadata JSONB,
+      created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+      updated_at TIMESTAMP DEFAULT NOW() NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS voice_transcripts_deal_idx
+      ON voice_transcripts (deal_id, created_at DESC);
+
     -- Scope creep signals (F3.3). Heuristic detector writes one
     -- row per (deal, kind) breach; status defaults to 'open'.
     -- Detector dedupes against open rows on subsequent runs.
