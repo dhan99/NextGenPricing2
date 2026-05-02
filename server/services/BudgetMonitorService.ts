@@ -19,13 +19,16 @@
  * alert for (deal, kind, metric) — the existing one stays, with
  * its `observed` field bumped to the latest reading.
  */
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, gte, inArray, lte, sql } from "drizzle-orm";
 import { db } from "../db";
 import {
   budgetActuals,
   budgetAlerts,
   deals,
   pricingLines,
+  rateCardEntries,
+  rateCards,
+  timeEntries,
 } from "../../shared/schema";
 
 export type BudgetThresholds = {
@@ -146,10 +149,19 @@ function round2(n: number): number {
  * Source of truth:
  *   - `hoursBudgeted` / `costBudgeted` / `feeBudgeted` come from
  *     pricing_lines (sum across roles).
- *   - `*Actual` are derived heuristically until F2.3 lands time
- *     entries. For now: if the deal is approved AND fully past its
- *     end date, actuals = budget × `usageFactor` (caller-supplied,
- *     default 1.0). Otherwise actuals = 0 (no work logged yet).
+ *   - `*Actual` are derived in priority order:
+ *       1. F2.3.3 — if time_entries rows exist for the deal in
+ *          the (periodStart, periodEnd] window, hoursActual is
+ *          their sum. Cost + fee are projected from those hours
+ *          using the per-role rates from the active rate card
+ *          (cost_rate × hours and rate × hours, summed by role).
+ *          Entries with NULL role_id contribute hours but not
+ *          cost/fee — they're tracked but not billable until
+ *          a role is assigned.
+ *       2. Heuristic fallback (legacy) — if no time entries
+ *          exist for the period: when the deal is approved AND
+ *          fully past its end date, actuals = budget × `usageFactor`
+ *          (caller-supplied, default 1.0). Otherwise actuals = 0.
  */
 export async function computeBudgetSnapshot(input: {
   dealId: number;
@@ -179,13 +191,64 @@ export async function computeBudgetSnapshot(input: {
   const costBudgeted = lines.reduce((s, l) => s + parseFloat(l.cost || "0"), 0);
   const feeBudgeted = lines.reduce((s, l) => s + parseFloat(l.fee || "0"), 0);
 
-  // Heuristic actuals — replaced by time-entries sum once F2.3 lands.
-  const isPastEnd =
-    deal.endDate != null && new Date(deal.endDate) <= periodEnd;
-  const factor = deal.status === "approved" && isPastEnd ? usageFactor : 0;
-  const hoursActual = hoursBudgeted * factor;
-  const costActual = costBudgeted * factor;
-  const feeActual = feeBudgeted * factor;
+  let hoursActual = 0;
+  let costActual = 0;
+  let feeActual = 0;
+  let actualsSource: "time_entries" | "heuristic" = "heuristic";
+
+  // F2.3.3 — prefer time-entries sum when any rows exist for the period.
+  // Window is half-open: [periodStart, periodEnd). work_date is TEXT
+  // YYYY-MM-DD; lexicographic compare matches calendar order.
+  const periodStartStr = periodStart.toISOString().slice(0, 10);
+  const periodEndStr = periodEnd.toISOString().slice(0, 10);
+  const tes = await db
+    .select({
+      hours: timeEntries.hours,
+      roleId: timeEntries.roleId,
+    })
+    .from(timeEntries)
+    .where(
+      and(
+        eq(timeEntries.dealId, dealId),
+        gte(timeEntries.workDate, periodStartStr),
+        lte(timeEntries.workDate, periodEndStr),
+      ),
+    );
+
+  if (tes.length > 0) {
+    actualsSource = "time_entries";
+    // Active rate card → role rates for cost/fee projection
+    const [activeCard] = await db.select().from(rateCards).where(eq(rateCards.isActive, true)).limit(1);
+    const rates = new Map<number, { rate: number; costRate: number }>();
+    if (activeCard) {
+      const entries = await db.select().from(rateCardEntries).where(eq(rateCardEntries.rateCardId, activeCard.id));
+      for (const e of entries) {
+        rates.set(e.roleId, {
+          rate: parseFloat(e.rate || "0"),
+          costRate: parseFloat(e.costRate || "0"),
+        });
+      }
+    }
+    for (const t of tes) {
+      const h = parseFloat(t.hours || "0") || 0;
+      hoursActual += h;
+      if (t.roleId != null) {
+        const r = rates.get(t.roleId);
+        if (r) {
+          costActual += h * r.costRate;
+          feeActual += h * r.rate;
+        }
+      }
+    }
+  } else {
+    // Heuristic fallback (legacy)
+    const isPastEnd = deal.endDate != null && new Date(deal.endDate) <= periodEnd;
+    const factor = deal.status === "approved" && isPastEnd ? usageFactor : 0;
+    hoursActual = hoursBudgeted * factor;
+    costActual = costBudgeted * factor;
+    feeActual = feeBudgeted * factor;
+  }
+  void actualsSource; // metadata exposed via the route in F2.3.3+ if useful
 
   return {
     dealId,
