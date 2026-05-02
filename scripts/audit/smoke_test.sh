@@ -99,9 +99,13 @@ mkdir -p .smoke-logs
 npx tsx server/index.ts > .smoke-logs/backend.log 2>&1 &
 BACKEND_PID=$!
 
-# Wait up to 60s for /api/dashboard/summary OR / to respond
+# Wait up to 60s for /api/clients to respond. Every mutating + most read
+# routes are gated by requirePerm(), so the readiness probe must send the
+# persona headers — without them the route returns 401 and `curl -fsS`
+# treats that as "not up".
+PROBE_HEADERS=(-H "x-user-name: SmokeTest" -H "x-user-role: PDL")
 for i in {1..60}; do
-    if curl -fsS -o /dev/null -m 2 "http://localhost:3001/api/clients"; then
+    if curl -fsS "${PROBE_HEADERS[@]}" -o /dev/null -m 2 "http://localhost:3001/api/clients"; then
         ok "Backend up after ${i}s"
         break
     fi
@@ -113,7 +117,7 @@ for i in {1..60}; do
     sleep 1
 done
 
-if ! curl -fsS -o /dev/null -m 2 "http://localhost:3001/api/clients"; then
+if ! curl -fsS "${PROBE_HEADERS[@]}" -o /dev/null -m 2 "http://localhost:3001/api/clients"; then
     fail "Backend did not respond within 60s. Log tail:"
     tail -50 .smoke-logs/backend.log
     exit 2

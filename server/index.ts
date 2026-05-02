@@ -441,6 +441,14 @@ async function pushSchema() {
     ALTER TABLE deals ADD COLUMN IF NOT EXISTS engagement_inputs JSONB;
     ALTER TABLE deals ADD COLUMN IF NOT EXISTS target_margin_percent DECIMAL(5,2);
 
+    -- Per-step rate override (shared/schema.ts:137-145). Captured baseline +
+    -- audit metadata so the variance badge can render "$X over standard, by Y".
+    ALTER TABLE pricing_lines ADD COLUMN IF NOT EXISTS standard_rate DECIMAL(8,2);
+    ALTER TABLE pricing_lines ADD COLUMN IF NOT EXISTS rate_overridden BOOLEAN DEFAULT FALSE;
+    ALTER TABLE pricing_lines ADD COLUMN IF NOT EXISTS override_reason TEXT;
+    ALTER TABLE pricing_lines ADD COLUMN IF NOT EXISTS override_by TEXT;
+    ALTER TABLE pricing_lines ADD COLUMN IF NOT EXISTS override_at TIMESTAMP;
+
     -- Margin Targets: single source of truth (Task #33). Firm default is the
     -- single row with scope='firm' and scope_key NULL; per-BU and
     -- per-service-line overrides have scope_key set.
@@ -570,6 +578,71 @@ async function pushSchema() {
       fields JSONB,
       actor_name TEXT,
       timestamp TIMESTAMP DEFAULT NOW() NOT NULL
+    );
+  `);
+
+  // ============ INTAKE (parallel-track gating) ============
+  // Mirrors shared/schema.ts:449-505. Creates a parallel non-blocking gate
+  // alongside the deal wizard: a request per deal, AI-extracted fields,
+  // federated reviewer approvals, and an append-only event log. References
+  // deals(id) so this block must run after the deals CREATE TABLE above.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS intake_requests (
+      id SERIAL PRIMARY KEY,
+      deal_id INTEGER NOT NULL UNIQUE REFERENCES deals(id),
+      external_ref TEXT NOT NULL,
+      source TEXT NOT NULL DEFAULT 'simulated',
+      stage TEXT NOT NULL DEFAULT 'draft',
+      risk_tier TEXT NOT NULL DEFAULT 'low',
+      service_line TEXT,
+      jurisdiction TEXT,
+      matter_id TEXT,
+      policy_version TEXT,
+      rejection_reason TEXT,
+      accepted_at TIMESTAMP,
+      accepted_by TEXT,
+      created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS intake_extractions (
+      id SERIAL PRIMARY KEY,
+      request_id INTEGER NOT NULL REFERENCES intake_requests(id),
+      field_key TEXT NOT NULL,
+      field_label TEXT NOT NULL,
+      value TEXT NOT NULL,
+      source_doc TEXT NOT NULL,
+      confidence DECIMAL(4,3) NOT NULL DEFAULT 0.900,
+      status TEXT NOT NULL DEFAULT 'pending',
+      acted_by TEXT,
+      acted_at TIMESTAMP,
+      created_at TIMESTAMP NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS intake_approvals (
+      id SERIAL PRIMARY KEY,
+      request_id INTEGER NOT NULL REFERENCES intake_requests(id),
+      reviewer_role TEXT NOT NULL,
+      reviewer_label TEXT NOT NULL,
+      reason TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending',
+      decided_by TEXT,
+      decided_at TIMESTAMP,
+      notes TEXT,
+      created_at TIMESTAMP NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS intake_events (
+      id SERIAL PRIMARY KEY,
+      request_id INTEGER REFERENCES intake_requests(id),
+      deal_id INTEGER REFERENCES deals(id),
+      event_type TEXT NOT NULL,
+      source TEXT DEFAULT 'simulated',
+      actor_name TEXT,
+      actor_role TEXT,
+      message TEXT,
+      metadata JSONB,
+      created_at TIMESTAMP NOT NULL DEFAULT NOW()
     );
   `);
 
