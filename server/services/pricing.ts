@@ -8,7 +8,7 @@
 
 import { eq } from "drizzle-orm";
 import { db } from "../db";
-import { deals, pricingLines, roles, scenarios } from "../../shared/schema";
+import { deals, dealEntities, pricingLines, roles, scenarios } from "../../shared/schema";
 import { COMPLEX_TAX_ROLE_DISTRIBUTION, COMPLEX_TAX_SERVICE_LINE } from "../tax-template";
 
 // Default Digital pyramid. Used by recalcPricingFromScope and (separately)
@@ -181,6 +181,108 @@ export async function persistDealTotals(dealId: number) {
   return totals;
 }
 
+// F1.1: hours rolled up per entity. The deal total is the sum across
+// entities (and across the legacy `null` bucket for any scope rows whose
+// entity_id hasn't been backfilled — should be empty in practice).
+//
+// `aggregateScopeByEntity` is pure and deterministic: same inputs → same
+// outputs. The per-item math is identical to the pre-F1.1 reduce
+// (Math.round(baseHrs × qty × multiplier)), so summing across entities
+// reproduces the legacy deal totalHours bit-for-bit. Calc parity holds.
+export type EntityHourRollup = {
+  entityId: number | null;
+  totalHours: number;
+};
+
+export function aggregateScopeByEntity(
+  scopeItems: any[],
+  totalMultiplier: number,
+): EntityHourRollup[] {
+  const byEntity = new Map<number | null, number>();
+  for (const si of scopeItems) {
+    if (si.scopeItem?.isAssembly) continue; // assemblies are groupings, not billable
+    const baseHrs = parseFloat(si.adjustedHours || si.scopeItem?.defaultHours || "40");
+    // Use ?? not || so an explicit zero quantity (e.g. parametric Tax
+    // line where the input resolved to zero units) stays zero. Falsy-
+    // coalescing would silently bill those lines as 1 × baseHrs.
+    const qty = si.quantity ?? 1;
+    const hours = Math.round(baseHrs * qty * totalMultiplier);
+    const eid = (si.entityId ?? null) as number | null;
+    byEntity.set(eid, (byEntity.get(eid) ?? 0) + hours);
+  }
+  return Array.from(byEntity.entries())
+    .map(([entityId, totalHours]) => ({ entityId, totalHours }))
+    .sort((a, b) => {
+      // null bucket last, otherwise stable by entityId for deterministic output
+      if (a.entityId === null) return 1;
+      if (b.entityId === null) return -1;
+      return a.entityId - b.entityId;
+    });
+}
+
+// Loads + aggregates per-entity hours for a deal. Returns the rollup +
+// flat deal total + the entity rows themselves so the UI can render
+// labelled tabs. Read-only — never mutates pricing or scope.
+export async function computeEntityTotalsForDeal(dealId: number): Promise<{
+  entities: Array<{
+    entityId: number;
+    name: string;
+    entityType: string | null;
+    jurisdiction: string | null;
+    isPrimary: boolean;
+    sortOrder: number;
+    totalHours: number;
+  }>;
+  unassignedHours: number;   // hours from scope rows with entity_id IS NULL
+  totalHours: number;
+}> {
+  const deal = await db.query.deals.findFirst({
+    where: eq(deals.id, dealId),
+    with: { scopeItems: { with: { scopeItem: true } }, promptResponses: true },
+  });
+  if (!deal) {
+    return { entities: [], unassignedHours: 0, totalHours: 0 };
+  }
+  const baseMultiplier = COMPLEXITY_MULTIPLIERS[deal.complexity || "medium"] || 1.0;
+  const promptMultiplier = (deal.promptResponses || []).reduce(
+    (m: number, p: any) => m * (parseFloat(p.impactMultiplier) || 1.0), 1.0
+  );
+  const totalMultiplier = baseMultiplier * promptMultiplier;
+
+  const rollup = aggregateScopeByEntity(deal.scopeItems || [], totalMultiplier);
+  const entityRows = await db.select().from(dealEntities).where(eq(dealEntities.dealId, dealId));
+  const byId = new Map(entityRows.map(e => [e.id, e]));
+
+  const entities = rollup
+    .filter(r => r.entityId !== null)
+    .map(r => {
+      const e = byId.get(r.entityId as number);
+      return {
+        entityId: r.entityId as number,
+        name: e?.name ?? "(deleted entity)",
+        entityType: e?.entityType ?? null,
+        jurisdiction: e?.jurisdiction ?? null,
+        isPrimary: !!e?.isPrimary,
+        sortOrder: e?.sortOrder ?? 0,
+        totalHours: r.totalHours,
+      };
+    })
+    .sort((a, b) => {
+      // Primary first, then by sortOrder, then by name. Same order the
+      // GET /api/deals/:dealId/entities endpoint uses, so the UI's tab
+      // strip and rollup table line up without re-sorting.
+      if (a.isPrimary !== b.isPrimary) return a.isPrimary ? -1 : 1;
+      if (a.sortOrder !== b.sortOrder) return a.sortOrder - b.sortOrder;
+      return a.name.localeCompare(b.name);
+    });
+
+  const unassigned = rollup.find(r => r.entityId === null);
+  const unassignedHours = unassigned?.totalHours ?? 0;
+  const totalHours = rollup.reduce((s, r) => s + r.totalHours, 0);
+
+  return { entities, unassignedHours, totalHours };
+}
+
 export async function recalcPricingFromScope(dealId: number) {
   const deal = await db.query.deals.findFirst({
     where: eq(deals.id, dealId),
@@ -202,18 +304,13 @@ export async function recalcPricingFromScope(dealId: number) {
   const rateAdjustmentPct = parseFloat(ei.tmRateAdjustmentPct ?? "0") || 0;
   const rateAdjustmentFactor = 1 + rateAdjustmentPct / 100;
 
-  // Use only billable items (assemblies are groupings, not billable lines)
-  const billableScope = (deal.scopeItems || []).filter((si: any) => !si.scopeItem?.isAssembly);
+  // Compute hours via the entity rollup so the math is grouped how the UI
+  // displays it (per-entity → deal total). Sum across all entities is
+  // identical to the pre-F1.1 flat reduce; calc parity holds.
+  const rollup = aggregateScopeByEntity(deal.scopeItems || [], totalMultiplier);
   let totalHours: number;
-  if (billableScope.length > 0) {
-    totalHours = billableScope.reduce((sum: number, si: any) => {
-      const baseHrs = parseFloat(si.adjustedHours || si.scopeItem?.defaultHours || "40");
-      // Use ?? not || so an explicit zero quantity (e.g. parametric Tax
-      // line where the input resolved to zero units) stays zero. Falsy-
-      // coalescing would silently bill those lines as 1 × baseHrs.
-      const qty = si.quantity ?? 1;
-      return sum + Math.round(baseHrs * qty * totalMultiplier);
-    }, 0);
+  if (rollup.length > 0) {
+    totalHours = rollup.reduce((s, r) => s + r.totalHours, 0);
   } else {
     totalHours = Math.round(200 * totalMultiplier);
   }
