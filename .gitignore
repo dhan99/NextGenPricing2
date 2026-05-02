@@ -141,3 +141,6 @@ backups/
 __pycache__/
 *.py[cod]
 *$py.class
+
+# Claude Code session state
+.claude/
