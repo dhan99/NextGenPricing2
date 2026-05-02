@@ -1284,3 +1284,75 @@ export function useCreateBatchAdjustmentRule() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["batch-adjustment-rules"] }),
   });
 }
+
+// F2.2 — Budget hooks
+export function useDealBudgetActuals(dealId: number, limit = 20) {
+  return useQuery({
+    queryKey: ["budget-actuals", dealId, limit],
+    queryFn: () => fetchApi(`/api/deals/${dealId}/budget-actuals?limit=${limit}`),
+  });
+}
+
+export function useDealBudgetAlerts(dealId: number, status?: string) {
+  const qs = status ? `?status=${encodeURIComponent(status)}` : "";
+  return useQuery({
+    queryKey: ["budget-alerts", dealId, status || "all"],
+    queryFn: () => fetchApi(`/api/deals/${dealId}/budget-alerts${qs}`),
+  });
+}
+
+export function useBudgetAlertOpenCount() {
+  return useQuery({
+    queryKey: ["budget-alerts", "open-count"],
+    queryFn: () => fetchApi(`/api/budget-alerts/open-count`),
+  });
+}
+
+export function useRecomputeDealBudget() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ dealId, body }: { dealId: number; body?: any }) =>
+      fetchApi(`/api/deals/${dealId}/budget/recompute`, { method: "POST", body: JSON.stringify(body || {}) }),
+    onSuccess: (_, vars) => {
+      qc.invalidateQueries({ queryKey: ["budget-actuals", vars.dealId] });
+      qc.invalidateQueries({ queryKey: ["budget-alerts", vars.dealId] });
+      qc.invalidateQueries({ queryKey: ["budget-alerts", "open-count"] });
+    },
+  });
+}
+
+export function useUpdateBudgetAlert() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, status }: { id: number; status: "acknowledged" | "resolved" | "snoozed" | "open" }) =>
+      fetchApi(`/api/budget-alerts/${id}`, { method: "PATCH", body: JSON.stringify({ status }) }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["budget-alerts"] });
+      qc.invalidateQueries({ queryKey: ["budget-alerts", "open-count"] });
+    },
+  });
+}
+
+// F2.4 — Fee arrangement hooks
+export function useFeeArrangements() {
+  return useQuery({ queryKey: ["fee-arrangements"], queryFn: () => fetchApi("/api/fee-arrangements") });
+}
+
+export function useDealFeeProjection(dealId: number) {
+  return useQuery({
+    queryKey: ["fee-projection", dealId],
+    queryFn: () => fetchApi(`/api/deals/${dealId}/fee-projection`),
+  });
+}
+
+export function useUpdateFeeArrangement() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ dealId, body }: { dealId: number; body: any }) =>
+      fetchApi(`/api/deals/${dealId}/fee-arrangement`, { method: "PATCH", body: JSON.stringify(body) }),
+    onSuccess: (_, vars) => {
+      qc.invalidateQueries({ queryKey: ["deal", vars.dealId] });
+      qc.invalidateQueries({ queryKey: ["fee-projection", vars.dealId] });
+    },
+  });
+}
