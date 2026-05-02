@@ -1,6 +1,6 @@
 import { Express, Request, Response } from "express";
 import { db } from "./db";
-import { clients, deals, dealEntities, scopeCatalog, dealScopeItems, scopeTemplates, scopeTemplateItems, assemblyTemplates, assemblyComponents, roles, rateCards, rateCardEntries, pricingLines, scenarios, approvals, promptResponses, activityLog, changeOrders, dynamicsOpportunities, promptSets, promptSetItems, marginTargets, batchRenewalJobs, batchRenewalItems, batchAdjustmentRules, budgetActuals, budgetAlerts, timeEntries, portalInvites } from "../shared/schema";
+import { clients, deals, dealEntities, scopeCatalog, dealScopeItems, scopeTemplates, scopeTemplateItems, assemblyTemplates, assemblyComponents, roles, rateCards, rateCardEntries, pricingLines, scenarios, approvals, promptResponses, activityLog, changeOrders, dynamicsOpportunities, promptSets, promptSetItems, marginTargets, batchRenewalJobs, batchRenewalItems, batchAdjustmentRules, budgetActuals, budgetAlerts, timeEntries, portalInvites, scopeCreepSignals } from "../shared/schema";
 import { evaluatePracticeLeadTrigger, resolveMarginTarget, type MarginTargetRow, type DealLike } from "../shared/policy";
 import { eq, desc, sql, and, count, isNull, isNotNull, asc, inArray } from "drizzle-orm";
 import { requirePerm, requireAnyPerm } from "./rbac";
@@ -343,6 +343,7 @@ import {
   verifyToken as verifyPortalToken,
   type PortalContext,
 } from "./services/PortalAuthService";
+import { runForDeal as runScopeCreepForDeal } from "./services/ScopeCreepDetector";
 import {
   ensureSession as ensureCollabSession,
   persistDocumentState as persistCollabDocumentState,
@@ -5793,6 +5794,68 @@ export function registerRoutes(app: Express) {
       const e = err as { message?: string };
       res.status(500).json({ error: e?.message || "Suggestion failed", code: "time_suggest_error" });
     }
+  });
+
+  // ========== SCOPE CREEP DETECTOR (F3.3) ==========
+  // Heuristic mode today; ML score plugs in via the
+  // ScopeCreepDetector.evaluate() seam without changing this surface.
+
+  // List signals for a deal. ?status=open|acknowledged|... narrows.
+  app.get("/api/deals/:dealId/scope-creep", requirePerm("viewDeals"), async (req: Request, res: Response) => {
+    const dealId = paramInt(req, "dealId");
+    const status = typeof req.query.status === "string" ? req.query.status : null;
+    const where = status
+      ? and(eq(scopeCreepSignals.dealId, dealId), eq(scopeCreepSignals.status, status))
+      : eq(scopeCreepSignals.dealId, dealId);
+    const rows = await db
+      .select()
+      .from(scopeCreepSignals)
+      .where(where)
+      .orderBy(desc(scopeCreepSignals.createdAt))
+      .limit(100);
+    res.json(rows);
+  });
+
+  // Run the detector on demand for one deal.
+  app.post("/api/deals/:dealId/scope-creep/scan", requirePerm("editDeals"), async (req: Request, res: Response) => {
+    const dealId = paramInt(req, "dealId");
+    const result = await runScopeCreepForDeal(dealId);
+    if (!result) return res.status(404).json({ error: "Deal not found" });
+    res.json(result);
+  });
+
+  // Acknowledge / dismiss / resolve a signal.
+  app.patch("/api/scope-creep/:id", requirePerm("editDeals"), async (req: Request, res: Response) => {
+    const id = paramInt(req, "id");
+    const [existing] = await db.select().from(scopeCreepSignals).where(eq(scopeCreepSignals.id, id));
+    if (!existing) return res.status(404).json({ error: "Signal not found" });
+    const next = String(req.body?.status ?? "").trim();
+    const ALLOWED: Record<string, string[]> = {
+      open: ["acknowledged", "dismissed", "resolved"],
+      acknowledged: ["resolved", "dismissed", "open"],
+      dismissed: ["open"], // can re-open if dismissed by mistake
+      resolved: [],         // terminal
+    };
+    if (!next) return res.status(400).json({ error: "status required", field: "status" });
+    if (!(ALLOWED[existing.status] || []).includes(next)) {
+      return res.status(409).json({
+        error: "illegal_signal_transition",
+        from: existing.status,
+        to: next,
+      });
+    }
+    const actor = (headerStr(req, "x-user-name") || "Unknown").trim();
+    const patch: Record<string, unknown> = { status: next };
+    if (next === "acknowledged") {
+      patch.acknowledgedBy = actor;
+      patch.acknowledgedAt = new Date();
+    }
+    if (next === "resolved") {
+      patch.resolvedBy = actor;
+      patch.resolvedAt = new Date();
+    }
+    const [updated] = await db.update(scopeCreepSignals).set(patch).where(eq(scopeCreepSignals.id, id)).returning();
+    res.json(updated);
   });
 
   // ========== COLLABORATIVE SCOPING (F3.1) ==========

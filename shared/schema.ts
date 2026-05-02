@@ -496,6 +496,37 @@ export const batchAdjustmentRules = pgTable("batch_adjustment_rules", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
+// ============ SCOPE CREEP DETECTOR (F3.3) ============
+// Predictive scope-creep signals. Today the detector is heuristic
+// (delta-vs-baseline, hours-burn-rate, change-order density);
+// future iteration plugs in an ML score as `aiConfidence`.
+//
+// One row per (deal, signal) detected. Detector dedupes against
+// `status='open'` so repeated runs on the same deal don't pile up.
+export const scopeCreepSignals = pgTable("scope_creep_signals", {
+  id: serial("id").primaryKey(),
+  dealId: integer("deal_id").references(() => deals.id).notNull(),
+  // Signal kind. Open-ended so future heuristics + ML scores plug in.
+  //   scope_growth        — adjusted hours grew >X% vs baseline
+  //   change_order_density — N change orders in Y days
+  //   burn_rate           — actuals projecting >X% over budget
+  //   margin_drift        — margin trending below target
+  //   stale_no_progress   — submitted >N days ago, no decisions
+  kind: text("kind").notNull(),
+  severity: text("severity").notNull().default("medium"),  // low | medium | high
+  // Heuristic confidence 0..1. ML can plug in here once available.
+  confidence: decimal("confidence", { precision: 4, scale: 3 }).notNull().default("0.500"),
+  message: text("message").notNull(),
+  // Free-form context: snapshot at detection time, contributing rows, etc.
+  evidence: jsonb("evidence"),
+  status: text("status").notNull().default("open"),        // open | acknowledged | dismissed | resolved
+  acknowledgedBy: text("acknowledged_by"),
+  acknowledgedAt: timestamp("acknowledged_at"),
+  resolvedBy: text("resolved_by"),
+  resolvedAt: timestamp("resolved_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 // ============ COLLABORATIVE SCOPING (F3.1) ============
 // Foundation for real-time collaborative scoping. The full Yjs
 // CRDT + WebSocket impl is deferred; this schema captures (a) which
