@@ -51,6 +51,30 @@ export const deals = pgTable("deals", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
+// Multi-entity worksheets (F1.1). A single tax engagement commonly models
+// 4 entities under one deal — e.g. 1040 + 1120 + 1065 + 1120S — each with its
+// own scope and pricing rollup. The deal stays the contracting unit; entities
+// live below it. Pre-F1.1 deals have a single auto-created "Primary Entity"
+// (see scripts/migrations/001_multi_entity_backfill.ts) so existing scope and
+// pricing rows can be assigned without behavior change.
+export const dealEntities = pgTable("deal_entities", {
+  id: serial("id").primaryKey(),
+  dealId: integer("deal_id").references(() => deals.id).notNull(),
+  name: text("name").notNull(),                            // e.g. "Form 1040", "DE-Holding LLC"
+  entityType: text("entity_type"),                          // e.g. "1040", "1120", "1065", "1120S", or NULL for non-tax
+  jurisdiction: text("jurisdiction"),                       // e.g. "US-DE", "UK-LDN"
+  sortOrder: integer("sort_order").default(0),
+  isPrimary: boolean("is_primary").default(false).notNull(),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (t) => ({
+  // (deal_id, name) is unique — no two entities under the same deal can share
+  // a label. Backfill creates exactly one "Primary Entity" per deal so this
+  // never collides on existing data.
+  uniqDealEntityName: uniqueIndex("deal_entities_deal_name_uniq").on(t.dealId, t.name),
+}));
+
 export const scopeCatalog = pgTable("scope_catalog", {
   id: serial("id").primaryKey(),
   code: text("code").notNull().unique(),
@@ -92,6 +116,11 @@ export const dealScopeItems = pgTable("deal_scope_items", {
   adjustedHours: decimal("adjusted_hours", { precision: 8, scale: 2 }),
   complexityMultiplier: decimal("complexity_multiplier", { precision: 4, scale: 2 }).default("1.0"),
   notes: text("notes"),
+  // F1.1: which entity (under this deal) does this scope row belong to?
+  // Nullable for back-compat — existing rows are pointed at the deal's
+  // Primary Entity by 001_multi_entity_backfill. New rows should always
+  // populate this once the entity-aware UI ships.
+  entityId: integer("entity_id").references(() => dealEntities.id),
 }, (t) => ({
   uniqDealScopeItem: uniqueIndex("deal_scope_items_deal_item_uniq").on(t.dealId, t.scopeItemId),
 }));
@@ -143,6 +172,9 @@ export const pricingLines = pgTable("pricing_lines", {
   overrideReason: text("override_reason"),
   overrideBy: text("override_by"),
   overrideAt: timestamp("override_at"),
+  // F1.1: same shape as dealScopeItems.entityId — nullable for back-compat,
+  // backfilled to the deal's Primary Entity for legacy rows.
+  entityId: integer("entity_id").references(() => dealEntities.id),
 });
 
 export const scenarios = pgTable("scenarios", {
