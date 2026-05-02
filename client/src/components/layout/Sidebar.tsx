@@ -1,6 +1,7 @@
 import { useLocation, Link } from "wouter";
 import { LayoutDashboard, FileText, Settings, ChevronDown, BookOpen, DollarSign, Layers, BarChart3, Database, ShieldAlert, Briefcase, MessageSquare, Target, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { flushPendingEdits } from "@/lib/flush-pending-edits";
 import { useState, useEffect } from "react";
 import { useAuth } from "@/context/AuthContext";
 
@@ -51,7 +52,10 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
     <>
       <div className="relative border-b border-sidebar-accent" style={{ backgroundColor: "#fef3e7" }}>
         <Link href="/">
-          <div className="px-6 py-6 cursor-pointer flex items-center justify-center">
+          <div
+            className="px-6 py-6 cursor-pointer flex items-center justify-center"
+            onMouseDown={flushPendingEdits}
+          >
             <img src="/armanino-logo.svg" alt="Armanino" className="h-8 w-auto" />
           </div>
         </Link>
@@ -80,12 +84,15 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
                 </div>
               )}
               <Link href={item.href}>
-                <div className={cn(
-                  "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all cursor-pointer",
-                  isActive
-                    ? "bg-primary/15 text-primary"
-                    : "text-sidebar-muted hover:text-sidebar-fg hover:bg-sidebar-accent"
-                )}>
+                <div
+                  onMouseDown={flushPendingEdits}
+                  className={cn(
+                    "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all cursor-pointer",
+                    isActive
+                      ? "bg-primary/15 text-primary"
+                      : "text-sidebar-muted hover:text-sidebar-fg hover:bg-sidebar-accent"
+                  )}
+                >
                   <item.icon className="w-4.5 h-4.5" />
                   {item.name}
                 </div>
@@ -117,12 +124,15 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
                   const isActive = location.startsWith(item.href);
                   return (
                     <Link key={item.href} href={item.href}>
-                      <div className={cn(
-                        "flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all cursor-pointer",
-                        isActive
-                          ? "bg-primary/15 text-primary"
-                          : "text-sidebar-muted hover:text-sidebar-fg hover:bg-sidebar-accent"
-                      )}>
+                      <div
+                        onMouseDown={flushPendingEdits}
+                        className={cn(
+                          "flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all cursor-pointer",
+                          isActive
+                            ? "bg-primary/15 text-primary"
+                            : "text-sidebar-muted hover:text-sidebar-fg hover:bg-sidebar-accent"
+                        )}
+                      >
                         <item.icon className="w-4 h-4" />
                         {item.name}
                       </div>
