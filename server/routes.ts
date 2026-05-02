@@ -1,6 +1,6 @@
 import { Express, Request, Response } from "express";
 import { db } from "./db";
-import { clients, deals, dealEntities, scopeCatalog, dealScopeItems, scopeTemplates, scopeTemplateItems, assemblyTemplates, assemblyComponents, roles, rateCards, rateCardEntries, pricingLines, scenarios, approvals, promptResponses, activityLog, changeOrders, dynamicsOpportunities, promptSets, promptSetItems, marginTargets } from "../shared/schema";
+import { clients, deals, dealEntities, scopeCatalog, dealScopeItems, scopeTemplates, scopeTemplateItems, assemblyTemplates, assemblyComponents, roles, rateCards, rateCardEntries, pricingLines, scenarios, approvals, promptResponses, activityLog, changeOrders, dynamicsOpportunities, promptSets, promptSetItems, marginTargets, batchRenewalJobs, batchRenewalItems, batchAdjustmentRules } from "../shared/schema";
 import { evaluatePracticeLeadTrigger, resolveMarginTarget, type MarginTargetRow, type DealLike } from "../shared/policy";
 import { eq, desc, sql, and, count, isNull, isNotNull, asc, inArray } from "drizzle-orm";
 import { requirePerm, requireAnyPerm } from "./rbac";
@@ -318,6 +318,7 @@ import {
   computeEntityTotalsForDeal,
 } from "./services/pricing";
 import { expandAssembly } from "./services/AssemblyExpansionService";
+import { createBatchRenewalJob, runBatchRenewalJob } from "./services/BatchRenewalService";
 
 // (former inline definitions of DealTotals / computeDealTotalsFromLines /
 // reconcileLine / backfillDealTotals / persistDealTotals / recalcPricingFromScope
@@ -2020,6 +2021,160 @@ export function registerRoutes(app: Express) {
     });
 
     res.status(201).json({ template: tpl, inserted, skipped, expanded: lines });
+  });
+
+  // ========== BATCH RENEWAL PROCESSING (F1.3) ==========
+  // Tax-season job orchestrator. See server/services/BatchRenewalService.ts
+  // for variance math + adjustment-rule semantics. Routes are RBAC-gated
+  // — creating + running a batch is editDeals territory; viewing is
+  // viewDeals.
+
+  app.get("/api/batch-renewals", requirePerm("viewDeals"), async (req: Request, res: Response) => {
+    const rows = await db.select().from(batchRenewalJobs).orderBy(desc(batchRenewalJobs.createdAt));
+    res.json(rows);
+  });
+
+  app.get("/api/batch-renewals/:id", requirePerm("viewDeals"), async (req: Request, res: Response) => {
+    const id = paramInt(req, "id");
+    const [job] = await db.select().from(batchRenewalJobs).where(eq(batchRenewalJobs.id, id));
+    if (!job) return res.status(404).json({ error: "Batch renewal job not found" });
+    res.json(job);
+  });
+
+  // Items for one job. Optional ?status=flagged|completed|failed|... filter.
+  app.get("/api/batch-renewals/:id/items", requirePerm("viewDeals"), async (req: Request, res: Response) => {
+    const id = paramInt(req, "id");
+    const [job] = await db.select({ id: batchRenewalJobs.id }).from(batchRenewalJobs).where(eq(batchRenewalJobs.id, id));
+    if (!job) return res.status(404).json({ error: "Batch renewal job not found" });
+    const status = typeof req.query.status === "string" ? req.query.status : null;
+    const where = status
+      ? and(eq(batchRenewalItems.jobId, id), eq(batchRenewalItems.status, status))
+      : eq(batchRenewalItems.jobId, id);
+    const rows = await db.select().from(batchRenewalItems).where(where).orderBy(asc(batchRenewalItems.id));
+    res.json(rows);
+  });
+
+  // Create a job. Body shape:
+  //   { name, sourceDealIds: number[], sourceFilter?, varianceThresholdPct?, adjustmentRuleIds?, notes? }
+  app.post("/api/batch-renewals", requirePerm("editDeals"), async (req: Request, res: Response) => {
+    const body = req.body || {};
+    const name = String(body.name ?? "").trim();
+    if (!name) return res.status(400).json({ error: "name is required", field: "name" });
+    if (name.length > 200) return res.status(400).json({ error: "name must be 200 chars or fewer", field: "name" });
+
+    const sourceDealIds = Array.isArray(body.sourceDealIds) ? body.sourceDealIds.map((n: any) => parseInt(String(n), 10)).filter(Number.isFinite) : [];
+    if (sourceDealIds.length === 0) {
+      return res.status(400).json({ error: "sourceDealIds must be a non-empty array of integers", field: "sourceDealIds" });
+    }
+
+    let varianceThresholdPct = 10;
+    if (body.varianceThresholdPct != null) {
+      const n = parseFloat(String(body.varianceThresholdPct));
+      if (!Number.isFinite(n) || n < 0 || n > 100) {
+        return res.status(400).json({ error: "varianceThresholdPct must be 0–100", field: "varianceThresholdPct" });
+      }
+      varianceThresholdPct = n;
+    }
+
+    const adjustmentRuleIds = Array.isArray(body.adjustmentRuleIds)
+      ? body.adjustmentRuleIds.map((n: any) => parseInt(String(n), 10)).filter(Number.isFinite)
+      : [];
+
+    // Validate that every source deal exists (cheap inArray query) so a
+    // typo doesn't insert items pointing at non-existent rows.
+    const found = await db.select({ id: deals.id }).from(deals).where(inArray(deals.id, sourceDealIds));
+    const foundSet = new Set(found.map((d) => d.id));
+    const missing = sourceDealIds.filter((id: number) => !foundSet.has(id));
+    if (missing.length > 0) {
+      return res.status(400).json({ error: `Unknown source deal id(s): ${missing.join(", ")}`, field: "sourceDealIds", code: "unknown_deal_ids" });
+    }
+
+    const actor = (headerStr(req, "x-user-name") || "Unknown").trim();
+    try {
+      const result = await createBatchRenewalJob({
+        name,
+        sourceFilter: body.sourceFilter,
+        sourceDealIds,
+        varianceThresholdPct,
+        adjustmentRuleIds,
+        notes: body.notes,
+        createdBy: actor,
+      });
+
+      await db.insert(activityLog).values({
+        action: "batch_renewal_job_created",
+        userName: actor,
+        description: `Created batch renewal job "${name}" (${result.itemCount} items)`,
+        metadata: { jobId: result.jobId, itemCount: result.itemCount, varianceThresholdPct, adjustmentRuleIds },
+      });
+
+      const [created] = await db.select().from(batchRenewalJobs).where(eq(batchRenewalJobs.id, result.jobId));
+      res.status(201).json(created);
+    } catch (e: any) {
+      return res.status(500).json({ error: e?.message || "Failed to create job" });
+    }
+  });
+
+  // Start (or resume) a pending job. Synchronous in slice 3 — the route
+  // returns once the whole batch finishes. Slice 5 swaps to enqueue +
+  // 202 Accepted with a poll URL.
+  app.post("/api/batch-renewals/:id/start", requirePerm("editDeals"), async (req: Request, res: Response) => {
+    const id = paramInt(req, "id");
+    const [job] = await db.select().from(batchRenewalJobs).where(eq(batchRenewalJobs.id, id));
+    if (!job) return res.status(404).json({ error: "Batch renewal job not found" });
+    if (job.status === "running") {
+      return res.status(409).json({ error: "Job is already running", code: "already_running" });
+    }
+    if (job.status === "completed") {
+      return res.status(409).json({ error: "Job already completed", code: "already_completed" });
+    }
+    const actor = (headerStr(req, "x-user-name") || "Unknown").trim();
+    try {
+      const summary = await runBatchRenewalJob(id, actor);
+      await db.insert(activityLog).values({
+        action: "batch_renewal_job_completed",
+        userName: actor,
+        description: `Batch renewal "${job.name}" finished — ${summary.processed} processed, ${summary.flagged} flagged, ${summary.failed} failed`,
+        metadata: { jobId: id, ...summary },
+      });
+      const [refreshed] = await db.select().from(batchRenewalJobs).where(eq(batchRenewalJobs.id, id));
+      res.json({ job: refreshed, ...summary });
+    } catch (e: any) {
+      return res.status(500).json({ error: e?.message || "Job execution failed", code: "execution_error" });
+    }
+  });
+
+  // Reusable adjustment rules — small CRUD surface so the UI in
+  // slice 4 can list + create rules without an admin migration.
+  app.get("/api/batch-adjustment-rules", requirePerm("viewDeals"), async (req: Request, res: Response) => {
+    const rows = await db.select().from(batchAdjustmentRules).orderBy(asc(batchAdjustmentRules.name));
+    res.json(rows);
+  });
+
+  app.post("/api/batch-adjustment-rules", requirePerm("manageRateCards"), async (req: Request, res: Response) => {
+    const body = req.body || {};
+    const name = String(body.name ?? "").trim();
+    if (!name) return res.status(400).json({ error: "name is required", field: "name" });
+    const ruleType = String(body.ruleType ?? "").trim();
+    const ALLOWED = ["rate_uplift", "hour_adjustment", "margin_target_override", "tech_admin_fee_override"];
+    if (!ALLOWED.includes(ruleType)) {
+      return res.status(400).json({ error: `ruleType must be one of: ${ALLOWED.join(", ")}`, field: "ruleType" });
+    }
+    if (typeof body.parameters !== "object" || body.parameters == null) {
+      return res.status(400).json({ error: "parameters must be an object", field: "parameters" });
+    }
+    const actor = (headerStr(req, "x-user-name") || "Unknown").trim();
+    const [created] = await db.insert(batchAdjustmentRules).values({
+      name,
+      scope: body.scope || "firm",
+      scopeKey: body.scopeKey || null,
+      ruleType,
+      parameters: body.parameters,
+      isActive: body.isActive !== false,
+      notes: body.notes,
+      createdBy: actor,
+    }).returning();
+    res.status(201).json(created);
   });
 
   // ========== SCOPE TEMPLATES ==========
