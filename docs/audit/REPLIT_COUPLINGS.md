@@ -111,16 +111,25 @@ Both internal ports map to external 80 — Replit handles the routing. No applic
 
 ---
 
-## 8. The `@neondatabase/serverless` driver bundles WebSocket / fetch shims (Risky)
+## 8. The `@neondatabase/serverless` driver bundles WebSocket / fetch shims (Cosmetic — DOWNGRADED)
 
-If `server/db.ts` is using the Neon driver in any code path, the runtime requirements differ from `pg`:
+**F0.7 validation finding (2026-05-02):** the original audit flagged this as **Risky** on the assumption that `server/db.ts` might switch drivers based on URL shape. **It does not.** The current 10-line file uses only `pg.Pool` + `drizzle-orm/node-postgres`:
 
-- Neon driver expects WebSocket support (Node 18+ has it natively).
-- Neon driver does HTTP fetch for queries — different timeout/retry semantics than TCP pg-wire.
+```ts
+// server/db.ts (verbatim)
+import { Pool } from "pg";
+import { drizzle } from "drizzle-orm/node-postgres";
+import * as schema from "../shared/schema";
+const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+export const db = drizzle(pool, { schema });
+export { pool };
+```
 
-**Action in Phase 0**: confirm by reading `server/db.ts`. If both drivers are referenced, document the switching logic; if only one is used, mark the other as removable.
+A repo-wide grep for `@neondatabase` returned **no source-code matches** outside `node_modules`. The package is in `package.json` as unused dependency baggage from the Replit template, not a runtime dependency.
 
-`server/db.ts` is 10 lines — this is a 10-minute task. Add it to F0.3 as a sub-bullet.
+**Updated decision when we move to AWS**: drop `@neondatabase/serverless` from `package.json` (`npm uninstall @neondatabase/serverless`). No code changes required because no code imports it. Severity drops from **Risky** to **Cosmetic** in the summary table below.
+
+The audit's original concern about WebSocket / fetch shim runtime requirements does not apply — those shims are only loaded if you `import` the package, and nothing does.
 
 ---
 
@@ -166,7 +175,7 @@ Runs backend and frontend in one terminal. Fine for local dev. Replace with `doc
 | 5 | `scripts/post-merge.sh`                      | Cosmetic   | When `.github/workflows/ci.yml` lands |
 | 6 | `.agents/agent_assets_metadata.toml`         | Cosmetic   | When migrating generated artifacts |
 | 7 | Replit external port mapping                 | Coupled    | When moving to AWS                 |
-| 8 | Driver-switching logic in `server/db.ts`     | **Risky**  | Phase 0 (10-minute confirmation)   |
+| 8 | Unused `@neondatabase/serverless` dep        | Cosmetic   | Drop in any cleanup PR (was flagged Risky pre-validation; confirmed unused in F0.7) |
 | 9 | Tailwind v4 plugin                           | Coupled    | Permanent — keep                   |
 | 10| React 19                                     | Coupled    | Permanent — keep                   |
 | 11| `concurrently` dev script                    | Cosmetic   | When Docker-based dev lands        |
@@ -175,6 +184,6 @@ Runs backend and frontend in one terminal. Fine for local dev. Replace with `doc
 
 ## What this document is not
 
-This is a **catalog**, not an action plan. Items #2 and #8 are flagged as risky but **must not be changed in Phase 0** — touching the boot sequence or the database driver without a tested replacement is exactly the kind of "fix" that breaks demos two days before a stakeholder presentation.
+This is a **catalog**, not an action plan. Item #2 is flagged as risky and **must not be changed in Phase 0** — touching the boot sequence without a tested replacement is exactly the kind of "fix" that breaks demos two days before a stakeholder presentation. (Item #8 was originally flagged risky but F0.7 validation confirmed it's a no-op — see above.)
 
 The action plan lives in `BACKLOG.md`. Couplings are referenced by number from there.
