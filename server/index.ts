@@ -1,3 +1,11 @@
+// Load .env before any other import — `server/db.ts` reads
+// process.env.DATABASE_URL at module load to construct its pg.Pool, so
+// dotenv MUST run first or the pool ends up with undefined and pg falls
+// back to the OS user as both DB and role (manifests as `database
+// "<your-os-user>" does not exist` FATAL on boot). This was the
+// "concurrently doesn't auto-load .env" gotcha from CLAUDE.md.
+import "dotenv/config";
+
 import express from "express";
 import cors from "cors";
 import path from "path";
