@@ -512,6 +512,60 @@ async function pushSchema() {
     CREATE INDEX IF NOT EXISTS assembly_components_template_idx
       ON assembly_components (template_id);
 
+    -- Batch renewal processing (F1.3, BACKLOG.md). Tax-season job
+    -- orchestrator: one batch_renewal_jobs row per run, one
+    -- batch_renewal_items row per source deal, plus a small library
+    -- of reusable batch_adjustment_rules.
+    CREATE TABLE IF NOT EXISTS batch_renewal_jobs (
+      id SERIAL PRIMARY KEY,
+      name TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending',
+      source_filter JSONB,
+      total_items INTEGER NOT NULL DEFAULT 0,
+      processed_items INTEGER NOT NULL DEFAULT 0,
+      failed_items INTEGER NOT NULL DEFAULT 0,
+      flagged_items INTEGER NOT NULL DEFAULT 0,
+      variance_threshold_pct DECIMAL(5,2) NOT NULL DEFAULT 10.00,
+      adjustment_rule_ids JSONB,
+      notes TEXT,
+      created_by TEXT,
+      created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+      started_at TIMESTAMP,
+      completed_at TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT NOW() NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS batch_renewal_items (
+      id SERIAL PRIMARY KEY,
+      job_id INTEGER REFERENCES batch_renewal_jobs(id) NOT NULL,
+      source_deal_id INTEGER REFERENCES deals(id) NOT NULL,
+      new_deal_id INTEGER REFERENCES deals(id),
+      status TEXT NOT NULL DEFAULT 'pending',
+      variance_pct DECIMAL(6,2),
+      variance_reason TEXT,
+      error TEXT,
+      processed_at TIMESTAMP
+    );
+
+    CREATE UNIQUE INDEX IF NOT EXISTS batch_renewal_items_job_source_uniq
+      ON batch_renewal_items (job_id, source_deal_id);
+    CREATE INDEX IF NOT EXISTS batch_renewal_items_status_idx
+      ON batch_renewal_items (job_id, status);
+
+    CREATE TABLE IF NOT EXISTS batch_adjustment_rules (
+      id SERIAL PRIMARY KEY,
+      name TEXT NOT NULL,
+      scope TEXT NOT NULL DEFAULT 'firm',
+      scope_key TEXT,
+      rule_type TEXT NOT NULL,
+      parameters JSONB NOT NULL,
+      is_active BOOLEAN NOT NULL DEFAULT TRUE,
+      notes TEXT,
+      created_by TEXT,
+      created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+      updated_at TIMESTAMP DEFAULT NOW() NOT NULL
+    );
+
     -- Margin Targets: single source of truth (Task #33). Firm default is the
     -- single row with scope='firm' and scope_key NULL; per-BU and
     -- per-service-line overrides have scope_key set.
