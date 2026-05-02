@@ -1,6 +1,6 @@
 import { Express, Request, Response } from "express";
 import { db } from "./db";
-import { clients, deals, scopeCatalog, dealScopeItems, scopeTemplates, scopeTemplateItems, roles, rateCards, rateCardEntries, pricingLines, scenarios, approvals, promptResponses, activityLog, changeOrders, dynamicsOpportunities, promptSets, promptSetItems, marginTargets } from "../shared/schema";
+import { clients, deals, dealEntities, scopeCatalog, dealScopeItems, scopeTemplates, scopeTemplateItems, roles, rateCards, rateCardEntries, pricingLines, scenarios, approvals, promptResponses, activityLog, changeOrders, dynamicsOpportunities, promptSets, promptSetItems, marginTargets } from "../shared/schema";
 import { evaluatePracticeLeadTrigger, resolveMarginTarget, type MarginTargetRow, type DealLike } from "../shared/policy";
 import { eq, desc, sql, and, count, isNull, isNotNull, asc, inArray } from "drizzle-orm";
 import { requirePerm, requireAnyPerm } from "./rbac";
@@ -1552,6 +1552,209 @@ export function registerRoutes(app: Express) {
 
     await recalcPricingFromScope(dealId);
     res.status(201).json({ ...item, cascadedChildren: cascaded });
+  });
+
+  // ========== DEAL ENTITIES (F1.1) ==========
+  // Multi-entity worksheets: a single engagement may model several entities
+  // (1040 + 1120 + 1065 + 1120S, etc.). Pre-F1.1 deals are pointed at one
+  // auto-created "Primary Entity" by 001_multi_entity_backfill, so callers
+  // can rely on findMany never returning empty for a real deal.
+
+  // Postgres unique-violation = SQLSTATE 23505. Drizzle's transaction
+  // wrapper sometimes surfaces this on `e.cause.code` rather than `e.code`,
+  // so check both. Used by both the entity POST and PATCH catch blocks.
+  function isUniqueViolation(e: any): boolean {
+    return e?.code === "23505" || e?.cause?.code === "23505";
+  }
+
+  // Validate the writeable shape for an entity. Returns either {error,field}
+  // or {values}. Same shape as validateEngagementInputs in the rigor
+  // playbook — narrow inputs at the boundary, never trust req.body.
+  function validateEntityPatch(input: any): { error?: string; field?: string; values: Record<string, any> } {
+    if (!input || typeof input !== "object") {
+      return { error: "Body must be an object", values: {} };
+    }
+    const out: Record<string, any> = {};
+    if ("name" in input) {
+      const v = String(input.name ?? "").trim();
+      if (!v) return { error: "name cannot be empty", field: "name", values: {} };
+      if (v.length > 100) return { error: "name must be 100 characters or fewer", field: "name", values: {} };
+      out.name = v;
+    }
+    if ("entityType" in input) {
+      const v = input.entityType == null ? null : String(input.entityType).trim();
+      if (v && v.length > 32) return { error: "entityType must be 32 characters or fewer", field: "entityType", values: {} };
+      out.entityType = v || null;
+    }
+    if ("jurisdiction" in input) {
+      const v = input.jurisdiction == null ? null : String(input.jurisdiction).trim();
+      if (v && v.length > 64) return { error: "jurisdiction must be 64 characters or fewer", field: "jurisdiction", values: {} };
+      out.jurisdiction = v || null;
+    }
+    if ("sortOrder" in input) {
+      const n = parseInt(String(input.sortOrder ?? ""), 10);
+      if (!Number.isFinite(n) || n < 0 || n > 1000) {
+        return { error: "sortOrder must be between 0 and 1000", field: "sortOrder", values: {} };
+      }
+      out.sortOrder = n;
+    }
+    if ("isPrimary" in input) {
+      out.isPrimary = !!input.isPrimary;
+    }
+    if ("notes" in input) {
+      const v = input.notes == null ? null : String(input.notes);
+      if (v && v.length > 1000) return { error: "notes must be 1000 characters or fewer", field: "notes", values: {} };
+      out.notes = v || null;
+    }
+    return { values: out };
+  }
+
+  // List entities under a deal. Sorted by primary first, then sort_order, then name.
+  app.get("/api/deals/:dealId/entities", requirePerm("viewDeals"), async (req: Request, res: Response) => {
+    const dealId = paramInt(req, "dealId");
+    const [deal] = await db.select({ id: deals.id }).from(deals).where(eq(deals.id, dealId));
+    if (!deal) return res.status(404).json({ error: "Deal not found" });
+    const rows = await db.select().from(dealEntities)
+      .where(eq(dealEntities.dealId, dealId))
+      .orderBy(desc(dealEntities.isPrimary), asc(dealEntities.sortOrder), asc(dealEntities.name));
+    res.json(rows);
+  });
+
+  // Create a new entity under a deal. If isPrimary=true, demote any other
+  // primary entity for the same deal in the same transaction so we never
+  // have two primaries at rest.
+  app.post("/api/deals/:dealId/entities", requirePerm("editDeals"), async (req: Request, res: Response) => {
+    const dealId = paramInt(req, "dealId");
+    const [deal] = await db.select({ id: deals.id, title: deals.title }).from(deals).where(eq(deals.id, dealId));
+    if (!deal) return res.status(404).json({ error: "Deal not found" });
+
+    const v = validateEntityPatch(req.body || {});
+    if (v.error) return res.status(400).json({ error: v.error, field: v.field });
+    if (!v.values.name) return res.status(400).json({ error: "name is required", field: "name" });
+
+    const actor = (headerStr(req, "x-user-name") || "Unknown").trim();
+
+    try {
+      const [created] = await db.transaction(async (tx) => {
+        if (v.values.isPrimary === true) {
+          await tx.update(dealEntities).set({ isPrimary: false, updatedAt: new Date() })
+            .where(and(eq(dealEntities.dealId, dealId), eq(dealEntities.isPrimary, true)));
+        }
+        const [row] = await tx.insert(dealEntities).values({
+          dealId,
+          name: v.values.name,
+          entityType: v.values.entityType ?? null,
+          jurisdiction: v.values.jurisdiction ?? null,
+          sortOrder: v.values.sortOrder ?? 0,
+          isPrimary: v.values.isPrimary === true,
+          notes: v.values.notes ?? null,
+        }).returning();
+        return [row];
+      });
+
+      await db.insert(activityLog).values({
+        dealId,
+        action: "entity_created",
+        userName: actor,
+        description: `Entity "${created.name}" added to deal`,
+        metadata: { entityId: created.id, entityType: created.entityType },
+      });
+      res.status(201).json(created);
+    } catch (e: any) {
+      // Unique-index violation on (deal_id, name) — surface a clean 409 so the
+      // UI can prompt for a different label rather than dumping the pg error.
+      // Drizzle's transaction may rewrap, so check cause as well.
+      if (isUniqueViolation(e)) {
+        return res.status(409).json({ error: `An entity named "${v.values.name}" already exists on this deal`, code: "duplicate_entity_name" });
+      }
+      throw e;
+    }
+  });
+
+  // Update an entity. PATCH takes any subset of {name, entityType,
+  // jurisdiction, sortOrder, isPrimary, notes}. Promoting to primary
+  // demotes the previous primary in the same transaction.
+  app.patch("/api/deal-entities/:id", requirePerm("editDeals"), async (req: Request, res: Response) => {
+    const id = paramInt(req, "id");
+    const v = validateEntityPatch(req.body || {});
+    if (v.error) return res.status(400).json({ error: v.error, field: v.field });
+    if (Object.keys(v.values).length === 0) {
+      return res.status(400).json({ error: "No updatable fields supplied" });
+    }
+
+    const [prior] = await db.select().from(dealEntities).where(eq(dealEntities.id, id));
+    if (!prior) return res.status(404).json({ error: "Entity not found" });
+
+    const actor = (headerStr(req, "x-user-name") || "Unknown").trim();
+
+    try {
+      const [updated] = await db.transaction(async (tx) => {
+        if (v.values.isPrimary === true && !prior.isPrimary) {
+          await tx.update(dealEntities).set({ isPrimary: false, updatedAt: new Date() })
+            .where(and(eq(dealEntities.dealId, prior.dealId), eq(dealEntities.isPrimary, true)));
+        }
+        const [row] = await tx.update(dealEntities)
+          .set({ ...v.values, updatedAt: new Date() })
+          .where(eq(dealEntities.id, id))
+          .returning();
+        return [row];
+      });
+
+      await db.insert(activityLog).values({
+        dealId: prior.dealId,
+        action: "entity_updated",
+        userName: actor,
+        description: `Entity "${updated.name}" updated`,
+        metadata: { entityId: id, changedFields: Object.keys(v.values) },
+      });
+      res.json(updated);
+    } catch (e: any) {
+      if (isUniqueViolation(e)) {
+        return res.status(409).json({ error: `Another entity on this deal already uses that name`, code: "duplicate_entity_name" });
+      }
+      throw e;
+    }
+  });
+
+  // Delete an entity. Refuse if it's the deal's primary OR if it has any
+  // scope_items / pricing_lines pointed at it — caller must reassign first.
+  // Returning 409 with a structured `code` so the UI can offer the right
+  // remediation (move children, then retry).
+  app.delete("/api/deal-entities/:id", requirePerm("editDeals"), async (req: Request, res: Response) => {
+    const id = paramInt(req, "id");
+    const [prior] = await db.select().from(dealEntities).where(eq(dealEntities.id, id));
+    if (!prior) return res.status(404).json({ error: "Entity not found" });
+
+    if (prior.isPrimary) {
+      return res.status(409).json({
+        error: "Cannot delete the primary entity. Promote another entity first.",
+        code: "primary_entity_protected",
+      });
+    }
+
+    const [scopeCount] = await db.select({ c: count() }).from(dealScopeItems)
+      .where(eq(dealScopeItems.entityId, id));
+    const [pricingCount] = await db.select({ c: count() }).from(pricingLines)
+      .where(eq(pricingLines.entityId, id));
+    if ((scopeCount?.c ?? 0) > 0 || (pricingCount?.c ?? 0) > 0) {
+      return res.status(409).json({
+        error: "Entity has attached scope items or pricing lines. Reassign them first.",
+        code: "entity_has_children",
+        scopeItemCount: scopeCount?.c ?? 0,
+        pricingLineCount: pricingCount?.c ?? 0,
+      });
+    }
+
+    const actor = (headerStr(req, "x-user-name") || "Unknown").trim();
+    await db.delete(dealEntities).where(eq(dealEntities.id, id));
+    await db.insert(activityLog).values({
+      dealId: prior.dealId,
+      action: "entity_deleted",
+      userName: actor,
+      description: `Entity "${prior.name}" deleted`,
+      metadata: { entityId: id, entityType: prior.entityType },
+    });
+    res.status(204).end();
   });
 
   // ========== SCOPE TEMPLATES ==========
