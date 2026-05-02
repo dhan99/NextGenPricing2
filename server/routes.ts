@@ -1,6 +1,6 @@
 import { Express, Request, Response } from "express";
 import { db } from "./db";
-import { clients, deals, dealEntities, scopeCatalog, dealScopeItems, scopeTemplates, scopeTemplateItems, assemblyTemplates, assemblyComponents, roles, rateCards, rateCardEntries, pricingLines, scenarios, approvals, promptResponses, activityLog, changeOrders, dynamicsOpportunities, promptSets, promptSetItems, marginTargets, batchRenewalJobs, batchRenewalItems, batchAdjustmentRules, budgetActuals, budgetAlerts, timeEntries } from "../shared/schema";
+import { clients, deals, dealEntities, scopeCatalog, dealScopeItems, scopeTemplates, scopeTemplateItems, assemblyTemplates, assemblyComponents, roles, rateCards, rateCardEntries, pricingLines, scenarios, approvals, promptResponses, activityLog, changeOrders, dynamicsOpportunities, promptSets, promptSetItems, marginTargets, batchRenewalJobs, batchRenewalItems, batchAdjustmentRules, budgetActuals, budgetAlerts, timeEntries, portalInvites } from "../shared/schema";
 import { evaluatePracticeLeadTrigger, resolveMarginTarget, type MarginTargetRow, type DealLike } from "../shared/policy";
 import { eq, desc, sql, and, count, isNull, isNotNull, asc, inArray } from "drizzle-orm";
 import { requirePerm, requireAnyPerm } from "./rbac";
@@ -337,6 +337,12 @@ import {
   ALL_FEE_ARRANGEMENTS,
   isFeeArrangement,
 } from "./services/feeArrangements";
+import {
+  createInvite as createPortalInvite,
+  revokeInvite as revokePortalInvite,
+  verifyToken as verifyPortalToken,
+  type PortalContext,
+} from "./services/PortalAuthService";
 
 // (former inline definitions of DealTotals / computeDealTotalsFromLines /
 // reconcileLine / backfillDealTotals / persistDealTotals / recalcPricingFromScope
@@ -5779,6 +5785,185 @@ export function registerRoutes(app: Express) {
       const e = err as { message?: string };
       res.status(500).json({ error: e?.message || "Suggestion failed", code: "time_suggest_error" });
     }
+  });
+
+  // ========== CLIENT PORTAL (F3.2) ==========
+  // Two surfaces:
+  //   * Internal-side admin to create / list / revoke invites,
+  //     gated like normal RBAC.
+  //   * Client-side /api/portal/* read-only endpoints, gated by a
+  //     magic-link token in the Authorization header (or
+  //     ?token= query string for the initial GET-from-email path).
+  //
+  // The client surface bypasses persona RBAC by design — it's a
+  // separate trust boundary. The `requirePortalToken` helper below
+  // resolves the token to a PortalContext (clientId + dealId scope)
+  // and rejects everything else with 401.
+
+  type PortalRequest = Request & { portalContext?: PortalContext };
+
+  async function requirePortalToken(req: PortalRequest, res: Response): Promise<PortalContext | null> {
+    const authHeader = headerStr(req, "authorization") || "";
+    let raw = "";
+    if (/^bearer\s+/i.test(authHeader)) raw = authHeader.replace(/^bearer\s+/i, "").trim();
+    if (!raw && typeof req.query.token === "string") raw = req.query.token.trim();
+    if (!raw) {
+      res.status(401).json({ error: "Portal token required", code: "portal_token_missing" });
+      return null;
+    }
+    const fromIp = (req.ip || req.socket?.remoteAddress || null) as string | null;
+    const ctx = await verifyPortalToken(raw, { fromIp });
+    if (!ctx) {
+      res.status(401).json({ error: "Invalid or expired portal token", code: "portal_token_invalid" });
+      return null;
+    }
+    req.portalContext = ctx;
+    return ctx;
+  }
+
+  // ----- Admin (internal) -----
+
+  // List invites for a deal. PDLs and Account Managers need this
+  // before sending a magic link. Restricts to viewDeals so the
+  // catalog of who's been invited can't leak.
+  app.get("/api/deals/:dealId/portal-invites", requirePerm("viewDeals"), async (req: Request, res: Response) => {
+    const dealId = paramInt(req, "dealId");
+    const rows = await db
+      .select()
+      .from(portalInvites)
+      .where(eq(portalInvites.dealId, dealId))
+      .orderBy(desc(portalInvites.createdAt));
+    // Never return the token_hash — it's a secret derivative of the
+    // raw token. tokenSuffix is fine (last 6 chars only).
+    res.json(rows.map((r) => ({
+      id: r.id,
+      clientId: r.clientId,
+      dealId: r.dealId,
+      email: r.email,
+      tokenSuffix: r.tokenSuffix,
+      status: r.status,
+      createdBy: r.createdBy,
+      createdAt: r.createdAt,
+      consumedAt: r.consumedAt,
+      consumedFromIp: r.consumedFromIp,
+      expiresAt: r.expiresAt,
+    })));
+  });
+
+  // Create an invite. Returns the raw token EXACTLY ONCE. Caller
+  // (UI) is responsible for showing it / mailing it; we do not log
+  // it server-side.
+  app.post("/api/deals/:dealId/portal-invites", requirePerm("editDeals"), async (req: Request, res: Response) => {
+    const dealId = paramInt(req, "dealId");
+    const body = req.body || {};
+    const email = String(body.email ?? "").trim();
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return res.status(400).json({ error: "valid email required", field: "email" });
+    }
+    const ttlDays = body.ttlDays != null ? parseInt(String(body.ttlDays), 10) : undefined;
+    const [deal] = await db.select({ id: deals.id, clientId: deals.clientId }).from(deals).where(eq(deals.id, dealId));
+    if (!deal) return res.status(404).json({ error: "Deal not found" });
+    const actor = (headerStr(req, "x-user-name") || "Unknown").trim();
+    try {
+      const result = await createPortalInvite({
+        clientId: deal.clientId,
+        dealId,
+        email,
+        ttlDays,
+        createdBy: actor,
+        metadata: body.metadata ?? null,
+      });
+      // Return the raw token exactly once. Client UI must surface it
+      // (or build a magic-link URL) at this moment.
+      res.status(201).json({
+        inviteId: result.inviteId,
+        token: result.token,
+        tokenSuffix: result.tokenSuffix,
+        email: result.email,
+        expiresAt: result.expiresAt,
+      });
+    } catch (err: unknown) {
+      const e = err as { message?: string };
+      res.status(500).json({ error: e?.message || "Invite failed", code: "portal_invite_error" });
+    }
+  });
+
+  app.delete("/api/portal-invites/:id", requirePerm("editDeals"), async (req: Request, res: Response) => {
+    const id = paramInt(req, "id");
+    const actor = (headerStr(req, "x-user-name") || "Unknown").trim();
+    const ok = await revokePortalInvite(id, actor);
+    if (!ok) return res.status(404).json({ error: "Invite not found" });
+    res.json({ revoked: true, id });
+  });
+
+  // ----- Client-side read-only -----
+
+  // Resolves the token, returns the {clientId, dealId, email}
+  // context — the client UI uses this on first load to know what
+  // it's allowed to render.
+  app.get("/api/portal/me", async (req: PortalRequest, res: Response) => {
+    const ctx = await requirePortalToken(req, res);
+    if (!ctx) return;
+    const [client] = await db.select().from(clients).where(eq(clients.id, ctx.clientId));
+    res.json({
+      clientId: ctx.clientId,
+      clientName: client?.name ?? null,
+      dealId: ctx.dealId,
+      email: ctx.email,
+      expiresAt: ctx.expiresAt,
+    });
+  });
+
+  // The deal's basic facts, scoped to the invite. Only deal id,
+  // title, status, totals — no PII beyond what's already shown.
+  app.get("/api/portal/deal", async (req: PortalRequest, res: Response) => {
+    const ctx = await requirePortalToken(req, res);
+    if (!ctx) return;
+    if (ctx.dealId == null) {
+      return res.status(403).json({ error: "Invite is not scoped to a specific deal", code: "portal_no_deal_scope" });
+    }
+    const [deal] = await db.select().from(deals).where(eq(deals.id, ctx.dealId));
+    if (!deal) return res.status(404).json({ error: "Deal not found" });
+    if (deal.clientId !== ctx.clientId) {
+      // Defense in depth: if a deal moves clients (rare), don't
+      // leak across the boundary.
+      return res.status(403).json({ error: "Deal does not belong to portal client", code: "portal_scope_mismatch" });
+    }
+    res.json({
+      id: deal.id,
+      dealNumber: deal.dealNumber,
+      title: deal.title,
+      status: deal.status,
+      totalFee: deal.totalFee,
+      totalHours: deal.totalHours,
+      marginPercent: deal.marginPercent,
+      startDate: deal.startDate,
+      endDate: deal.endDate,
+      businessUnit: deal.businessUnit,
+      serviceLine: deal.serviceLine,
+    });
+  });
+
+  // Public-facing scope summary. Just code + name + adjusted hours
+  // (no internal-only metadata like complexity multipliers).
+  app.get("/api/portal/scope", async (req: PortalRequest, res: Response) => {
+    const ctx = await requirePortalToken(req, res);
+    if (!ctx) return;
+    if (ctx.dealId == null) {
+      return res.status(403).json({ error: "Invite is not scoped to a specific deal", code: "portal_no_deal_scope" });
+    }
+    const rows = await db
+      .select({
+        code: scopeCatalog.code,
+        name: scopeCatalog.name,
+        category: scopeCatalog.category,
+        adjustedHours: dealScopeItems.adjustedHours,
+        quantity: dealScopeItems.quantity,
+      })
+      .from(dealScopeItems)
+      .innerJoin(scopeCatalog, eq(scopeCatalog.id, dealScopeItems.scopeItemId))
+      .where(eq(dealScopeItems.dealId, ctx.dealId));
+    res.json(rows);
   });
 
   // ========== PROPOSAL GENERATION ==========
