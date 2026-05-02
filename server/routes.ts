@@ -343,6 +343,14 @@ import {
   verifyToken as verifyPortalToken,
   type PortalContext,
 } from "./services/PortalAuthService";
+import {
+  ensureSession as ensureCollabSession,
+  persistDocumentState as persistCollabDocumentState,
+  setPresence as setCollabPresence,
+  getSession as getCollabSession,
+  isDocumentKey,
+  ALLOWED_DOCUMENT_KEYS,
+} from "./services/CollaborationService";
 
 // (former inline definitions of DealTotals / computeDealTotalsFromLines /
 // reconcileLine / backfillDealTotals / persistDealTotals / recalcPricingFromScope
@@ -5785,6 +5793,91 @@ export function registerRoutes(app: Express) {
       const e = err as { message?: string };
       res.status(500).json({ error: e?.message || "Suggestion failed", code: "time_suggest_error" });
     }
+  });
+
+  // ========== COLLABORATIVE SCOPING (F3.1) ==========
+  // Schema + durability layer only. The Yjs CRDT + WebSocket
+  // gateway is intentionally not wired yet — it'll plug into
+  // ensureSession/persistDocumentState once it lands.
+
+  app.get("/api/collab/document-keys", requirePerm("viewDeals"), async (_req: Request, res: Response) => {
+    res.json(ALLOWED_DOCUMENT_KEYS);
+  });
+
+  // GET-or-create the room for a (deal, documentKey). Returns the
+  // roomId the WS gateway should bind to, plus the latest snapshot.
+  app.post("/api/deals/:dealId/collab/sessions", requirePerm("editDeals"), async (req: Request, res: Response) => {
+    const dealId = paramInt(req, "dealId");
+    const docKey = String(req.body?.documentKey ?? "");
+    if (!isDocumentKey(docKey)) {
+      return res.status(400).json({
+        error: `documentKey must be one of: ${ALLOWED_DOCUMENT_KEYS.join(", ")}`,
+        field: "documentKey",
+      });
+    }
+    const session = await ensureCollabSession({ dealId, documentKey: docKey });
+    if (!session) return res.status(404).json({ error: "Deal not found" });
+    res.status(201).json(session);
+  });
+
+  // Read the current snapshot. Used both by the WS gateway on
+  // connection (to send the initial state) and by the UI for a
+  // quick read-without-WS path.
+  app.get("/api/deals/:dealId/collab/sessions/:documentKey", requirePerm("viewDeals"), async (req: Request, res: Response) => {
+    const dealId = paramInt(req, "dealId");
+    const docKey = paramStr(req, "documentKey");
+    if (!isDocumentKey(docKey)) {
+      return res.status(400).json({
+        error: `documentKey must be one of: ${ALLOWED_DOCUMENT_KEYS.join(", ")}`,
+        field: "documentKey",
+      });
+    }
+    const session = await getCollabSession({ dealId, documentKey: docKey });
+    if (!session) return res.status(404).json({ error: "Session not found" });
+    res.json(session);
+  });
+
+  // The WS gateway POSTs here on debounced idle to durably persist
+  // the latest Yjs update vector. payload is base64-encoded.
+  app.post("/api/deals/:dealId/collab/sessions/:documentKey/snapshot", requirePerm("editDeals"), async (req: Request, res: Response) => {
+    const dealId = paramInt(req, "dealId");
+    const docKey = paramStr(req, "documentKey");
+    if (!isDocumentKey(docKey)) {
+      return res.status(400).json({ error: "Invalid documentKey", field: "documentKey" });
+    }
+    const payload = String(req.body?.payload ?? "");
+    if (!payload || payload.length > 4 * 1024 * 1024) {
+      // 4MB cap — Yjs update vectors should never approach this in
+      // practice; refusing huge bodies prevents accidental DoS.
+      return res.status(400).json({ error: "payload required and ≤ 4MB", field: "payload" });
+    }
+    if (!/^[A-Za-z0-9+/]+={0,2}$/.test(payload)) {
+      return res.status(400).json({ error: "payload must be base64", field: "payload" });
+    }
+    const editedBy = (headerStr(req, "x-user-name") || "Unknown").trim();
+    const session = await persistCollabDocumentState({
+      dealId,
+      documentKey: docKey,
+      payload,
+      editedBy,
+    });
+    if (!session) return res.status(404).json({ error: "Deal not found" });
+    res.json(session);
+  });
+
+  app.post("/api/deals/:dealId/collab/sessions/:documentKey/presence", requirePerm("editDeals"), async (req: Request, res: Response) => {
+    const dealId = paramInt(req, "dealId");
+    const docKey = paramStr(req, "documentKey");
+    if (!isDocumentKey(docKey)) {
+      return res.status(400).json({ error: "Invalid documentKey", field: "documentKey" });
+    }
+    const session = await setCollabPresence({
+      dealId,
+      documentKey: docKey,
+      presence: req.body?.presence ?? null,
+    });
+    if (!session) return res.status(404).json({ error: "Deal not found" });
+    res.json(session);
   });
 
   // ========== CLIENT PORTAL (F3.2) ==========
