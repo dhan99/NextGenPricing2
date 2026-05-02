@@ -476,6 +476,51 @@ export const batchAdjustmentRules = pgTable("batch_adjustment_rules", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
+// ============ BUDGET ACTUALS + ALERTS (F2.2) ============
+// Periodic snapshot of actual hours/cost vs budget for a deal. The
+// BudgetMonitorService writes one row per (deal, period) at compute
+// time; older snapshots are retained for trend analysis. `period` is
+// stored as a date range (start inclusive, end exclusive); the cron
+// caller picks the period (e.g. weekly, monthly) — the service
+// doesn't enforce a frequency.
+export const budgetActuals = pgTable("budget_actuals", {
+  id: serial("id").primaryKey(),
+  dealId: integer("deal_id").references(() => deals.id).notNull(),
+  periodStart: timestamp("period_start").notNull(),
+  periodEnd: timestamp("period_end").notNull(),
+  hoursBudgeted: decimal("hours_budgeted", { precision: 10, scale: 2 }).default("0"),
+  hoursActual: decimal("hours_actual", { precision: 10, scale: 2 }).default("0"),
+  hoursVarPct: decimal("hours_var_pct", { precision: 6, scale: 2 }),  // (actual - budgeted) / budgeted * 100; null if budget=0
+  costBudgeted: decimal("cost_budgeted", { precision: 14, scale: 2 }).default("0"),
+  costActual: decimal("cost_actual", { precision: 14, scale: 2 }).default("0"),
+  costVarPct: decimal("cost_var_pct", { precision: 6, scale: 2 }),
+  feeBudgeted: decimal("fee_budgeted", { precision: 14, scale: 2 }).default("0"),
+  feeActual: decimal("fee_actual", { precision: 14, scale: 2 }).default("0"),
+  feeVarPct: decimal("fee_var_pct", { precision: 6, scale: 2 }),
+  capturedAt: timestamp("captured_at").defaultNow().notNull(),
+});
+
+// Threshold-based alerts. The monitor service inserts rows when a
+// deal crosses a configured threshold (over_budget, near_budget,
+// burn_rate); the UI lets approvers acknowledge or resolve them.
+// `kind` is open-ended so future heuristics can plug in.
+export const budgetAlerts = pgTable("budget_alerts", {
+  id: serial("id").primaryKey(),
+  dealId: integer("deal_id").references(() => deals.id).notNull(),
+  kind: text("kind").notNull(),                             // over_budget | near_budget | burn_rate | margin_drop
+  metric: text("metric").notNull(),                         // hours | cost | fee | margin
+  threshold: decimal("threshold", { precision: 8, scale: 2 }).notNull(),  // percent that was breached (e.g. 110 = 110%)
+  observed: decimal("observed", { precision: 8, scale: 2 }).notNull(),    // observed percent at fire time
+  message: text("message").notNull(),
+  status: text("status").notNull().default("open"),         // open | acknowledged | resolved | snoozed
+  acknowledgedBy: text("acknowledged_by"),
+  acknowledgedAt: timestamp("acknowledged_at"),
+  resolvedBy: text("resolved_by"),
+  resolvedAt: timestamp("resolved_at"),
+  metadata: jsonb("metadata"),                              // free-form: window, period_id, etc.
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 // ============ DOMAIN EVENTS OUTBOX (F1.4) ============
 // Outbox for the DDD strangler-fig refactor. Application services write
 // aggregate state + outbox rows in a single transaction; an in-process

@@ -590,6 +590,48 @@ async function pushSchema() {
       updated_at TIMESTAMP DEFAULT NOW() NOT NULL
     );
 
+    -- Budget actuals (F2.2). Periodic snapshot rows; one per (deal,
+    -- period). Variance percent columns are nullable (null when the
+    -- budget value is zero — avoids divide-by-zero garbage).
+    CREATE TABLE IF NOT EXISTS budget_actuals (
+      id SERIAL PRIMARY KEY,
+      deal_id INTEGER NOT NULL REFERENCES deals(id),
+      period_start TIMESTAMP NOT NULL,
+      period_end TIMESTAMP NOT NULL,
+      hours_budgeted DECIMAL(10,2) DEFAULT 0,
+      hours_actual DECIMAL(10,2) DEFAULT 0,
+      hours_var_pct DECIMAL(6,2),
+      cost_budgeted DECIMAL(14,2) DEFAULT 0,
+      cost_actual DECIMAL(14,2) DEFAULT 0,
+      cost_var_pct DECIMAL(6,2),
+      fee_budgeted DECIMAL(14,2) DEFAULT 0,
+      fee_actual DECIMAL(14,2) DEFAULT 0,
+      fee_var_pct DECIMAL(6,2),
+      captured_at TIMESTAMP DEFAULT NOW() NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS budget_actuals_deal_idx ON budget_actuals (deal_id, period_end DESC);
+
+    -- Budget alerts (F2.2). One row per fired threshold breach.
+    -- Status defaults to 'open'; UI acknowledge/resolve flips it.
+    CREATE TABLE IF NOT EXISTS budget_alerts (
+      id SERIAL PRIMARY KEY,
+      deal_id INTEGER NOT NULL REFERENCES deals(id),
+      kind TEXT NOT NULL,
+      metric TEXT NOT NULL,
+      threshold DECIMAL(8,2) NOT NULL,
+      observed DECIMAL(8,2) NOT NULL,
+      message TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'open',
+      acknowledged_by TEXT,
+      acknowledged_at TIMESTAMP,
+      resolved_by TEXT,
+      resolved_at TIMESTAMP,
+      metadata JSONB,
+      created_at TIMESTAMP DEFAULT NOW() NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS budget_alerts_deal_idx ON budget_alerts (deal_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS budget_alerts_open_idx ON budget_alerts (status) WHERE status = 'open';
+
     -- Domain events outbox (F1.4). The DDD strangler-fig refactor writes
     -- aggregate state + outbox rows in one transaction; an in-process
     -- dispatcher publishes them to subscribers (synchronous fanout for
