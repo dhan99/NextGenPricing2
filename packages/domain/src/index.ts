@@ -9,3 +9,4 @@
  */
 export * from "./shared";
 export * from "./deal";
+export * from "./events";

@@ -1,4 +1,5 @@
 export { Deal, type DealRow, type DealSnapshot } from "./Deal";
+export type { DealRepository } from "./DealRepository";
 export {
   DealStatus,
   DEAL_STATUSES,

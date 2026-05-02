@@ -566,6 +566,28 @@ async function pushSchema() {
       updated_at TIMESTAMP DEFAULT NOW() NOT NULL
     );
 
+    -- Domain events outbox (F1.4). The DDD strangler-fig refactor writes
+    -- aggregate state + outbox rows in one transaction; an in-process
+    -- dispatcher publishes them to subscribers (synchronous fanout for
+    -- now). published_at stays null until delivered. The unique
+    -- (aggregate_type, aggregate_id, type, occurred_at) tuple lets
+    -- subscribers dedupe replays.
+    CREATE TABLE IF NOT EXISTS domain_events_outbox (
+      id SERIAL PRIMARY KEY,
+      type TEXT NOT NULL,
+      version INTEGER NOT NULL,
+      aggregate_type TEXT NOT NULL,
+      aggregate_id INTEGER NOT NULL,
+      payload JSONB NOT NULL,
+      occurred_at TIMESTAMP NOT NULL,
+      published_at TIMESTAMP,
+      created_at TIMESTAMP DEFAULT NOW() NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS domain_events_outbox_unpublished_idx
+      ON domain_events_outbox (published_at) WHERE published_at IS NULL;
+    CREATE INDEX IF NOT EXISTS domain_events_outbox_aggregate_idx
+      ON domain_events_outbox (aggregate_type, aggregate_id);
+
     -- Margin Targets: single source of truth (Task #33). Firm default is the
     -- single row with scope='firm' and scope_key NULL; per-BU and
     -- per-service-line overrides have scope_key set.
