@@ -602,6 +602,31 @@ async function pushSchema() {
       updated_at TIMESTAMP DEFAULT NOW() NOT NULL
     );
 
+    -- Client portal invites (F3.2). Magic-link auth for the
+    -- client-facing /portal/* routes. tokenHash is sha256 of the
+    -- raw token; we never persist plaintext. tokenSuffix is the
+    -- last 6 chars of the raw token (debugging only).
+    CREATE TABLE IF NOT EXISTS portal_invites (
+      id SERIAL PRIMARY KEY,
+      client_id INTEGER NOT NULL REFERENCES clients(id),
+      deal_id INTEGER REFERENCES deals(id),
+      email TEXT NOT NULL,
+      token_hash TEXT NOT NULL,
+      token_suffix TEXT NOT NULL,
+      expires_at TIMESTAMP NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending',
+      created_by TEXT,
+      consumed_at TIMESTAMP,
+      consumed_from_ip TEXT,
+      metadata JSONB,
+      created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+      updated_at TIMESTAMP DEFAULT NOW() NOT NULL
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS portal_invites_token_hash_uniq
+      ON portal_invites (token_hash);
+    CREATE INDEX IF NOT EXISTS portal_invites_client_idx
+      ON portal_invites (client_id, status);
+
     -- Time entries (F2.3). Authoritative source for "actuals" once
     -- populated; BudgetMonitorService prefers a sum-of-time-entries
     -- over the pricing-line projection when both are available.

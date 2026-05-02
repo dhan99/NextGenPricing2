@@ -496,6 +496,35 @@ export const batchAdjustmentRules = pgTable("batch_adjustment_rules", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
+// ============ CLIENT PORTAL (F3.2) ============
+// Magic-link invites for the client self-service portal.
+// `tokenHash` stores SHA-256 of the raw token; we never persist
+// the plaintext. Each invite resolves to one (clientId, dealId)
+// scope; the routes layer enforces that scope on every request.
+export const portalInvites = pgTable("portal_invites", {
+  id: serial("id").primaryKey(),
+  clientId: integer("client_id").references(() => clients.id).notNull(),
+  // Optional deal scope. If null, the invite is client-wide
+  // (rare; dealId-scoped is the default).
+  dealId: integer("deal_id").references(() => deals.id),
+  email: text("email").notNull(),
+  // SHA-256 hex of the raw token. Compare via constant-time eq.
+  tokenHash: text("token_hash").notNull(),
+  // Last 6 chars of the raw token (for "did I receive the right
+  // link?" debugging without leaking the secret).
+  tokenSuffix: text("token_suffix").notNull(),
+  expiresAt: timestamp("expires_at").notNull(),
+  status: text("status").notNull().default("pending"),     // pending | active | revoked | expired
+  createdBy: text("created_by"),
+  consumedAt: timestamp("consumed_at"),
+  consumedFromIp: text("consumed_from_ip"),
+  metadata: jsonb("metadata"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (t) => ({
+  tokenHashUniq: uniqueIndex("portal_invites_token_hash_uniq").on(t.tokenHash),
+}));
+
 // ============ TIME ENTRIES (F2.3) ============
 // One row per logged increment of work against a deal. The
 // BudgetMonitorService heuristic falls back to pricing-line
