@@ -131,3 +131,9 @@ dist
 
 # Replit debugger
 .breakpoints
+
+# Phase 0 audit tooling
+# scripts/audit/backup_db.sh writes pg_dump output here.
+# scripts/audit/smoke_test.sh writes server logs here.
+backups/
+.smoke-logs/
