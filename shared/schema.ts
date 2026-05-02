@@ -88,6 +88,26 @@ export const deals = pgTable("deals", {
   // for sub-500ms k-NN similarity search. NULL until first compute;
   // background job back-fills on existing rows.
   embedding: vector("embedding", { dimensions: 1536 }),
+  // F2.4 — Alternative fee arrangements. Default 'time_and_materials'
+  // matches the legacy pricing engine; non-T&M values feed into the
+  // pricing-engine fork in F2.4.2. Validation lives in the pricing
+  // engine + the FeeArrangementPicker UI; the schema only enforces
+  // the column shape.
+  //
+  // Allowed feeArrangement values:
+  //   time_and_materials  — bill-as-you-go, T&M (legacy default)
+  //   fixed               — single fixed fee for the deal
+  //   capped              — T&M with a not-to-exceed cap
+  //   contingent          — % of a recovery / settlement / savings
+  //   retainer            — recurring fixed retainer + true-up
+  //   hybrid              — T&M base + success fee on milestone
+  feeArrangement: text("fee_arrangement").default("time_and_materials"),
+  fixedFeeAmount: decimal("fixed_fee_amount", { precision: 14, scale: 2 }),
+  cappedFeeAmount: decimal("capped_fee_amount", { precision: 14, scale: 2 }),
+  contingentFeePercent: decimal("contingent_fee_percent", { precision: 5, scale: 2 }),
+  contingentFeeBase: text("contingent_fee_base"), // e.g. "settlement_amount", "savings_realized"
+  retainerAmount: decimal("retainer_amount", { precision: 14, scale: 2 }),
+  successFeePercent: decimal("success_fee_percent", { precision: 5, scale: 2 }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

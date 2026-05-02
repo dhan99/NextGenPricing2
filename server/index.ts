@@ -452,6 +452,18 @@ async function pushSchema() {
     -- the similarity engine.
     ALTER TABLE deals ADD COLUMN IF NOT EXISTS fingerprint JSONB;
 
+    -- F2.4.1 — Alternative fee arrangements. Default 'time_and_materials'
+    -- preserves legacy pricing-engine behavior; other arrangements are
+    -- handled by the pricing-engine fork in F2.4.2. All amount/percent
+    -- columns are nullable so legacy T&M rows don't carry zeroes.
+    ALTER TABLE deals ADD COLUMN IF NOT EXISTS fee_arrangement TEXT DEFAULT 'time_and_materials';
+    ALTER TABLE deals ADD COLUMN IF NOT EXISTS fixed_fee_amount DECIMAL(14,2);
+    ALTER TABLE deals ADD COLUMN IF NOT EXISTS capped_fee_amount DECIMAL(14,2);
+    ALTER TABLE deals ADD COLUMN IF NOT EXISTS contingent_fee_percent DECIMAL(5,2);
+    ALTER TABLE deals ADD COLUMN IF NOT EXISTS contingent_fee_base TEXT;
+    ALTER TABLE deals ADD COLUMN IF NOT EXISTS retainer_amount DECIMAL(14,2);
+    ALTER TABLE deals ADD COLUMN IF NOT EXISTS success_fee_percent DECIMAL(5,2);
+
     -- F2.1.2 — pgvector + deal embedding column. CREATE EXTENSION is a
     -- no-op once installed; the dealpad role doesn't have permission to
     -- create extensions, so this is wrapped in DO/EXCEPTION so a missing
