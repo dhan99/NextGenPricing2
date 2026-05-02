@@ -449,6 +449,28 @@ async function pushSchema() {
     ALTER TABLE pricing_lines ADD COLUMN IF NOT EXISTS override_by TEXT;
     ALTER TABLE pricing_lines ADD COLUMN IF NOT EXISTS override_at TIMESTAMP;
 
+    -- Multi-entity worksheets (F1.1, BACKLOG.md). One deal can hold multiple
+    -- entities — e.g. tax engagements modeling 1040 + 1120 + 1065 + 1120S
+    -- under one engagement. Pre-F1.1 deals are pointed at a single auto-
+    -- created "Primary Entity" by 001_multi_entity_backfill so existing
+    -- scope and pricing rows can be assigned without touching their values.
+    CREATE TABLE IF NOT EXISTS deal_entities (
+      id SERIAL PRIMARY KEY,
+      deal_id INTEGER REFERENCES deals(id) NOT NULL,
+      name TEXT NOT NULL,
+      entity_type TEXT,
+      jurisdiction TEXT,
+      sort_order INTEGER DEFAULT 0,
+      is_primary BOOLEAN DEFAULT FALSE NOT NULL,
+      notes TEXT,
+      created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+      updated_at TIMESTAMP DEFAULT NOW() NOT NULL
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS deal_entities_deal_name_uniq
+      ON deal_entities (deal_id, name);
+    ALTER TABLE deal_scope_items ADD COLUMN IF NOT EXISTS entity_id INTEGER REFERENCES deal_entities(id);
+    ALTER TABLE pricing_lines ADD COLUMN IF NOT EXISTS entity_id INTEGER REFERENCES deal_entities(id);
+
     -- Margin Targets: single source of truth (Task #33). Firm default is the
     -- single row with scope='firm' and scope_key NULL; per-BU and
     -- per-service-line overrides have scope_key set.
@@ -797,6 +819,24 @@ async function start() {
     }
   } else {
     console.log("[backfillDealTotals] skipped (set RUN_PRICING_BACKFILL=1 to run on next boot)");
+  }
+
+  // F1.1: ensure every deal has at least one entity row, and that all existing
+  // scope/pricing rows are pointed at it. Idempotent — skips deals already
+  // backfilled. Same gating pattern as backfillDealTotals.
+  const shouldBackfillEntities =
+    process.env.RUN_MULTI_ENTITY_BACKFILL === "1" ||
+    process.env.NODE_ENV !== "production";
+  if (shouldBackfillEntities) {
+    try {
+      const { backfillMultiEntity } = await import("../scripts/migrations/001_multi_entity_backfill");
+      const r = await backfillMultiEntity();
+      console.log(`[001_multi_entity_backfill] scanned ${r.dealsScanned} deal(s); created ${r.entitiesCreated} primary entity row(s); assigned ${r.scopeItemsAssigned} scope item(s) and ${r.pricingLinesAssigned} pricing line(s) to their primary entity`);
+    } catch (e) {
+      console.error("[001_multi_entity_backfill] failed:", e);
+    }
+  } else {
+    console.log("[001_multi_entity_backfill] skipped (set RUN_MULTI_ENTITY_BACKFILL=1 to run on next boot)");
   }
 
   // Start nightly Intapp re-screen loop (no-op until enabled in settings)
