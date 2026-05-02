@@ -54,6 +54,7 @@
     "express": "^5.2.1",
     "framer-motion": "^12.38.0",
     "lucide-react": "^1.8.0",
+    "mathjs": "^15.2.0",
     "pdfkit": "^0.18.0",
     "pg": "^8.20.0",
     "recharts": "^3.8.1",
