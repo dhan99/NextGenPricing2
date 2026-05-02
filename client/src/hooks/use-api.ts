@@ -175,6 +175,61 @@ export function useDeactivateScopeItem() {
   });
 }
 
+// F1.1 multi-entity hooks. Endpoints in server/routes.ts; behaviour in
+// docs/refactoring/BACKLOG.md F1.1. The useDealEntities + useEntityTotals
+// pair is what EntityTabs binds to; mutations all invalidate both keys
+// plus the parent deal so totals re-derive.
+
+export function useDealEntities(dealId: number | null | undefined) {
+  return useQuery({
+    queryKey: ["deal-entities", dealId],
+    queryFn: () => fetchApi(`/api/deals/${dealId}/entities`),
+    enabled: !!dealId,
+  });
+}
+
+export function useEntityTotals(dealId: number | null | undefined) {
+  return useQuery({
+    queryKey: ["deal-entity-totals", dealId],
+    queryFn: () => fetchApi(`/api/deals/${dealId}/entity-totals`),
+    enabled: !!dealId,
+  });
+}
+
+function invalidateEntityKeys(qc: ReturnType<typeof useQueryClient>, dealId: number) {
+  qc.invalidateQueries({ queryKey: ["deal-entities", dealId] });
+  qc.invalidateQueries({ queryKey: ["deal-entity-totals", dealId] });
+  qc.invalidateQueries({ queryKey: ["deal", dealId] });
+  qc.invalidateQueries({ queryKey: ["activity"] });
+}
+
+export function useCreateEntity() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ dealId, data }: { dealId: number; data: any }) =>
+      fetchApi(`/api/deals/${dealId}/entities`, { method: "POST", body: JSON.stringify(data) }),
+    onSuccess: (_, { dealId }) => invalidateEntityKeys(qc, dealId),
+  });
+}
+
+export function useUpdateEntity() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, data }: { id: number; dealId: number; data: any }) =>
+      fetchApi(`/api/deal-entities/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
+    onSuccess: (_, { dealId }) => invalidateEntityKeys(qc, dealId),
+  });
+}
+
+export function useDeleteEntity() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id }: { id: number; dealId: number }) =>
+      fetchApi(`/api/deal-entities/${id}`, { method: "DELETE" }),
+    onSuccess: (_, { dealId }) => invalidateEntityKeys(qc, dealId),
+  });
+}
+
 export function useScopeTemplates(serviceLine?: string | null) {
   const qs = serviceLine ? `?serviceLine=${encodeURIComponent(serviceLine)}` : "";
   return useQuery({

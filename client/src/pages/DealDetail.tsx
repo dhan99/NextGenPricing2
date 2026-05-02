@@ -10,6 +10,7 @@ import { ArrowLeft, Check, ChevronRight, Sparkles, AlertTriangle, TrendingUp, Tr
 import { Link } from "wouter";
 import { useAuth } from "@/context/AuthContext";
 import { AskDealPadAI } from "@/components/AskDealPadAI";
+import { EntityTabs } from "@/components/entities/EntityTabs";
 
 const STEP_KEYS = ["", "wizard-setup", "wizard-scope", "wizard-assumptions", "wizard-pricing", "wizard-review", "wizard-approval", "wizard-summary"];
 
@@ -419,6 +420,12 @@ function ScopeStep({ deal }: { deal: any }) {
   const removeItem = useRemoveScopeItem();
   const applyTemplate = useApplyScopeTemplate();
   const erpRescale = useErpRescale();
+  // F1.1 — selected entity drives the rollup tab strip rendered above the
+  // scope content. Hooking the scope-item filter to this selection is
+  // intentionally NOT done in this PR; the BACKLOG calls out "do NOT
+  // rewrite the wizard". A follow-up PR makes scope item adds + the
+  // catalogue picker entity-aware once the model has settled.
+  const [activeEntityId, setActiveEntityId] = useState<number | null>(null);
   const estimation = useAIEffortEstimation();
   const isErpDeal = (deal.serviceLine || "") === "ERP Implementation";
   const ei: Record<string, any> = (deal.engagementInputs as any) || {};
@@ -546,7 +553,13 @@ function ScopeStep({ deal }: { deal: any }) {
   }, [scopeItemCount]);
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <div className="space-y-6">
+      <EntityTabs
+        dealId={deal.id}
+        activeEntityId={activeEntityId}
+        onSelect={setActiveEntityId}
+      />
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
       <div className="lg:col-span-2 space-y-6">
         {isErpDeal && !erpInputsValid && (
           <div className="rounded-xl border border-red-300 bg-red-50/70 p-4 flex items-start gap-3">
@@ -887,6 +900,7 @@ function ScopeStep({ deal }: { deal: any }) {
             </div>
           )}
         </div>
+      </div>
       </div>
     </div>
   );
