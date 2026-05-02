@@ -108,6 +108,62 @@ export const scopeTemplateItems = pgTable("scope_template_items", {
   sortOrder: integer("sort_order").default(0),
 });
 
+// F1.2 — Assembly expansion engine. Today scope_catalog.isAssembly groups
+// children via parent_id and the cascade is implicit (POST /scope-items
+// adds every child of a parent). That covers simple bundles but not the
+// Tax PHB Excel calculator's parametric assemblies, which have:
+//   - tier-based hour overrides (Ultimate / Enhanced / Essential)
+//   - quantity formulas computed from prompt answers + engagement inputs
+//     (e.g. "1 per entity × 2 if multi-jurisdiction")
+//   - per-component prompt dependencies
+//
+// `assembly_templates` is the explicit spec for an assembly catalog item.
+// `assembly_components` is its line-by-line expansion. Backwards compat:
+// when a scope_catalog row has is_assembly=true but no template, the
+// legacy parent_id cascade still applies. The new model is opt-in per
+// assembly catalog item — set up the template and AssemblyExpansionService
+// (slice 2) prefers it over the cascade.
+export const assemblyTemplates = pgTable("assembly_templates", {
+  id: serial("id").primaryKey(),
+  // The assembly catalog row this template implements. Unique so we
+  // never have two competing templates for the same assembly.
+  scopeItemId: integer("scope_item_id").references(() => scopeCatalog.id).notNull().unique(),
+  name: text("name").notNull(),                      // e.g. "Tax PHB — 1040 Calculator"
+  description: text("description"),
+  serviceLine: text("service_line"),                  // optional segmentation hint
+  version: integer("version").notNull().default(1),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const assemblyComponents = pgTable("assembly_components", {
+  id: serial("id").primaryKey(),
+  templateId: integer("template_id").references(() => assemblyTemplates.id).notNull(),
+  // The leaf scope_catalog row this component expands into. NOT unique
+  // per template — a single template may pull the same leaf in twice
+  // (e.g. one for federal, one for state) with different formulas.
+  scopeItemId: integer("scope_item_id").references(() => scopeCatalog.id).notNull(),
+  // Tier overrides — tax pricing's three packages. Each is an HOURS
+  // override applied to the leaf's defaultHours when the deal's tier
+  // matches. NULL = use the leaf's defaultHours unchanged.
+  ultimateTierOverride: decimal("ultimate_tier_override", { precision: 8, scale: 2 }),
+  enhancedTierOverride: decimal("enhanced_tier_override", { precision: 8, scale: 2 }),
+  essentialTierOverride: decimal("essential_tier_override", { precision: 8, scale: 2 }),
+  // Pure-arithmetic expression evaluated against engagement_inputs +
+  // prompt answers + a small whitelist of identifiers. Resolves to a
+  // non-negative integer "how many of this leaf to add". NULL = always 1.
+  // The mathjs sandbox in slice 2 enforces no function calls beyond
+  // basic arithmetic.
+  quantityFormula: text("quantity_formula"),
+  // Optional pointer at a specific prompt this component's quantity
+  // depends on. The expansion service uses this to surface "answer this
+  // prompt before adding" UX warnings.
+  promptId: integer("prompt_id").references(() => promptSetItems.id),
+  sortOrder: integer("sort_order").default(0),
+  notes: text("notes"),
+});
+
 export const dealScopeItems = pgTable("deal_scope_items", {
   id: serial("id").primaryKey(),
   dealId: integer("deal_id").references(() => deals.id).notNull(),
