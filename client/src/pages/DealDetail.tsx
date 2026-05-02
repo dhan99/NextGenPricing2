@@ -49,6 +49,19 @@ export function DealDetail() {
     setCurrentStep(step);
   }, [dealId, qc]);
 
+  // Wizard nav uses mousedown to flush any focused input's pending onBlur
+  // commit (e.g. EngagementInputsCard number/text fields that auto-save on
+  // blur). Without this, on macOS — where clicking a button does NOT shift
+  // focus by default — the input never blurs, the commit never fires, and
+  // the typed value (e.g. Tech & Admin %) is lost when the step unmounts.
+  // mousedown precedes click, so the blur-driven mutate is in flight before
+  // navigateToStep runs. The cache invalidates when the mutate's onSuccess
+  // lands, so the next step renders the fresh value.
+  const flushPendingEdits = useCallback(() => {
+    const active = document.activeElement as HTMLElement | null;
+    if (active && typeof active.blur === "function") active.blur();
+  }, []);
+
   useEffect(() => {
     if (deal?.currentStep) {
       // Clamp to the current step range. Older deals may have a saved step from
@@ -91,6 +104,7 @@ export function DealDetail() {
 
         <div className="flex items-center justify-between mt-8 pt-6 border-t border-border">
           <button
+            onMouseDown={flushPendingEdits}
             onClick={() => navigateToStep(Math.max(1, currentStep - 1))}
             disabled={currentStep === 1}
             className={cn(
@@ -118,6 +132,7 @@ export function DealDetail() {
           )}
           {currentStep < STEPS.length ? (
             <button
+              onMouseDown={flushPendingEdits}
               onClick={() => !advanceBlocked && navigateToStep(Math.min(STEPS.length, currentStep + 1))}
               disabled={advanceBlocked}
               aria-describedby={summaryGated ? "summary-gate-hint" : undefined}
