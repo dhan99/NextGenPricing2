@@ -10,6 +10,7 @@ import { ArrowLeft, Check, ChevronRight, Sparkles, AlertTriangle, TrendingUp, Tr
 import { Link } from "wouter";
 import { useAuth } from "@/context/AuthContext";
 import { AskDealPadAI } from "@/components/AskDealPadAI";
+import { AssemblyPicker } from "@/components/scope/AssemblyPicker";
 import { EntityTabs } from "@/components/entities/EntityTabs";
 import { flushPendingEdits } from "@/lib/flush-pending-edits";
 
@@ -742,6 +743,7 @@ function ScopeStep({ deal }: { deal: any }) {
               </p>
             </div>
             <div className="flex items-center gap-3">
+              <AssemblyPicker dealId={deal.id} activeEntityId={null} serviceLine={deal.serviceLine ?? null} />
               {deal.serviceLine && (
                 <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer">
                   <input type="checkbox" checked={showAllPractices} onChange={(e) => setShowAllPractices(e.target.checked)} className="rounded" />
