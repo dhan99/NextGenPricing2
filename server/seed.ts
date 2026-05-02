@@ -1,5 +1,5 @@
 import { db } from "./db";
-import { clients, deals, scopeCatalog, roles, rateCards, rateCardEntries, dealScopeItems, pricingLines, scenarios, approvals, promptResponses, activityLog, promptSets, promptSetItems, marginTargets } from "../shared/schema";
+import { clients, deals, scopeCatalog, roles, rateCards, rateCardEntries, dealScopeItems, pricingLines, scenarios, approvals, promptResponses, activityLog, promptSets, promptSetItems, marginTargets, assemblyTemplates, assemblyComponents } from "../shared/schema";
 import { sql, eq, and, isNull, desc } from "drizzle-orm";
 import { seedDynamics } from "./dynamics";
 import { seedIntapp } from "./intapp";
@@ -298,6 +298,99 @@ export type SeedStepResult = {
   error?: string;
 };
 
+// F1.2 — Tax PHB Standard Bundle assembly seed.
+//
+// Idempotent: skips entirely if scope_catalog.code='TAX-ASM-PHB-001'
+// already has an assembly_template registered. Inserts:
+//   1. The assembly catalog row itself (is_assembly=true).
+//   2. An assembly_template against it.
+//   3. Five components pointing at existing tax-leaf catalog rows
+//      with tier overrides + quantity formulas keyed off Tax-Corporate
+//      engagement_inputs (taxEntities, taxReturnsPerYear, tpTransactions).
+//
+// The components are designed so the F1.2 sandbox + expansion service
+// produces deterministic totals. The tax-phb-golden test pins the
+// exact lines this template emits given a known engagement-inputs
+// fixture.
+const TAX_PHB_ASM_CODE = "TAX-ASM-PHB-001";
+const TAX_PHB_ASM_NAME = "Tax PHB Standard Bundle";
+
+type TaxPhbComponentSeed = {
+  leafCode: string;
+  ultimateHrs: string;
+  enhancedHrs: string;
+  essentialHrs: string;
+  formula: string | null;
+  sortOrder: number;
+};
+
+const TAX_PHB_COMPONENTS: TaxPhbComponentSeed[] = [
+  // Annual provision: one per entity. Hours per provision varies by tier.
+  { leafCode: "TAX-DIR-001", ultimateHrs: "28", enhancedHrs: "24", essentialHrs: "20", formula: "taxEntities", sortOrder: 1 },
+  // Quarterly provisions: 4 per entity per year.
+  { leafCode: "TAX-DIR-002", ultimateHrs: "6",  enhancedHrs: "5",  essentialHrs: "4",  formula: "taxEntities * 4", sortOrder: 2 },
+  // Federal/state returns: one per return.
+  { leafCode: "TAX-DIR-004", ultimateHrs: "22", enhancedHrs: "18", essentialHrs: "16", formula: "taxReturnsPerYear", sortOrder: 3 },
+  // TP benchmarking: one per intercompany transaction.
+  { leafCode: "TAX-TP-004",  ultimateHrs: "12", enhancedHrs: "10", essentialHrs: "8",  formula: "tpTransactions", sortOrder: 4 },
+  // PMO: one bundle, hours scale with tier.
+  { leafCode: "PMO-001",     ultimateHrs: "80", enhancedHrs: "60", essentialHrs: "40", formula: null, sortOrder: 5 },
+];
+
+export async function seedTaxPhbAssembly(): Promise<void> {
+  // 1. Ensure the assembly catalog row exists.
+  let [asm] = await db.select().from(scopeCatalog).where(eq(scopeCatalog.code, TAX_PHB_ASM_CODE));
+  if (!asm) {
+    [asm] = await db.insert(scopeCatalog).values({
+      code: TAX_PHB_ASM_CODE,
+      name: TAX_PHB_ASM_NAME,
+      category: "Tax",
+      description: "Tax PHB Excel-parity bundle. Scaled by entities × returns × intercompany transactions; tier-overridden hours.",
+      defaultHours: "0",
+      isAssembly: true,
+      serviceLines: "Tax-Corporate,Tax-PHB,Tax,Tax Planning",
+      sortOrder: 100,
+    }).returning();
+  }
+
+  // 2. Skip the rest if the template already exists. Operators may have
+  // tweaked components; we don't overwrite their work.
+  const [existingTpl] = await db.select().from(assemblyTemplates)
+    .where(eq(assemblyTemplates.scopeItemId, asm.id));
+  if (existingTpl) return;
+
+  const [tpl] = await db.insert(assemblyTemplates).values({
+    scopeItemId: asm.id,
+    name: TAX_PHB_ASM_NAME,
+    description: "Five-component bundle: annual + quarterly provisions, return prep, TP benchmarking, PMO.",
+    serviceLine: "Tax-Corporate",
+    version: 1,
+    isActive: true,
+  }).returning();
+
+  // 3. Resolve leaf scope_catalog rows by code. Skip components whose
+  // leaf isn't in the seed (operator can run the audit-scope script
+  // first; this seed is non-fatal so a missing leaf is logged and moved
+  // past, not crashed on).
+  for (const c of TAX_PHB_COMPONENTS) {
+    const [leaf] = await db.select({ id: scopeCatalog.id })
+      .from(scopeCatalog).where(eq(scopeCatalog.code, c.leafCode));
+    if (!leaf) {
+      console.warn(`[seedTaxPhbAssembly] missing leaf code ${c.leafCode}; skipping component`);
+      continue;
+    }
+    await db.insert(assemblyComponents).values({
+      templateId: tpl.id,
+      scopeItemId: leaf.id,
+      ultimateTierOverride: c.ultimateHrs,
+      enhancedTierOverride: c.enhancedHrs,
+      essentialTierOverride: c.essentialHrs,
+      quantityFormula: c.formula,
+      sortOrder: c.sortOrder,
+    });
+  }
+}
+
 async function runStep(
   name: string,
   fn: () => Promise<void>,
@@ -344,6 +437,10 @@ export async function seedAll(): Promise<SeedStepResult[]> {
     results.push(await runStep("core:marginTargets", () => seedDefaultMarginTargets(), { fatal: true }));
     results.push(await runStep("core:promptSet", () => seedDefaultPromptSet(), { fatal: true }));
     results.push(await runStep("core:snapshot", () => loadSeedSnapshot(), { fatal: false }));
+    // F1.2 — assembly templates. Non-fatal because it depends on the
+    // tax leaf scope rows (TAX-DIR-*, TAX-TP-*, PMO-001) which are
+    // optional in some test fixtures.
+    results.push(await runStep("core:taxPhbAssembly", () => seedTaxPhbAssembly(), { fatal: false }));
 
     // Integrations (non-fatal): a failed simulator should not block the server.
     results.push(await runStep("integration:dynamics", () => seedDynamics(), { fatal: false }));
