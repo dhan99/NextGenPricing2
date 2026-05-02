@@ -11,6 +11,7 @@ import { Link } from "wouter";
 import { useAuth } from "@/context/AuthContext";
 import { AskDealPadAI } from "@/components/AskDealPadAI";
 import { AssemblyPicker } from "@/components/scope/AssemblyPicker";
+import { FeeArrangementPicker } from "@/components/pricing/FeeArrangementPicker";
 import { EntityTabs } from "@/components/entities/EntityTabs";
 import { flushPendingEdits } from "@/lib/flush-pending-edits";
 
@@ -1579,6 +1580,8 @@ function RateCell({ line, dealId, updateLine }: { line: any; dealId: number; upd
 }
 
 function PricingStep({ deal }: { deal: any }) {
+  const { persona } = useAuth();
+  const canEdit = persona?.permissions.editDeals ?? false;
   const { data: pricingLines } = useDealPricing(deal.id);
   const updateLine = useUpdatePricingLine();
   const marginAdvisor = useAIMarginAdvisor();
@@ -1962,6 +1965,7 @@ function PricingStep({ deal }: { deal: any }) {
             </div>
           )}
         </div>
+        <FeeArrangementPicker dealId={deal.id} deal={deal} canEdit={canEdit} />
       </div>
     </div>
   );
