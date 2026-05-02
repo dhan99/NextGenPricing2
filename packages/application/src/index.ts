@@ -4,7 +4,20 @@
  * Stitches together domain aggregates, repositories from
  * @dealpad/infrastructure, and the event bus. Thin layer; one
  * service per business workflow (submit, approve, reject, …).
- *
- * Empty in F1.4.1; populated by F1.4.4.
  */
-export {};
+export * from "./ports/gates";
+export {
+  SubmitDealService,
+  type SubmitDealInput,
+  type SubmitDealResult,
+} from "./services/SubmitDealService";
+export {
+  ApproveDealService,
+  type ApproveDealInput,
+  type ApproveDealResult,
+} from "./services/ApproveDealService";
+export {
+  RejectDealService,
+  type RejectDealInput,
+  type RejectDealResult,
+} from "./services/RejectDealService";
