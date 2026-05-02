@@ -8,3 +8,4 @@
  * @dealpad/application.
  */
 export * from "./shared";
+export * from "./deal";
