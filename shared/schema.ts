@@ -1,4 +1,32 @@
-import { pgTable, text, serial, integer, decimal, boolean, timestamp, jsonb, varchar, uniqueIndex } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, decimal, boolean, timestamp, jsonb, varchar, uniqueIndex, customType } from "drizzle-orm/pg-core";
+
+/**
+ * pgvector `vector(N)` column type for Drizzle (F2.1.2). The
+ * extension ships with `CREATE TYPE vector` of dimension N; we model
+ * it client-side as a `number[]` and serialize to the canonical
+ * "[a,b,c,...]" wire format. Read path tolerates both string and
+ * array shapes (driver versions differ).
+ *
+ * Usage: `embedding: vector("embedding", { dimensions: 1536 })`
+ */
+const vector = customType<{ data: number[]; driverData: string; config: { dimensions: number } }>({
+  dataType(config) {
+    return `vector(${config?.dimensions ?? 1536})`;
+  },
+  toDriver(value: number[]): string {
+    return `[${value.join(",")}]`;
+  },
+  fromDriver(value: unknown): number[] {
+    if (Array.isArray(value)) return value as number[];
+    if (typeof value === "string") {
+      // pgvector returns "[1,2,3]" — strip brackets, split, parse.
+      const stripped = value.replace(/^\[|\]$/g, "");
+      if (!stripped) return [];
+      return stripped.split(",").map((n) => parseFloat(n));
+    }
+    return [];
+  },
+});
 import { relations } from "drizzle-orm";
 
 export const clients = pgTable("clients", {
@@ -52,10 +80,14 @@ export const deals = pgTable("deals", {
   // used as a fast cache key for the similarity engine. The fingerprint
   // is a JSONB blob so the schema doesn't lock us into a specific
   // feature set; the IntelligenceEngine writes it on the same path that
-  // computes the deal's embedding. NULL until first compute. The
-  // matching `embedding vector(1536)` column lands in F2.1.2 (gated on
-  // pgvector being installed in the cluster).
+  // computes the deal's embedding. NULL until first compute.
   fingerprint: jsonb("fingerprint"),
+  // F2.1.2 — Deal embedding. 1536-dimensional dense vector produced by
+  // the IntelligenceEngine (text-embedding-3-small or equivalent) over
+  // the deal's title + scope summary + entity list. Indexed via HNSW
+  // for sub-500ms k-NN similarity search. NULL until first compute;
+  // background job back-fills on existing rows.
+  embedding: vector("embedding", { dimensions: 1536 }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
