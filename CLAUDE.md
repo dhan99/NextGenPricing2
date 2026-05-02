@@ -65,7 +65,7 @@ python3 scripts/audit/extract_schema.py    > docs/audit/schema_inventory.csv
 
 Stack: **React 19 + Vite + TS** (client) / **Express 5 on Node 22 + tsx** (server) / **Postgres + Drizzle ORM** (data) / **Tailwind 4 + shadcn-style Radix primitives** (UI). Routing via `wouter`, data fetching via `@tanstack/react-query`. No build step on the server in dev — `tsx` runs `server/index.ts` directly.
 
-Path aliases (vite + tsconfig): `@/*` → `client/src/*`, `@shared/*` → `shared/*`.
+Path aliases (vite + tsconfig): `@/*` → `client/src/*`, `@shared/*` → `shared/*`, `@dealpad/{domain,application,infrastructure}` → `packages/<name>/src` (DDD strangler-fig packages added in F1.4 — see "DDD strangler fig" below).
 
 ### Source-of-truth files
 
@@ -74,6 +74,9 @@ Path aliases (vite + tsconfig): `@/*` → `client/src/*`, `@shared/*` → `share
 - **`server/routes.ts`** — primary REST surface (~4000+ lines). Sub-domains (Dynamics/Intapp/Workday/Conga/Intake) each register their own routes via `registerXRoutes(app)` called from `registerRoutes()`.
 - **`server/lib/req.ts`** — `paramStr / paramInt / headerStr / queryStr` helpers. **Use these for every read of `req.params/.header/.query`** — never `parseInt(req.params.id)` or `req.header("...") || ...` directly. `@types/express` 5.x types those returns as `string | string[] | undefined` and the typecheck will fail. The helpers narrow safely.
 - **`shared/policy.ts`** — shared business policy constants used by both ends.
+- **`packages/domain/src/`** — pure domain model (F1.4). Value objects (`Money`, `Percentage`) live in `shared/`. Aggregates land in `deal/`, `pricing/`, etc. as the strangler fig progresses. **No I/O, no Drizzle, no Express.** Imported as `@dealpad/domain`.
+- **`packages/application/src/`** — use-case orchestrators (F1.4). One service per workflow (submit, approve, reject). Stitches domain + repositories + event bus. Imported as `@dealpad/application`.
+- **`packages/infrastructure/src/`** — concrete adapters (F1.4). Wraps existing Drizzle calls behind repository interfaces from `@dealpad/domain`. Imported as `@dealpad/infrastructure`.
 
 ### Server boot sequence (`server/index.ts:start()`)
 
@@ -144,6 +147,23 @@ If you add a column to `shared/schema.ts`, you **must** add the matching `ALTER 
 - **`onBlur`-only commit pattern is fragile on macOS.** Several inputs (Engagement Inputs, rate-override popover, scope-item adjusted hours) save on `onBlur`. macOS does not shift focus to a `<button>` on click, so the input never blurs and the value is lost when navigation unmounts the step. Mitigation in the wizard: nav buttons fire `flushPendingEdits` (`document.activeElement?.blur()`) on `onMouseDown`, which fires before `click` and triggers the input's blur handler. **Apply the same pattern to any new "navigate away" button that lives next to `onBlur`-committing inputs.** Better long-term fix: commit-on-change with debounce.
 - **Brand**: amber `#DA720F`, olive `#949300`, Roboto + Playfair Display. Tokens in `client/src/index.css`. UX references: Ramp.com (minimal/high-contrast) + Gusto.com (warm/sidebar/card hierarchy).
 - The `/architecture` Hub has 4 tabs (Overview / Interactive / AI Chat / Document); the Interactive tab's "External Integrations" sub-page renders Dynamics/Workday/Intapp, with Intapp revealing the deep-dive `ArchitectureIntappFederated.tsx` (federated reviewer model with server-side dedupe called out as a forward-looking gap).
+
+## DDD strangler fig (F1.4)
+
+A 6-slice refactor (`feat/F1.4-*`) extracts the deal aggregate behind a thin application-services layer, **one route at a time**, while every other handler in `server/routes.ts` stays unchanged. Layering:
+
+- **`packages/domain/`** — value objects + aggregates + domain events. Pure TypeScript; no imports of `drizzle-orm`, `pg`, `express`, or React. Tested in `tests/domain/`.
+- **`packages/application/`** — services that orchestrate use cases. Depends on `@dealpad/domain` interfaces (repositories, event bus); never imports `db` directly.
+- **`packages/infrastructure/`** — Drizzle-backed repository implementations + in-process event bus. The only place `@dealpad/domain` interfaces touch real I/O.
+
+**Conventions**:
+- Construct domain objects via factories (`Deal.fromPersistence(row)`); never `new`.
+- Repositories return aggregates, not Drizzle rows. Marshal at the boundary.
+- Domain methods return *outcomes* or throw `DomainError` — never `res.status()`.
+- Activity-log + integration-pushes (Dynamics/Workday/Intapp) stay in the application layer for now; they migrate to subscribers once the event bus is fully wired.
+- A route handler is "migrated" when its body is purely: parse req → call application service → marshal response.
+
+When adding behavior: prefer growing the domain layer over adding inline logic to `routes.ts`. Inline logic in `routes.ts` is grandfathered, not encouraged.
 
 ## Branching & PR rules (from `docs/refactoring/BRANCHING.md`)
 
