@@ -602,6 +602,29 @@ async function pushSchema() {
       updated_at TIMESTAMP DEFAULT NOW() NOT NULL
     );
 
+    -- Scope creep signals (F3.3). Heuristic detector writes one
+    -- row per (deal, kind) breach; status defaults to 'open'.
+    -- Detector dedupes against open rows on subsequent runs.
+    CREATE TABLE IF NOT EXISTS scope_creep_signals (
+      id SERIAL PRIMARY KEY,
+      deal_id INTEGER NOT NULL REFERENCES deals(id),
+      kind TEXT NOT NULL,
+      severity TEXT NOT NULL DEFAULT 'medium',
+      confidence DECIMAL(4,3) NOT NULL DEFAULT 0.500,
+      message TEXT NOT NULL,
+      evidence JSONB,
+      status TEXT NOT NULL DEFAULT 'open',
+      acknowledged_by TEXT,
+      acknowledged_at TIMESTAMP,
+      resolved_by TEXT,
+      resolved_at TIMESTAMP,
+      created_at TIMESTAMP DEFAULT NOW() NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS scope_creep_signals_deal_idx
+      ON scope_creep_signals (deal_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS scope_creep_signals_open_idx
+      ON scope_creep_signals (status) WHERE status = 'open';
+
     -- Collaborative scoping (F3.1). Schema-only foundation; the
     -- WebSocket + Yjs CRDT layer is intentionally not yet wired.
     -- documentState carries the serialized Yjs update vector
