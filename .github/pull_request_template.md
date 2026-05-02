@@ -51,7 +51,7 @@ client/src/components/entities/EntityTabs.tsx (NEW)
 
 - [ ] `docs/audit/api_inventory.csv` regenerated and committed
 - [ ] `docs/audit/schema_inventory.csv` regenerated and committed
-- [ ] `replit.md` / `PROJECT.md` updated if table or page count changed
+- [ ] `PROJECT.md` updated if table or page count changed
 
 ## Screenshots / output
 

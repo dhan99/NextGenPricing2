@@ -12,14 +12,14 @@ A **32-week strangler-fig refactor** is in progress (Phase 0 landed in commit `f
 
 | Doc | What it's for |
 |---|---|
-| `docs/audit/CURRENT_STATE_AUDIT.md` | **The headline.** 42 tables, 154 endpoints, 23 pages. Trust this over `replit.md` for counts — `replit.md` still says "13 tables", which is stale (called out in audit §10). |
+| `PROJECT.md` | The project's living index — current phase, active features, project structure, key routes, table count, integrations. Renamed from `replit.md` in May 2026; keep it current with any architectural change, new dependency, new route, new table, or new integration. |
+| `docs/audit/CURRENT_STATE_AUDIT.md` | The original headline audit (42 tables, 154 endpoints, 23 pages — captured pre-Phase-1). Trust `docs/audit/api_inventory.csv` and `schema_inventory.csv` for current counts; this doc is the architectural narrative + risk register. |
 | `docs/audit/AI_HEURISTICS.md` | What each `/api/ai/*` endpoint actually does (heuristics, not LLMs). Cited line numbers may have drifted; verify before quoting. |
 | `docs/audit/REPLIT_COUPLINGS.md` | Replit-specific code that needs to come out before AWS migration. Anything that only works on Replit goes on this list, not into the new code. |
 | `docs/audit/api_inventory.csv` / `schema_inventory.csv` | Auto-generated from the live tree by the extractor scripts. Re-run them in any PR that adds endpoints or tables (see Commands). |
 | `docs/refactoring/BACKLOG.md` | The 32-week roadmap. Every backlog item has an ID (`F0.x`, `F1.x`, …). |
 | `docs/refactoring/BRANCHING.md` | Branch + PR rules. **Binding.** See "Branching & PR rules" below. |
-| `replit.md` | Older living index. Still useful for routes/integration narrative, but the table/endpoint counts are stale — defer to the audit. |
-| `replit-project-rigor-playbook.md` | House rules. Most operative: **No silent fallbacks** (structured error codes, never swallow). **Smallest viable change** (no smuggled refactors). **Definition of done includes validation** (restart workflow, hit the path, read logs). **No emojis in product UI.** **Persona-aware UX.** |
+| `replit-project-rigor-playbook.md` | House rules. Most operative: **No silent fallbacks** (structured error codes, never swallow). **Smallest viable change** (no smuggled refactors). **Definition of done includes validation** (restart workflow, hit the path, read logs). **No emojis in product UI.** **Persona-aware UX.** Note: this doc still references the old `replit.md` filename — read those mentions as `PROJECT.md`. |
 
 ## Commands
 

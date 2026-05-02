@@ -1,18 +1,24 @@
 # DealPad - NextGenApp Pricing & Scoping 2.0
 
+> **File rename note (May 2026):** this file used to be `replit.md`. The
+> rename landed alongside the Phase 1 close-out — keep this name going
+> forward. `CLAUDE.md` is the AI-pair-programming guide; `PROJECT.md`
+> (this file) is the project's living index.
+
 ## Overview
 DealPad is a full-stack web application replacing Excel-based pricing and scoping workbooks for professional services firm Armanino LLP's Quote-to-Cash workflow. It demonstrates 5 AI-powered use cases across the entire vertical stack with a modern UX inspired by Ramp.com and Gusto.com.
 
 ## Current State
-- **Phase**: Working PoC with 5 AI use cases + RBAC + Analytics + Change Orders + Proposal Generation
-- **Active Features**: Login/Persona Selection, Dashboard, Deal List, 8-step Deal Wizard, Rate Card Admin, Scope Catalog Admin, Architecture Hub (4-tab), Analytics Dashboard, Change Order Management, PDF Proposal Generation
-- **AI Features**: Deal Similarity, Effort Estimation, Margin Advisor, Scenario Recommendation, Risk Summary, Architecture Chat
+- **Phase**: Phase 1 of the 32-week refactor complete (F1.1 Multi-entity worksheets, F1.2 Assembly expansion, F1.3 Batch renewals, F1.4 DDD Strangler-Fig start). Backlog: `docs/refactoring/BACKLOG.md`.
+- **Active Features**: Login/Persona Selection, Dashboard, Deal List, 8-step Deal Wizard, Rate Card Admin, Scope Catalog Admin, Architecture Hub (4-tab), Analytics Dashboard, Change Order Management, PDF Proposal Generation, Batch Renewal Processing (admin)
+- **AI Features**: Deal Similarity, Effort Estimation, Margin Advisor, Scenario Recommendation, Risk Summary, Architecture Chat (heuristics today; pgvector RAG slated for F2.1)
 - **Auth**: Role-based persona selection (PDL, SLL, PO, FIN, QRM, IT) with per-feature permissions
 
 ## Architecture
 - **Frontend**: React 19 + Vite + TypeScript + Tailwind CSS (client/src/)
-- **Backend**: Express.js on Node.js (server/)
+- **Backend**: Express.js 5 on Node.js 22 (server/, tsx in dev)
 - **Database**: PostgreSQL + Drizzle ORM (shared/schema.ts)
+- **Domain layer (F1.4)**: `packages/domain` (pure TS, no I/O), `packages/application` (use-case orchestrators), `packages/infrastructure` (Drizzle repos, in-process EventBus, outbox dispatcher). Wired via TS path aliases (`@dealpad/domain`, `@dealpad/application`, `@dealpad/infrastructure`).
 - **Styling**: Custom design tokens with Armanino brand colors (amber/orange #DA720F)
 
 ## Project Structure
@@ -20,17 +26,26 @@ DealPad is a full-stack web application replacing Excel-based pricing and scopin
 client/src/          - React frontend
   context/           - AuthContext (persona/RBAC state)
   components/layout/ - AppLayout, Sidebar
-  pages/             - Login, Dashboard, DealsList, DealDetail, NewDeal, RateCards, ScopeCatalogAdmin, ArchitectureHub, Architecture, ArchitectureInteractive, Analytics, ChangeOrders
+  pages/             - Login, Dashboard, DealsList, DealDetail, NewDeal, RateCards, ScopeCatalogAdmin, ArchitectureHub, Architecture, ArchitectureInteractive, Analytics, ChangeOrders, BatchRenewals
   hooks/use-api.ts   - All API hooks (React Query)
   lib/utils.ts       - Utility functions
   index.css          - Tailwind + design tokens
 server/              - Express backend
-  index.ts           - Server entry, schema push, seeding
-  routes.ts          - All API routes (CRUD + AI + Analytics + Change Orders + Proposal endpoints)
+  index.ts           - Server entry, schema push, seeding, outbox dispatch
+  routes.ts          - REST surface (CRUD + AI + Analytics + Change Orders + Proposal + Batch Renewals + DDD-migrated submit/approval endpoints)
   db.ts              - Database connection
   seed.ts            - Sample data seeding
+  services/          - Domain-adjacent services: pricing, AssemblyExpansion, BatchRenewal, dealServices (DI container), gates/, subscribers/
+  lib/req.ts         - paramStr/paramInt/headerStr/queryStr (Express 5.x type-safe extractors)
 shared/              - Shared code
-  schema.ts          - Drizzle ORM schema (all 48 tables + relations; see `docs/audit/schema_inventory.csv` for the full list)
+  schema.ts          - Drizzle ORM schema (all 49 tables + relations; see `docs/audit/schema_inventory.csv` for the full list)
+  policy.ts          - Approval-trigger constants used by both ends
+packages/            - DDD strangler-fig packages (F1.4)
+  domain/            - Money, Percentage, DealStatus, Deal aggregate, versioned events, errors
+  application/       - SubmitDealService, ApproveDealService, RejectDealService, gate ports
+  infrastructure/    - DrizzleDealRepository, InProcessEventBus, OutboxDispatcher
+services/            - Standalone workers (deployable independently)
+  batch-processor/   - Python + Celery + Redis worker for F1.3 batch renewals
 ```
 
 ## Key Routes
@@ -65,6 +80,14 @@ shared/              - Shared code
 - `POST /api/ai/scenario-recommendation` - AI scenario recommendation
 - `POST /api/ai/risk-summary` - AI risk assessment
 - `POST /api/ai/architecture-chat` - Architecture conversational AI (11 topics with live DB stats)
+- `POST /api/deals/:id/submit` - Submit deal for approval (Intapp gating, runs through `SubmitDealService`/F1.4)
+- `GET/POST /api/deals/:dealId/entities` - Multi-entity worksheets (F1.1)
+- `POST /api/deals/:dealId/scope-items/from-assembly` - Apply assembly template (F1.2)
+- `GET /api/assemblies` / `GET /api/assemblies/:id/components` / `POST /api/assemblies/:id/expand` - Assembly catalog + dry-run expansion (F1.2)
+- `GET/POST /api/batch-renewals` / `POST /api/batch-renewals/:id/start` / `GET /api/batch-renewals/:id/items` - Batch renewal jobs (F1.3)
+- `GET/POST /api/batch-adjustment-rules` - Reusable adjustment rules for batch renewals (F1.3)
+
+Authoritative endpoint list: `docs/audit/api_inventory.csv` (170 endpoints; regenerated by `python3 scripts/audit/extract_endpoints.py`).
 
 ## Database Tables (49 total — +1 in F1.1 for `deal_entities`, +2 in F1.2 for `assembly_templates` + `assembly_components`, +3 in F1.3 for `batch_renewal_jobs` + `batch_renewal_items` + `batch_adjustment_rules`, +1 in F1.4 for `domain_events_outbox`)
 
