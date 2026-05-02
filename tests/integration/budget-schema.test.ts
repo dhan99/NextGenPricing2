@@ -67,7 +67,7 @@ describe("F2.2.1 — budget schema", () => {
       .insert(deals)
       .values({
         title: `${RUN_TAG} Deal`,
-        dealNumber: `DL-TEST-${Date.now()}`,
+        dealNumber: `DL-TEST-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         clientId: client.id,
         status: "approved",
       })
