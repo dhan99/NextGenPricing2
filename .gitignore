@@ -137,3 +137,7 @@ dist
 # scripts/audit/smoke_test.sh writes server logs here.
 backups/
 .smoke-logs/
+# Python bytecode (services/batch-processor/, F1.3)
+__pycache__/
+*.py[cod]
+*$py.class

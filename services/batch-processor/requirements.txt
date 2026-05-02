@@ -1,0 +1,5 @@
+# F1.3 — batch renewal worker. Pinned to specific minor versions to
+# keep the Docker image reproducible across rebuilds.
+celery>=5.4,<6
+redis>=5.0,<6
+httpx>=0.27,<1
