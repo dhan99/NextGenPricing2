@@ -350,6 +350,7 @@ import {
 } from "./services/VoiceToScopeService";
 import { runOptimizer as runRateOptimizer } from "./services/RateOptimizerService";
 import { recordAi } from "./middleware/aiTelemetry";
+import { completeStructured, z as llmZ } from "./services/llm";
 import {
   ensureSession as ensureCollabSession,
   persistDocumentState as persistCollabDocumentState,
@@ -3758,6 +3759,11 @@ export function registerRoutes(app: Express) {
   });
 
   app.post("/api/ai/risk-summary", requirePerm("runAI"), async (req: Request, res: Response) => {
+    // F4.4.2 — Heuristic computes the baseline (riskLevel, factors,
+    // exec summary) deterministically; the LLM enriches the
+    // human-readable narrative + approval-likelihood band via
+    // completeStructured(). In simulated mode the stub matches the
+    // existing heuristic narrative exactly so output is byte-stable.
     const { dealId } = req.body;
     const deal = await db.query.deals.findFirst({
       where: eq(deals.id, dealId),
@@ -3770,9 +3776,9 @@ export function registerRoutes(app: Express) {
     const resolvedTarget = await resolveTargetForDeal(deal as any);
     const target = resolvedTarget.percent;
     const warnThreshold = Math.max(0, target - 10);
-    const riskLevel = margin < warnThreshold ? "High" : margin < target ? "Medium" : "Low";
+    const riskLevel: "Low" | "Medium" | "High" = margin < warnThreshold ? "High" : margin < target ? "Medium" : "Low";
 
-    const riskFactors = [];
+    const riskFactors: Array<{ factor: string; severity: string; detail: string }> = [];
     if (deal.complexity === "high" || deal.complexity === "very_high") {
       riskFactors.push({ factor: "High Complexity", severity: "medium", detail: "Project complexity increases delivery risk" });
     }
@@ -3788,7 +3794,64 @@ export function registerRoutes(app: Express) {
       riskFactors.push({ factor: "Strong Client Relationship", severity: "positive", detail: `${clientYears}-year relationship provides delivery confidence` });
     }
 
-    const narrative = `This $${parseFloat(deal.totalFee || "0").toLocaleString()} ${deal.serviceLine || "consulting"} engagement for ${deal.client?.name} represents a ${margin.toFixed(1)}% margin with ${parseFloat(deal.totalHours || "0").toLocaleString()} estimated hours. ${riskLevel === "Low" ? "The deal is well-positioned with acceptable margin and manageable complexity." : riskLevel === "Medium" ? "The deal has moderate risk factors that should be monitored during delivery." : "The deal has elevated risk factors requiring additional oversight and potential restructuring."} ${clientYears > 3 ? `The ${clientYears}-year client relationship provides a strong foundation for successful delivery.` : ""} Comparable deals in the ${deal.businessUnit || "practice"} have an 89% approval rate at this margin band.`;
+    // The heuristic narrative — matches the existing UI copy exactly.
+    const heuristicNarrative = `This $${parseFloat(deal.totalFee || "0").toLocaleString()} ${deal.serviceLine || "consulting"} engagement for ${deal.client?.name} represents a ${margin.toFixed(1)}% margin with ${parseFloat(deal.totalHours || "0").toLocaleString()} estimated hours. ${riskLevel === "Low" ? "The deal is well-positioned with acceptable margin and manageable complexity." : riskLevel === "Medium" ? "The deal has moderate risk factors that should be monitored during delivery." : "The deal has elevated risk factors requiring additional oversight and potential restructuring."} ${clientYears > 3 ? `The ${clientYears}-year client relationship provides a strong foundation for successful delivery.` : ""} Comparable deals in the ${deal.businessUnit || "practice"} have an 89% approval rate at this margin band.`;
+    const heuristicApprovalLikelihood = riskLevel === "Low" ? "High (89%)" : riskLevel === "Medium" ? "Moderate (72%)" : "Requires Review (45%)";
+
+    const NarrativeSchema = llmZ.object({
+      narrative: llmZ.string().min(20),
+      approvalLikelihood: llmZ.string(),
+      keyMessage: llmZ.string(),
+    });
+
+    const actor = (headerStr(req, "x-user-name") || "Unknown").trim();
+    let llmEnriched: { narrative: string; approvalLikelihood: string; keyMessage: string };
+    try {
+      const llmResult = await completeStructured({
+        operation: "risk_summary",
+        systemPrompt:
+          "You are an experienced Practice Lead writing a one-paragraph risk narrative for a professional services engagement. Be concise, specific, and use the deal's actual numbers.",
+        userPrompt: JSON.stringify({
+          deal: {
+            title: deal.title,
+            clientName: deal.client?.name,
+            totalFee: deal.totalFee,
+            marginPercent: deal.marginPercent,
+            targetMarginPercent: target,
+            complexity: deal.complexity,
+            businessUnit: deal.businessUnit,
+            serviceLine: deal.serviceLine,
+            totalHours: deal.totalHours,
+            clientRelationshipYears: clientYears,
+          },
+          riskLevel,
+          riskFactors,
+        }),
+        schema: NarrativeSchema,
+        schemaHint:
+          '{ narrative: string (1 paragraph, ≥20 chars), approvalLikelihood: string (e.g. "High (89%)"), keyMessage: string (one-line takeaway) }',
+        simulatedStub: {
+          narrative: heuristicNarrative,
+          approvalLikelihood: heuristicApprovalLikelihood,
+          keyMessage:
+            riskLevel === "Low"
+              ? "Approve as drafted; comparable to recent wins."
+              : riskLevel === "Medium"
+                ? "Approve with monitoring; flag the margin variance to the lead."
+                : "Restructure or escalate; current shape exceeds firm risk appetite.",
+        },
+        dealId: deal.id,
+        actor,
+      });
+      llmEnriched = llmResult.data;
+    } catch (err) {
+      // LLM failure must never block the route; fall back to heuristic.
+      llmEnriched = {
+        narrative: heuristicNarrative,
+        approvalLikelihood: heuristicApprovalLikelihood,
+        keyMessage: "(LLM enrichment unavailable; heuristic narrative shown.)",
+      };
+    }
 
     res.json({
       dealTitle: deal.title,
@@ -3805,8 +3868,9 @@ export function registerRoutes(app: Express) {
         dealType: deal.dealType,
         complexity: deal.complexity,
       },
-      narrative,
-      approvalLikelihood: riskLevel === "Low" ? "High (89%)" : riskLevel === "Medium" ? "Moderate (72%)" : "Requires Review (45%)",
+      narrative: llmEnriched.narrative,
+      approvalLikelihood: llmEnriched.approvalLikelihood,
+      keyMessage: llmEnriched.keyMessage,
     });
   });
 
