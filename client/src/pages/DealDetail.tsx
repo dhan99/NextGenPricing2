@@ -485,11 +485,22 @@ function ScopeStep({ deal }: { deal: any }) {
     return matchesSearch && matchesServiceLine(item);
   });
 
+  // F1.1.1 — Scope items already on the deal (used for the duplicate-add
+  // guard). We DON'T filter this set by activeEntityId so the catalog
+  // picker can still show "added" feedback for items already on any
+  // entity of the deal.
   const addedIds = new Set((scopeItems || []).map((si: any) => si.scopeItemId));
 
-  // Group deal scope items: parents (assemblies) followed by their children
+  // Group deal scope items: parents (assemblies) followed by their children.
+  // Filter to the active entity when one is selected — the EntityTabs above
+  // is the user's selector for which entity's scope they're editing. When
+  // activeEntityId is null (e.g. before EntityTabs has auto-selected), show
+  // every row so legacy un-bucketed items are still visible.
   const groupedScope = (() => {
-    const items = scopeItems || [];
+    const all = scopeItems || [];
+    const items = activeEntityId == null
+      ? all
+      : all.filter((si: any) => si.entityId === activeEntityId);
     const parents = items.filter((si: any) => si.scopeItem?.isAssembly);
     const orphans = items.filter((si: any) => !si.scopeItem?.isAssembly && !parents.some((p: any) => p.scopeItem?.id === si.scopeItem?.parentId));
     const childrenByParent = new Map<number, any[]>();
@@ -757,7 +768,7 @@ function ScopeStep({ deal }: { deal: any }) {
                 </div>
                 <button
                   disabled={addedIds.has(item.id)}
-                  onClick={() => addItem.mutate({ dealId: deal.id, data: { scopeItemId: item.id, adjustedHours: item.defaultHours, complexityMultiplier: "1.0" } })}
+                  onClick={() => addItem.mutate({ dealId: deal.id, data: { scopeItemId: item.id, adjustedHours: item.defaultHours, complexityMultiplier: "1.0", entityId: activeEntityId ?? undefined } })}
                   className={cn("p-1.5 rounded-lg transition-colors", addedIds.has(item.id) ? "text-success" : "text-muted-foreground hover:text-primary hover:bg-primary/10")}
                 >
                   {addedIds.has(item.id) ? <Check className="w-4 h-4" /> : <Plus className="w-4 h-4" />}

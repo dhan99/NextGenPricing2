@@ -255,4 +255,125 @@ describe("F1.1 — multi-entity routes", () => {
       expect(res.status).toBe(404);
     });
   });
+
+  // F1.1.1 — scope-item routes are now entity-aware: POST accepts an
+  // entityId (defaulting to the deal's primary entity), GET accepts
+  // ?entityId=N to filter. Validation rejects entity_ids that belong
+  // to a different deal.
+  describe("F1.1.1 — scope-item entity awareness", () => {
+    const createdScopeRowIds: number[] = [];
+    let secondaryEntityId: number | null = null;
+    let availableScopeItemIds: number[] = [];
+
+    beforeAll(async () => {
+      // Find scope-catalog items NOT yet on the test deal. We need fresh
+      // ones because dealScopeItems has a unique index on (deal_id,
+      // scope_item_id), so re-adding an existing combo just returns the
+      // existing row.
+      const { scopeCatalog, dealScopeItems } = await import("../../shared/schema");
+      const allCatalog = await db.select({ id: scopeCatalog.id, isActive: scopeCatalog.isActive })
+        .from(scopeCatalog);
+      const onDeal = await db.select({ scopeItemId: dealScopeItems.scopeItemId })
+        .from(dealScopeItems).where(eq(dealScopeItems.dealId, dealId));
+      const used = new Set(onDeal.map(r => r.scopeItemId));
+      availableScopeItemIds = allCatalog
+        .filter(c => c.isActive !== false && !used.has(c.id))
+        .map(c => c.id);
+
+      // Create a secondary entity on the test deal — needed so we can
+      // verify the POST routes the row to the right one and the GET
+      // filter actually filters something.
+      const res = await request(app).post(`/api/deals/${dealId}/entities`).set(HEADERS).send({
+        name: `${RUN_TAG}-scope-target`,
+      });
+      if (res.status === 201) secondaryEntityId = res.body.id;
+    });
+
+    afterAll(async () => {
+      const { dealScopeItems } = await import("../../shared/schema");
+      for (const id of createdScopeRowIds) {
+        try { await db.delete(dealScopeItems).where(eq(dealScopeItems.id, id)); } catch {}
+      }
+    });
+
+    it("POST /scope-items defaults entity_id to the deal's primary entity when omitted", async () => {
+      if (availableScopeItemIds.length === 0) return; // no fresh catalog ids — skip
+      const scopeItemId = availableScopeItemIds.shift()!;
+      const res = await request(app).post(`/api/deals/${dealId}/scope-items`).set(HEADERS).send({
+        scopeItemId, quantity: 1, complexityMultiplier: "1.0", cascade: false,
+      });
+      expect(res.status).toBe(201);
+      expect(res.body.entityId).toBeTruthy();
+      createdScopeRowIds.push(res.body.id);
+
+      // The default should match the primary entity for this deal.
+      const list = await request(app).get(`/api/deals/${dealId}/entities`).set(HEADERS);
+      const primary = list.body.find((e: any) => e.isPrimary);
+      expect(res.body.entityId).toBe(primary.id);
+    });
+
+    it("POST /scope-items honors a supplied entityId", async () => {
+      if (availableScopeItemIds.length === 0 || !secondaryEntityId) return;
+      const scopeItemId = availableScopeItemIds.shift()!;
+      const res = await request(app).post(`/api/deals/${dealId}/scope-items`).set(HEADERS).send({
+        scopeItemId, quantity: 1, complexityMultiplier: "1.0", cascade: false,
+        entityId: secondaryEntityId,
+      });
+      expect(res.status).toBe(201);
+      expect(res.body.entityId).toBe(secondaryEntityId);
+      createdScopeRowIds.push(res.body.id);
+    });
+
+    it("POST /scope-items rejects an entityId from a different deal (entity_deal_mismatch)", async () => {
+      if (availableScopeItemIds.length === 0) return;
+      // Find any entity whose deal_id is NOT our test deal.
+      const others = await db.select().from(dealEntities);
+      const foreign = others.find(e => e.dealId !== dealId);
+      if (!foreign) return; // single-deal DB; nothing to assert
+
+      const scopeItemId = availableScopeItemIds[0];
+      const res = await request(app).post(`/api/deals/${dealId}/scope-items`).set(HEADERS).send({
+        scopeItemId, quantity: 1, complexityMultiplier: "1.0", cascade: false,
+        entityId: foreign.id,
+      });
+      expect(res.status).toBe(400);
+      expect(res.body.code).toBe("entity_deal_mismatch");
+    });
+
+    it("POST /scope-items rejects malformed entityId", async () => {
+      const res = await request(app).post(`/api/deals/${dealId}/scope-items`).set(HEADERS).send({
+        scopeItemId: 1, entityId: "not-a-number",
+      });
+      expect(res.status).toBe(400);
+      expect(res.body.field).toBe("entityId");
+    });
+
+    it("GET /scope-items?entityId=N filters to that entity only", async () => {
+      if (!secondaryEntityId) return;
+      const res = await request(app)
+        .get(`/api/deals/${dealId}/scope-items?entityId=${secondaryEntityId}`)
+        .set(HEADERS);
+      expect(res.status).toBe(200);
+      // Every returned row must belong to the secondary entity.
+      for (const row of res.body) {
+        expect(row.entityId).toBe(secondaryEntityId);
+      }
+    });
+
+    it("GET /scope-items rejects garbage entityId", async () => {
+      const res = await request(app)
+        .get(`/api/deals/${dealId}/scope-items?entityId=oops`)
+        .set(HEADERS);
+      expect(res.status).toBe(400);
+    });
+
+    it("GET /scope-items without entityId returns the full deal list (legacy behavior)", async () => {
+      const filtered = await request(app)
+        .get(`/api/deals/${dealId}/scope-items?entityId=${secondaryEntityId ?? 0}`)
+        .set(HEADERS);
+      const all = await request(app).get(`/api/deals/${dealId}/scope-items`).set(HEADERS);
+      expect(all.status).toBe(200);
+      expect(filtered.body.length).toBeLessThanOrEqual(all.body.length);
+    });
+  });
 });

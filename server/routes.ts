@@ -1506,9 +1506,21 @@ export function registerRoutes(app: Express) {
   });
 
   // ========== DEAL SCOPE ITEMS ==========
+  // F1.1.1 — accept ?entityId=N to filter the list to one entity. Without
+  // it, returns every scope row on the deal (legacy behaviour). The client
+  // could filter the full list itself, but doing it on the server keeps
+  // payloads small for deals with dozens of entities × hundreds of rows.
   app.get("/api/deals/:dealId/scope-items", requirePerm("viewDeals"), async (req: Request, res: Response) => {
+    const dealId = paramInt(req, "dealId");
+    const rawEntity = req.query.entityId;
+    const entityId = typeof rawEntity === "string" && rawEntity.length > 0 ? parseInt(rawEntity, 10) : null;
+    if (entityId !== null && (!Number.isFinite(entityId) || entityId <= 0)) {
+      return res.status(400).json({ error: "entityId must be a positive integer" });
+    }
     const result = await db.query.dealScopeItems.findMany({
-      where: eq(dealScopeItems.dealId, paramInt(req, "dealId")),
+      where: entityId !== null
+        ? and(eq(dealScopeItems.dealId, dealId), eq(dealScopeItems.entityId, entityId))
+        : eq(dealScopeItems.dealId, dealId),
       with: { scopeItem: true },
     });
     res.json(result);
@@ -1517,6 +1529,30 @@ export function registerRoutes(app: Express) {
   app.post("/api/deals/:dealId/scope-items", requirePerm("editDeals"), async (req: Request, res: Response) => {
     const dealId = paramInt(req, "dealId");
     const cascade = req.body?.cascade !== false; // default true
+
+    // F1.1.1 — pin the row to an entity. The client passes activeEntityId
+    // from EntityTabs; if missing, default to the deal's primary entity so
+    // legacy callers (autonomous-agent draft, ERP rescaler, snapshot loader)
+    // keep working without modification.
+    let entityId: number | null = null;
+    if (req.body?.entityId != null) {
+      const requested = parseInt(String(req.body.entityId), 10);
+      if (!Number.isFinite(requested) || requested <= 0) {
+        return res.status(400).json({ error: "entityId must be a positive integer", field: "entityId" });
+      }
+      const [ent] = await db.select({ id: dealEntities.id, dealId: dealEntities.dealId })
+        .from(dealEntities).where(eq(dealEntities.id, requested));
+      if (!ent) return res.status(404).json({ error: "Entity not found", field: "entityId" });
+      if (ent.dealId !== dealId) {
+        return res.status(400).json({ error: "Entity belongs to a different deal", field: "entityId", code: "entity_deal_mismatch" });
+      }
+      entityId = ent.id;
+    } else {
+      const [primary] = await db.select({ id: dealEntities.id })
+        .from(dealEntities).where(and(eq(dealEntities.dealId, dealId), eq(dealEntities.isPrimary, true)));
+      entityId = primary?.id ?? null;
+    }
+
     const [check] = await db.select({ isActive: scopeCatalog.isActive, code: scopeCatalog.code })
       .from(scopeCatalog).where(eq(scopeCatalog.id, req.body.scopeItemId));
     if (!check) return res.status(404).json({ error: "Scope item not found" });
@@ -1528,6 +1564,7 @@ export function registerRoutes(app: Express) {
       adjustedHours: req.body.adjustedHours,
       complexityMultiplier: req.body.complexityMultiplier ?? "1.0",
       notes: req.body.notes,
+      entityId,
     }).onConflictDoNothing({ target: [dealScopeItems.dealId, dealScopeItems.scopeItemId] }).returning();
     if (!item) {
       const [existingRow] = await db.select().from(dealScopeItems)
@@ -1548,6 +1585,9 @@ export function registerRoutes(app: Express) {
           const [ci] = await db.insert(dealScopeItems).values({
             dealId, scopeItemId: child.id, quantity: 1,
             adjustedHours: child.defaultHours, complexityMultiplier: "1.0",
+            // F1.1.1 — cascaded children inherit the parent assembly's
+            // entityId so per-entity rollups stay consistent.
+            entityId,
           }).onConflictDoNothing({ target: [dealScopeItems.dealId, dealScopeItems.scopeItemId] }).returning();
           if (ci) cascaded.push(ci);
         }
