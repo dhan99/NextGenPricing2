@@ -332,6 +332,11 @@ import {
   persistAndAlert,
 } from "./services/BudgetMonitorService";
 import { suggestTimeEntry, snapToQuarterHour } from "./services/TimeEntryService";
+import {
+  applyFeeArrangement,
+  ALL_FEE_ARRANGEMENTS,
+  isFeeArrangement,
+} from "./services/feeArrangements";
 
 // (former inline definitions of DealTotals / computeDealTotalsFromLines /
 // reconcileLine / backfillDealTotals / persistDealTotals / recalcPricingFromScope
@@ -5547,6 +5552,78 @@ export function registerRoutes(app: Express) {
       .set(patch)
       .where(eq(budgetAlerts.id, id))
       .returning();
+    res.json(updated);
+  });
+
+  // ========== FEE ARRANGEMENTS (F2.4) ==========
+  // Compute the deal's projected totals under the configured fee
+  // arrangement. Pricing-line based (legacy T&M) totals come from
+  // computeDealTotalsFromLines; applyFeeArrangement layers the
+  // arrangement-specific override on top.
+
+  // Returns the list of supported arrangements (UI picker's source).
+  app.get("/api/fee-arrangements", requirePerm("viewDeals"), async (_req: Request, res: Response) => {
+    res.json(ALL_FEE_ARRANGEMENTS);
+  });
+
+  // Per-deal projection. Includes baseTotals (legacy T&M math) +
+  // adjustedTotals (arrangement-applied) + arrangement-specific meta.
+  app.get("/api/deals/:dealId/fee-projection", requirePerm("viewDeals"), async (req: Request, res: Response) => {
+    const dealId = paramInt(req, "dealId");
+    const [deal] = await db.select().from(deals).where(eq(deals.id, dealId));
+    if (!deal) return res.status(404).json({ error: "Deal not found" });
+    const lines = await db.select().from(pricingLines).where(eq(pricingLines.dealId, dealId));
+    const baseTotals = computeDealTotalsFromLines(lines, (deal as { engagementInputs?: unknown }).engagementInputs || {});
+    const projection = applyFeeArrangement(baseTotals, {
+      feeArrangement: deal.feeArrangement,
+      fixedFeeAmount: deal.fixedFeeAmount,
+      cappedFeeAmount: deal.cappedFeeAmount,
+      contingentFeePercent: deal.contingentFeePercent,
+      contingentFeeBase: deal.contingentFeeBase,
+      retainerAmount: deal.retainerAmount,
+      successFeePercent: deal.successFeePercent,
+    });
+    res.json(projection);
+  });
+
+  // PATCH the fee arrangement + the relevant amount/percent fields.
+  // Validates that `feeArrangement` is one of the canonical values
+  // and that amount/percent fields are non-negative when supplied.
+  app.patch("/api/deals/:dealId/fee-arrangement", requirePerm("editDeals"), async (req: Request, res: Response) => {
+    const dealId = paramInt(req, "dealId");
+    const body = req.body || {};
+    if (!isFeeArrangement(body.feeArrangement)) {
+      return res.status(400).json({
+        error: `feeArrangement must be one of: ${ALL_FEE_ARRANGEMENTS.join(", ")}`,
+        field: "feeArrangement",
+      });
+    }
+    const NUMERIC_FIELDS = [
+      "fixedFeeAmount",
+      "cappedFeeAmount",
+      "contingentFeePercent",
+      "retainerAmount",
+      "successFeePercent",
+    ] as const;
+    const patch: Record<string, unknown> = { feeArrangement: body.feeArrangement };
+    for (const f of NUMERIC_FIELDS) {
+      if (body[f] === undefined) continue;
+      if (body[f] === null) {
+        patch[f] = null;
+        continue;
+      }
+      const n = parseFloat(String(body[f]));
+      if (!Number.isFinite(n) || n < 0) {
+        return res.status(400).json({ error: `${f} must be a non-negative number`, field: f });
+      }
+      patch[f] = String(n);
+    }
+    if (body.contingentFeeBase !== undefined) {
+      patch.contingentFeeBase = body.contingentFeeBase ? String(body.contingentFeeBase) : null;
+    }
+    patch.updatedAt = new Date();
+    const [updated] = await db.update(deals).set(patch).where(eq(deals.id, dealId)).returning();
+    if (!updated) return res.status(404).json({ error: "Deal not found" });
     res.json(updated);
   });
 
