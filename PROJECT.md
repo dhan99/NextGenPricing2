@@ -80,6 +80,9 @@ services/            - Standalone workers (deployable independently)
 - `POST /api/ai/scenario-recommendation` - AI scenario recommendation
 - `POST /api/ai/risk-summary` - AI risk assessment
 - `POST /api/ai/architecture-chat` - Architecture conversational AI (11 topics with live DB stats)
+- `POST /api/ai/deal-similarity` - **F2.1.4 — pgvector k-NN.** Anchor on `dealId` (preferred) or fall back to `clientId`/`serviceLine`/`businessUnit` for a virtual-anchor query. Heuristic fallback if pgvector unavailable. Returns `{ similarDeals, insights: { mode: "knn" | "heuristic", ... } }`.
+- `POST /api/admin/intelligence/backfill` - Bulk recompute fingerprint + embedding for every deal that's missing one (manageRateCards-gated). Idempotent under no concurrent writes.
+- `POST /api/deals/:id/intelligence/recompute` - Single-deal recompute (editDeals-gated).
 - `POST /api/deals/:id/submit` - Submit deal for approval (Intapp gating, runs through `SubmitDealService`/F1.4)
 - `GET/POST /api/deals/:dealId/entities` - Multi-entity worksheets (F1.1)
 - `POST /api/deals/:dealId/scope-items/from-assembly` - Apply assembly template (F1.2)

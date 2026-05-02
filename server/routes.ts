@@ -320,6 +320,13 @@ import {
 import { expandAssembly } from "./services/AssemblyExpansionService";
 import { createBatchRenewalJob, runBatchRenewalJob } from "./services/BatchRenewalService";
 import { getDealServices } from "./services/dealServices";
+import {
+  backfillIntelligence,
+  buildDealText,
+  computeEmbedding,
+  findSimilar,
+  recomputeForDeal,
+} from "./services/IntelligenceEngine";
 
 // (former inline definitions of DealTotals / computeDealTotalsFromLines /
 // reconcileLine / backfillDealTotals / persistDealTotals / recalcPricingFromScope
@@ -3326,42 +3333,182 @@ export function registerRoutes(app: Express) {
   // ========== AI ENDPOINTS ==========
 
   app.post("/api/ai/deal-similarity", requirePerm("runAI"), async (req: Request, res: Response) => {
-    const { clientId, serviceLine, businessUnit } = req.body;
-    const similarDeals = await db.query.deals.findMany({
-      where: and(
-        eq(deals.clientId, clientId),
-        eq(deals.status, "approved"),
-      ),
-      with: { client: true },
-      limit: 3,
-    });
+    // F2.1.4: pgvector k-NN via IntelligenceEngine.
+    //
+    // Request:
+    //   { dealId?, clientId?, serviceLine?, businessUnit?, k?, onlyApproved? }
+    //   - dealId  → anchor on that deal (preferred path)
+    //   - else    → build a "virtual" anchor from the form fields and
+    //               run k-NN on its embedding (legacy callers that
+    //               don't have a deal id yet)
+    //
+    // Response shape is unchanged from the heuristic version
+    // ({ similarDeals, insights }) so existing UI continues to work.
+    // Falls back to the old client-match heuristic if pgvector isn't
+    // installed or the embedding pipeline returns nothing.
+    const { dealId, clientId, serviceLine, businessUnit, k: rawK, onlyApproved } = req.body || {};
+    const k = Number.isFinite(parseInt(String(rawK ?? ""), 10))
+      ? Math.max(1, Math.min(20, parseInt(String(rawK), 10)))
+      : 5;
+    const onlyApprovedBool = onlyApproved !== false; // default true
 
-    const allDeals = await db.query.deals.findMany({
-      where: eq(deals.status, "approved"),
-      with: { client: true },
-      limit: 5,
-    });
-
-    const dealsToAnalyze = similarDeals.length > 0 ? similarDeals : allDeals;
-    const avgMargin = dealsToAnalyze.reduce((sum, d) => sum + parseFloat(d.marginPercent || "0"), 0) / (dealsToAnalyze.length || 1);
-    const avgFee = dealsToAnalyze.reduce((sum, d) => sum + parseFloat(d.totalFee || "0"), 0) / (dealsToAnalyze.length || 1);
-
-    res.json({
-      similarDeals: dealsToAnalyze.map(d => ({
+    const buildHeuristicFallback = async () => {
+      const matches = clientId
+        ? await db.query.deals.findMany({
+            where: and(eq(deals.clientId, clientId), eq(deals.status, "approved")),
+            with: { client: true },
+            limit: 3,
+          })
+        : [];
+      const fillIn = matches.length > 0
+        ? matches
+        : await db.query.deals.findMany({
+            where: eq(deals.status, "approved"),
+            with: { client: true },
+            limit: k,
+          });
+      return fillIn.map((d) => ({
         dealNumber: d.dealNumber,
         title: d.title,
         clientName: d.client?.name,
         totalFee: d.totalFee,
         marginPercent: d.marginPercent,
         totalHours: d.totalHours,
-      })),
+        distance: null as number | null,
+      }));
+    };
+
+    type Result = {
+      dealNumber: string;
+      title: string;
+      clientName?: string | null;
+      totalFee: string | null;
+      marginPercent: string | null;
+      totalHours?: string | null;
+      distance: number | null;
+    };
+
+    let results: Result[] = [];
+    let mode: "knn" | "heuristic" = "heuristic";
+
+    try {
+      const parsedDealId = dealId != null ? parseInt(String(dealId), 10) : NaN;
+      if (Number.isFinite(parsedDealId) && parsedDealId > 0) {
+        const knn = await findSimilar(parsedDealId, k, { onlyApproved: onlyApprovedBool });
+        if (knn.length > 0) {
+          // Hydrate clientName via a single batched read (small set)
+          const ids = knn.map((r) => r.clientId);
+          const clientRows = ids.length
+            ? await db.query.clients.findMany({ where: inArray(clients.id, ids) })
+            : [];
+          const clientById = new Map(clientRows.map((c) => [c.id, c.name]));
+          const dealRows = await db.query.deals.findMany({
+            where: inArray(deals.id, knn.map((r) => r.dealId)),
+          });
+          const dealById = new Map(dealRows.map((d) => [d.id, d]));
+          results = knn.map((r) => ({
+            dealNumber: r.dealNumber,
+            title: r.title,
+            clientName: clientById.get(r.clientId) ?? null,
+            totalFee: r.totalFee,
+            marginPercent: r.marginPercent,
+            totalHours: dealById.get(r.dealId)?.totalHours ?? null,
+            distance: r.distance,
+          }));
+          mode = "knn";
+        }
+      } else if (clientId || serviceLine || businessUnit) {
+        // Virtual-anchor path: synthesize a text + embedding from
+        // the form fields, then query pgvector directly. Avoids
+        // creating a deal just to find similar ones.
+        const text = buildDealText({
+          title: "",
+          businessUnit,
+          serviceLine,
+          scopeNames: [],
+        });
+        if (text.trim()) {
+          const probe = await computeEmbedding(text);
+          const literal = `[${probe.join(",")}]`;
+          const conds = [isNotNull(deals.embedding)];
+          if (onlyApprovedBool) conds.push(eq(deals.status, "approved"));
+          const rows = await db
+            .select({
+              id: deals.id,
+              dealNumber: deals.dealNumber,
+              title: deals.title,
+              clientId: deals.clientId,
+              totalFee: deals.totalFee,
+              marginPercent: deals.marginPercent,
+              totalHours: deals.totalHours,
+              distance: sql<number>`(${deals.embedding} <-> ${literal}::vector)`,
+            })
+            .from(deals)
+            .where(and(...conds))
+            .orderBy(sql`(${deals.embedding} <-> ${literal}::vector) ASC`)
+            .limit(k);
+          if (rows.length > 0) {
+            const clientRows = await db.query.clients.findMany({
+              where: inArray(clients.id, rows.map((r) => r.clientId)),
+            });
+            const clientById = new Map(clientRows.map((c) => [c.id, c.name]));
+            results = rows.map((r) => ({
+              dealNumber: r.dealNumber,
+              title: r.title,
+              clientName: clientById.get(r.clientId) ?? null,
+              totalFee: r.totalFee,
+              marginPercent: r.marginPercent,
+              totalHours: r.totalHours,
+              distance: Number(r.distance),
+            }));
+            mode = "knn";
+          }
+        }
+      }
+    } catch (err) {
+      // pgvector might not be installed — fall through to heuristic.
+      console.warn("[deal-similarity] kNN path failed, falling back to heuristic:", err);
+    }
+
+    if (results.length === 0) {
+      results = await buildHeuristicFallback();
+    }
+
+    const avgMargin = results.reduce((s, r) => s + parseFloat(r.marginPercent || "0"), 0) / (results.length || 1);
+    const avgFee = results.reduce((s, r) => s + parseFloat(r.totalFee || "0"), 0) / (results.length || 1);
+
+    res.json({
+      similarDeals: results,
       insights: {
         averageMargin: avgMargin.toFixed(1),
         averageFee: avgFee.toFixed(0),
-        dealCount: dealsToAnalyze.length,
-        recommendation: `Based on ${dealsToAnalyze.length} similar ${serviceLine || "consulting"} engagements, the average margin is ${avgMargin.toFixed(1)}% with an average fee of $${avgFee.toLocaleString()}. Consider using these benchmarks as a starting point for your pricing strategy.`,
+        dealCount: results.length,
+        recommendation: `Based on ${results.length} ${mode === "knn" ? "vector-similar" : "comparable"} ${serviceLine || "consulting"} engagement(s), the average margin is ${avgMargin.toFixed(1)}% with an average fee of $${avgFee.toLocaleString()}. Consider using these benchmarks as a starting point for your pricing strategy.`,
+        mode,
       },
     });
+  });
+
+  // F2.1.4 — operator endpoint to (re)compute fingerprint + embedding
+  // for every deal with a missing column. Idempotent. Returns counts.
+  // Useful after bulk imports or after toggling INTELLIGENCE_MODE.
+  app.post("/api/admin/intelligence/backfill", requirePerm("manageRateCards"), async (_req: Request, res: Response) => {
+    try {
+      const result = await backfillIntelligence();
+      res.json(result);
+    } catch (err: unknown) {
+      const e = err as { message?: string };
+      res.status(500).json({ error: e?.message || "Backfill failed", code: "intelligence_backfill_error" });
+    }
+  });
+
+  // F2.1.4 — single-deal recompute. Used by ops + by the UI's
+  // "Refresh similarity" button when added.
+  app.post("/api/deals/:id/intelligence/recompute", requirePerm("editDeals"), async (req: Request, res: Response) => {
+    const dealId = paramInt(req, "id");
+    const result = await recomputeForDeal(dealId);
+    if (!result.updated) return res.status(404).json({ error: "Deal not found" });
+    res.json(result);
   });
 
   app.post("/api/ai/effort-estimation", requirePerm("runAI"), async (req: Request, res: Response) => {
