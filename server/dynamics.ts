@@ -1,6 +1,7 @@
 import type { Request, Response, Express } from "express";
 import { db } from "./db";
 import { requirePerm, requireAnyPerm } from "./rbac";
+import { paramInt } from "./lib/req";
 import {
   clients, deals, dynamicsAccounts, dynamicsOpportunities, dynamicsSyncLog,
   dynamicsSettings, dynamicsOwners, approvals, activityLog,
@@ -399,7 +400,7 @@ export function registerDynamicsRoutes(app: Express) {
   });
 
   app.get("/api/dynamics/accounts/:id", requirePerm("viewDeals"), async (req, res) => {
-    const id = parseInt(req.params.id);
+    const id = paramInt(req, "id");
     if (isNaN(id)) return res.status(400).json({ error: "Invalid id" });
     const [row] = await db.select().from(dynamicsAccounts).where(eq(dynamicsAccounts.id, id));
     if (!row) return res.status(404).json({ error: "Not found" });
@@ -455,7 +456,7 @@ export function registerDynamicsRoutes(app: Express) {
   });
 
   app.post("/api/dynamics/opportunities/:id/unlink", requirePerm("editDeals"), async (req, res) => {
-    const id = parseInt(req.params.id);
+    const id = paramInt(req, "id");
     if (Number.isNaN(id)) return res.status(400).json({ error: "Invalid id" });
     const result = await unlinkOpportunity(id, req.body?.userName);
     if (!result.ok) return res.status(400).json({ error: result.reason || "unlink-failed" });
@@ -466,7 +467,7 @@ export function registerDynamicsRoutes(app: Express) {
   // Reuses the existing `rejected` revision path — PDL can amend and re-submit
   // through the standard approval workflow. Auto-push fans out the stage update.
   app.post("/api/dynamics/opportunities/:id/send-back", requirePerm("editDeals"), async (req, res) => {
-    const id = parseInt(req.params.id);
+    const id = paramInt(req, "id");
     if (Number.isNaN(id)) return res.status(400).json({ error: "Invalid id" });
     const reason = (req.body?.reason || "").toString().trim();
     const userName = (req.body?.userName || "Sales").toString();
@@ -621,7 +622,7 @@ export function registerDynamicsRoutes(app: Express) {
 
   // ============ WRITE: Account edit ============
   app.patch("/api/dynamics/accounts/:id", requirePerm("editDeals"), async (req, res) => {
-    const id = parseInt(req.params.id);
+    const id = paramInt(req, "id");
     if (isNaN(id)) return res.status(400).json({ error: "Invalid id" });
     const allowed = [
       "name", "industry", "industryCode", "segment", "annualRevenue", "numberOfEmployees",
@@ -650,7 +651,7 @@ export function registerDynamicsRoutes(app: Express) {
 
   // ============ WRITE: Opportunity edit ============
   app.patch("/api/dynamics/opportunities/:id", requirePerm("editDeals"), async (req, res) => {
-    const id = parseInt(req.params.id);
+    const id = paramInt(req, "id");
     if (isNaN(id)) return res.status(400).json({ error: "Invalid id" });
     const allowed = ["name", "estimatedValue", "stage", "probability", "estimatedCloseDate",
                      "ownerName", "forecastCategory", "rating"];
@@ -683,7 +684,7 @@ export function registerDynamicsRoutes(app: Express) {
 
   // ============ WRITE: Import opportunity → DealPad draft ============
   app.post("/api/dynamics/opportunities/:id/import", requirePerm("createDeals"), async (req, res) => {
-    const id = parseInt(req.params.id);
+    const id = paramInt(req, "id");
     if (isNaN(id)) return res.status(400).json({ error: "Invalid id" });
     const [opp] = await db.select().from(dynamicsOpportunities).where(eq(dynamicsOpportunities.id, id));
     if (!opp) return res.status(404).json({ error: "Opportunity not found" });
@@ -755,7 +756,7 @@ export function registerDynamicsRoutes(app: Express) {
 
   // ============ WRITE: Manual push deal → D365 ============
   app.post("/api/dynamics/deals/:id/push", requirePerm("editDeals"), async (req, res) => {
-    const id = parseInt(req.params.id);
+    const id = paramInt(req, "id");
     if (isNaN(id)) return res.status(400).json({ error: "Invalid id" });
     const result = await pushDealToDynamics(id, req.body?.userName, "manual");
     if (!result.ok) return res.status(404).json(result);

@@ -2,6 +2,7 @@ import { Express, Request, Response } from "express";
 import { db } from "./db";
 import { eq, desc, sql, and } from "drizzle-orm";
 import { requirePerm, requireAnyPerm } from "./rbac";
+import { paramInt, headerStr } from "./lib/req";
 import {
   intappSettings, intappScreenings, intappHits, intappMitigations, intappEvents,
   deals, clients,
@@ -962,8 +963,8 @@ export function startNightlyRescreenLoop() {
 // trusted for authorization decisions.
 // ====================================================================
 function identityFrom(req: Request): { name: string | null; role: string | null } {
-  const name = (req.header("x-user-name") || "").trim() || null;
-  const role = ((req.header("x-user-role") || "").trim().toLowerCase()) || null;
+  const name = headerStr(req, "x-user-name").trim() || null;
+  const role = headerStr(req, "x-user-role").trim().toLowerCase() || null;
   return { name, role };
 }
 
@@ -1182,7 +1183,7 @@ export function registerIntappRoutes(app: Express) {
   });
 
   app.get("/api/intapp/screenings/:id", requirePerm("viewRiskSummary"), async (req: Request, res: Response) => {
-    const id = parseInt(req.params.id);
+    const id = paramInt(req, "id");
     if (isNaN(id)) return res.status(400).json({ error: "Invalid id" });
     const [s] = await db.select().from(intappScreenings).where(eq(intappScreenings.id, id));
     if (!s) return res.status(404).json({ error: "Screening not found" });
@@ -1194,7 +1195,7 @@ export function registerIntappRoutes(app: Express) {
   });
 
   app.get("/api/intapp/deals/:dealId/screening", requirePerm("viewDeals"), async (req, res) => {
-    const dealId = parseInt(req.params.dealId);
+    const dealId = paramInt(req, "dealId");
     if (isNaN(dealId)) return res.status(400).json({ error: "Invalid dealId" });
     const screening = await getLatestScreening(dealId);
     res.json(screening);
@@ -1203,7 +1204,7 @@ export function registerIntappRoutes(app: Express) {
   app.post("/api/intapp/deals/:dealId/screen", requirePerm("editDeals"), async (req: Request, res: Response) => {
     const id = requireRoles(req, res, ["qrm", "pdl", "sll", "it"]);
     if (!id) return;
-    const dealId = parseInt(req.params.dealId);
+    const dealId = paramInt(req, "dealId");
     if (isNaN(dealId)) return res.status(400).json({ error: "Invalid dealId" });
     try {
       const { response } = await runScreeningForDeal(dealId, id.name, "manual");
@@ -1218,7 +1219,7 @@ export function registerIntappRoutes(app: Express) {
   app.post("/api/intapp/screenings/:id/recheck", requirePerm("editDeals"), async (req: Request, res: Response) => {
     const id = requireRoles(req, res, ["qrm", "pdl", "sll", "it"]);
     if (!id) return;
-    const screeningId = parseInt(req.params.id);
+    const screeningId = paramInt(req, "id");
     const [s] = await db.select().from(intappScreenings).where(eq(intappScreenings.id, screeningId));
     if (!s) return res.status(404).json({ error: "Screening not found" });
     try {
@@ -1231,7 +1232,7 @@ export function registerIntappRoutes(app: Express) {
 
   // -------- Mitigations --------
   app.get("/api/intapp/screenings/:id/mitigations", requirePerm("viewRiskSummary"), async (req, res) => {
-    const id = parseInt(req.params.id);
+    const id = paramInt(req, "id");
     const rows = await db.select().from(intappMitigations)
       .where(eq(intappMitigations.screeningId, id))
       .orderBy(desc(intappMitigations.createdAt));
@@ -1241,7 +1242,7 @@ export function registerIntappRoutes(app: Express) {
   app.post("/api/intapp/screenings/:id/mitigations", requirePerm("editDeals"), async (req: Request, res: Response) => {
     const id = requireRoles(req, res, ["qrm", "pdl", "sll"]);
     if (!id) return;
-    const screeningId = parseInt(req.params.id);
+    const screeningId = paramInt(req, "id");
     const { hitId, action, notes, status } = req.body || {};
     if (!action) return res.status(400).json({ error: "action is required" });
     // Integrity: if hitId is provided, ensure it belongs to this screening.
@@ -1279,7 +1280,7 @@ export function registerIntappRoutes(app: Express) {
   app.patch("/api/intapp/mitigations/:id", requirePerm("editDeals"), async (req: Request, res: Response) => {
     const id = requireRoles(req, res, ["qrm", "pdl", "sll"]);
     if (!id) return;
-    const mitId = parseInt(req.params.id);
+    const mitId = paramInt(req, "id");
     const patch: any = {};
     if (req.body.status) {
       patch.status = req.body.status;
@@ -1313,7 +1314,7 @@ export function registerIntappRoutes(app: Express) {
   app.post("/api/intapp/mitigations/:id/push", requirePerm("editDeals"), async (req: Request, res: Response) => {
     const id = requireRoles(req, res, ["qrm", "pdl", "sll"]);
     if (!id) return;
-    const mitId = parseInt(req.params.id);
+    const mitId = paramInt(req, "id");
     const result = await runPushMitigation(mitId, id.name);
     if (!result.ok) return res.status(409).json(result);
     res.json(result);
@@ -1323,7 +1324,7 @@ export function registerIntappRoutes(app: Express) {
   app.post("/api/intapp/screenings/:id/push-outcome", requirePerm("editDeals"), async (req: Request, res: Response) => {
     const id = requireRoles(req, res, ["qrm", "pdl", "sll", "fin"]);
     if (!id) return;
-    const sid = parseInt(req.params.id);
+    const sid = paramInt(req, "id");
     const decision = String(req.body?.decision || "").toLowerCase();
     if (!["approved", "rejected", "withdrawn"].includes(decision)) {
       return res.status(400).json({ error: "decision must be 'approved' | 'rejected' | 'withdrawn'" });
@@ -1371,9 +1372,9 @@ export function registerIntappRoutes(app: Express) {
   };
 
   app.post("/api/intapp/screenings/:id/override", requirePerm("approveDeals"), (req: Request, res: Response) =>
-    overrideHandler(req, res, { screeningId: parseInt(req.params.id) }));
+    overrideHandler(req, res, { screeningId: paramInt(req, "id") }));
   app.post("/api/intapp/deals/:dealId/override", requirePerm("approveDeals"), (req: Request, res: Response) =>
-    overrideHandler(req, res, { dealId: parseInt(req.params.dealId) }));
+    overrideHandler(req, res, { dealId: paramInt(req, "dealId") }));
 
   // -------- Events / audit log --------
   app.get("/api/intapp/events", requirePerm("viewRiskSummary"), async (req, res) => {

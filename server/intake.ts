@@ -2,6 +2,7 @@ import { Express, Request, Response } from "express";
 import { db } from "./db";
 import { eq, desc, sql, and } from "drizzle-orm";
 import { requirePerm } from "./rbac";
+import { paramStr, paramInt, headerStr } from "./lib/req";
 import {
   intakeRequests, intakeExtractions, intakeApprovals, intakeEvents,
   intappSettings, intappScreenings,
@@ -13,8 +14,8 @@ import { runScreeningForDeal, getLatestScreening } from "./intapp";
 // Identity helper (mirrors intapp.ts)
 // ====================================================================
 function requireRoles(req: Request, res: Response, roles: string[]) {
-  const role = (req.header("x-user-role") || "").toLowerCase();
-  const name = req.header("x-user-name") || "Unknown";
+  const role = headerStr(req, "x-user-role").toLowerCase();
+  const name = headerStr(req, "x-user-name") || "Unknown";
   if (!role || !roles.includes(role)) {
     res.status(403).json({ error: `Requires one of: ${roles.join(", ")}` });
     return null;
@@ -412,7 +413,7 @@ export function registerIntakeRoutes(app: Express) {
 
   // Detail
   app.get("/api/intake/requests/:id", requirePerm("viewRiskSummary"), async (req, res) => {
-    const id = parseInt(req.params.id);
+    const id = paramInt(req, "id");
     if (isNaN(id)) return res.status(400).json({ error: "Invalid id" });
     const detail = await getRequestDetail(id);
     if (!detail) return res.status(404).json({ error: "Intake request not found" });
@@ -421,7 +422,7 @@ export function registerIntakeRoutes(app: Express) {
 
   // Lookup-by-deal (used from deal detail)
   app.get("/api/intake/deals/:dealId/request", requirePerm("viewDeals"), async (req, res) => {
-    const dealId = parseInt(req.params.dealId);
+    const dealId = paramInt(req, "dealId");
     if (isNaN(dealId)) return res.status(400).json({ error: "Invalid dealId" });
     const [r] = await db.select().from(intakeRequests).where(eq(intakeRequests.dealId, dealId));
     if (!r) return res.json(null);
@@ -432,7 +433,7 @@ export function registerIntakeRoutes(app: Express) {
   app.post("/api/intake/deals/:dealId/open", requirePerm("editDeals"), async (req, res) => {
     const id = requireRoles(req, res, ["pdl", "sll", "qrm", "it"]);
     if (!id) return;
-    const dealId = parseInt(req.params.dealId);
+    const dealId = paramInt(req, "dealId");
     if (isNaN(dealId)) return res.status(400).json({ error: "Invalid dealId" });
     try {
       const reqRow = await ensureIntakeRequest(dealId, id.name);
@@ -447,9 +448,9 @@ export function registerIntakeRoutes(app: Express) {
   app.post("/api/intake/extractions/:id/:action", requirePerm("editDeals"), async (req: Request, res: Response) => {
     const id = requireRoles(req, res, ["pdl", "sll", "qrm"]);
     if (!id) return;
-    const action = req.params.action;
+    const action = paramStr(req, "action");
     if (action !== "apply" && action !== "dismiss") return res.status(400).json({ error: "action must be apply|dismiss" });
-    const extId = parseInt(req.params.id);
+    const extId = paramInt(req, "id");
     const [ext] = await db.select().from(intakeExtractions).where(eq(intakeExtractions.id, extId));
     if (!ext) return res.status(404).json({ error: "Extraction not found" });
     const status = action === "apply" ? "applied" : "dismissed";
@@ -479,7 +480,7 @@ export function registerIntakeRoutes(app: Express) {
   app.post("/api/intake/approvals/:id/decide", requirePerm("viewRiskSummary"), async (req: Request, res: Response) => {
     const id = requireRoles(req, res, ["qrm", "sll", "pdl", "fin"]);
     if (!id) return;
-    const apprId = parseInt(req.params.id);
+    const apprId = paramInt(req, "id");
     const decision = String(req.body?.decision || "").toLowerCase();
     const notes = (req.body?.notes || "").toString().trim();
     if (!["approved", "rejected", "waived"].includes(decision)) {
@@ -526,7 +527,7 @@ export function registerIntakeRoutes(app: Express) {
   app.post("/api/intake/requests/:id/pricing-packet", requirePerm("editDeals"), async (req: Request, res: Response) => {
     const id = requireRoles(req, res, ["pdl", "sll", "fin", "qrm"]);
     if (!id) return;
-    const reqId = parseInt(req.params.id);
+    const reqId = paramInt(req, "id");
     const [reqRow] = await db.select().from(intakeRequests).where(eq(intakeRequests.id, reqId));
     if (!reqRow) return res.status(404).json({ error: "Intake request not found" });
     const totalFee = Number(req.body?.totalFee || 0);
@@ -560,7 +561,7 @@ export function registerIntakeRoutes(app: Express) {
   app.post("/api/intake/requests/:id/accept", requirePerm("viewRiskSummary"), async (req: Request, res: Response) => {
     const id = requireRoles(req, res, ["qrm", "pdl"]);
     if (!id) return;
-    const reqId = parseInt(req.params.id);
+    const reqId = paramInt(req, "id");
     const [reqRow] = await db.select().from(intakeRequests).where(eq(intakeRequests.id, reqId));
     if (!reqRow) return res.status(404).json({ error: "Intake request not found" });
     if (reqRow.stage === "accepted") return res.status(409).json({ error: "Already accepted" });
@@ -593,7 +594,7 @@ export function registerIntakeRoutes(app: Express) {
   app.post("/api/intake/requests/:id/reject", requirePerm("viewRiskSummary"), async (req: Request, res: Response) => {
     const id = requireRoles(req, res, ["qrm", "pdl"]);
     if (!id) return;
-    const reqId = parseInt(req.params.id);
+    const reqId = paramInt(req, "id");
     const reason = String(req.body?.reason || "").trim();
     if (reason.length < 10) return res.status(400).json({ error: "Rejection reason (min 10 chars) required." });
     const [reqRow] = await db.select().from(intakeRequests).where(eq(intakeRequests.id, reqId));

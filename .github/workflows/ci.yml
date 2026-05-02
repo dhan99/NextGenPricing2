@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main, develop]
+  push:
+    branches: [main, develop]
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: dealpad
+          POSTGRES_PASSWORD: dealpad
+          POSTGRES_DB: dealpad_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U dealpad"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql://dealpad:dealpad@localhost:5432/dealpad_test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install
+        run: npm install --no-audit --no-fund
+
+      - name: Type-check
+        run: npx tsc --noEmit
+
+      - name: Lint
+        run: npx eslint . --ext .ts,.tsx,.js,.jsx --max-warnings=0 || true
+        # `|| true` for now — we'll flip to fail-on-warning once the existing
+        # codebase is brought into compliance. Tracked in BACKLOG.md F0.6.
+
+      - name: Test
+        run: npm test
+
+      - name: Smoke test
+        run: bash scripts/audit/smoke_test.sh
+        timeout-minutes: 5

@@ -3,6 +3,7 @@ import { db } from "./db";
 import { eq, desc, and, sql } from "drizzle-orm";
 import PDFDocument from "pdfkit";
 import { requirePerm, requireAnyPerm } from "./rbac";
+import { paramInt, headerStr } from "./lib/req";
 import {
   congaSettings, congaTemplates, engagementLetters,
   deals, clients, pricingLines, roles as rolesTable,
@@ -565,7 +566,7 @@ export function registerCongaRoutes(app: Express) {
 
   // Per-deal letter history.
   app.get("/api/conga/deals/:dealId/letters", requirePerm("viewDeals"), async (req, res) => {
-    const dealId = parseInt(req.params.dealId);
+    const dealId = paramInt(req, "dealId");
     if (Number.isNaN(dealId)) return res.status(400).json({ error: "Invalid deal id" });
     const rows = await db.select().from(engagementLetters)
       .where(eq(engagementLetters.dealId, dealId))
@@ -582,7 +583,7 @@ export function registerCongaRoutes(app: Express) {
   // Generate a new engagement letter for a deal. Returns the row metadata —
   // the client opens /api/conga/letters/:id/download in a new tab to view it.
   app.post("/api/conga/deals/:dealId/letters", requirePerm("editDeals"), async (req, res) => {
-    const dealId = parseInt(req.params.dealId);
+    const dealId = paramInt(req, "dealId");
     if (Number.isNaN(dealId)) return res.status(400).json({ error: "Invalid deal id" });
     const { templateId, generatedBy } = req.body || {};
     const tid = parseInt(templateId);
@@ -598,7 +599,7 @@ export function registerCongaRoutes(app: Express) {
     try {
       const result = await provider.generateLetter({
         dealId, templateId: tid,
-        generatedBy: generatedBy || (req.headers["x-user-name"] as string | undefined) || null,
+        generatedBy: generatedBy || headerStr(req, "x-user-name") || null,
       });
       const [row] = await db.insert(engagementLetters).values({
         dealId, templateId: tid,
@@ -608,7 +609,7 @@ export function registerCongaRoutes(app: Express) {
         storedDocumentRef: result.storedDocumentRef,
         documentBase64: result.documentBase64,
         parameters: result.parameters,
-        generatedBy: generatedBy || (req.headers["x-user-name"] as string | undefined) || null,
+        generatedBy: generatedBy || headerStr(req, "x-user-name") || null,
       }).returning();
       res.status(201).json({
         id: row.id, dealId: row.dealId, templateId: row.templateId,
@@ -624,7 +625,7 @@ export function registerCongaRoutes(app: Express) {
         templateKey: tmpl.key, templateName: tmpl.name,
         source: provider.mode, status: "failed",
         parameters: { error: e?.message || String(e) },
-        generatedBy: generatedBy || (req.headers["x-user-name"] as string | undefined) || null,
+        generatedBy: generatedBy || headerStr(req, "x-user-name") || null,
       }).returning();
       res.status(502).json({ error: e?.message || "Letter generation failed", letterId: row.id });
     }
@@ -635,15 +636,15 @@ export function registerCongaRoutes(app: Express) {
   app.post("/api/conga/letters/:id/deliver", requirePerm("editDeals"), async (req, res) => {
     // Identity from trusted headers, NEVER request body. Only roles that own the
     // engagement-letter delivery flow may trigger an external send.
-    const actorName = ((req.headers["x-user-name"] as string) || "").trim();
-    const role = ((req.headers["x-user-role"] as string) || "").trim().toLowerCase();
+    const actorName = headerStr(req, "x-user-name").trim();
+    const role = headerStr(req, "x-user-role").trim().toLowerCase();
     if (!actorName || !role) {
       return res.status(401).json({ error: "x-user-name and x-user-role headers are required." });
     }
     if (!["pdl", "sll", "po", "qrm", "it"].includes(role)) {
       return res.status(403).json({ error: "Insufficient role to deliver engagement letters." });
     }
-    const id = parseInt(req.params.id);
+    const id = paramInt(req, "id");
     if (Number.isNaN(id)) return res.status(400).json({ error: "Invalid id" });
     const [letter] = await db.select().from(engagementLetters).where(eq(engagementLetters.id, id));
     if (!letter) return res.status(404).json({ error: "Letter not found" });
@@ -673,7 +674,7 @@ export function registerCongaRoutes(app: Express) {
   // base64 PDF is decoded and streamed back so re-downloads return the exact
   // same document that was generated originally.
   app.get("/api/conga/letters/:id/download", requirePerm("viewDeals"), async (req, res) => {
-    const id = parseInt(req.params.id);
+    const id = paramInt(req, "id");
     if (Number.isNaN(id)) return res.status(400).json({ error: "Invalid id" });
     const [row] = await db.select().from(engagementLetters).where(eq(engagementLetters.id, id));
     if (!row) return res.status(404).json({ error: "Letter not found" });
