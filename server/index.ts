@@ -602,6 +602,27 @@ async function pushSchema() {
       updated_at TIMESTAMP DEFAULT NOW() NOT NULL
     );
 
+    -- Collaborative scoping (F3.1). Schema-only foundation; the
+    -- WebSocket + Yjs CRDT layer is intentionally not yet wired.
+    -- documentState carries the serialized Yjs update vector
+    -- ({format: "y-update-v1", payload: base64}) when present.
+    CREATE TABLE IF NOT EXISTS collaboration_sessions (
+      id SERIAL PRIMARY KEY,
+      deal_id INTEGER NOT NULL REFERENCES deals(id),
+      document_key TEXT NOT NULL,
+      document_state JSONB,
+      room_id TEXT NOT NULL,
+      presence JSONB,
+      last_edited_by TEXT,
+      last_edited_at TIMESTAMP,
+      created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+      updated_at TIMESTAMP DEFAULT NOW() NOT NULL
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS collab_sessions_deal_key_uniq
+      ON collaboration_sessions (deal_id, document_key);
+    CREATE INDEX IF NOT EXISTS collab_sessions_room_idx
+      ON collaboration_sessions (room_id);
+
     -- Client portal invites (F3.2). Magic-link auth for the
     -- client-facing /portal/* routes. tokenHash is sha256 of the
     -- raw token; we never persist plaintext. tokenSuffix is the

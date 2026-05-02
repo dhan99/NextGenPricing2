@@ -496,6 +496,40 @@ export const batchAdjustmentRules = pgTable("batch_adjustment_rules", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
+// ============ COLLABORATIVE SCOPING (F3.1) ============
+// Foundation for real-time collaborative scoping. The full Yjs
+// CRDT + WebSocket impl is deferred; this schema captures (a) which
+// deals have collaboration enabled and (b) the persistent
+// document state + presence rosters.
+//
+// `documentState` is the Yjs binary update vector serialized as
+// bytea-equivalent jsonb { format: "y-update-v1", payload: base64 }.
+// New writers can `applyUpdate(doc, payload)` to catch up to current
+// state; this is how server-restart durability works without an
+// external state-management service.
+export const collaborationSessions = pgTable("collaboration_sessions", {
+  id: serial("id").primaryKey(),
+  dealId: integer("deal_id").references(() => deals.id).notNull(),
+  // Per-document keys so a single deal can host multiple collab
+  // surfaces — e.g. `scope_v1`, `pricing_notes_v1`. Versioned in
+  // the key so a schema migration on the doc shape is a new row.
+  documentKey: text("document_key").notNull(),
+  documentState: jsonb("document_state"),                  // null until first edit
+  // ULID-style room id we hand to the WebSocket gateway. Stable
+  // across restarts so reconnecting clients land in the same room.
+  roomId: text("room_id").notNull(),
+  // Who's online right now. Updated by the gateway on join/leave.
+  // Free-form jsonb keeps us flexible while the gateway evolves.
+  presence: jsonb("presence"),
+  lastEditedBy: text("last_edited_by"),
+  lastEditedAt: timestamp("last_edited_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (t) => ({
+  // (deal, documentKey) is unique — one row per surface per deal.
+  dealKeyUniq: uniqueIndex("collab_sessions_deal_key_uniq").on(t.dealId, t.documentKey),
+}));
+
 // ============ CLIENT PORTAL (F3.2) ============
 // Magic-link invites for the client self-service portal.
 // `tokenHash` stores SHA-256 of the raw token; we never persist
