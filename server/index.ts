@@ -479,6 +479,39 @@ async function pushSchema() {
     ALTER TABLE deal_scope_items ADD COLUMN IF NOT EXISTS entity_id INTEGER REFERENCES deal_entities(id);
     ALTER TABLE pricing_lines ADD COLUMN IF NOT EXISTS entity_id INTEGER REFERENCES deal_entities(id);
 
+    -- Assembly expansion engine (F1.2, BACKLOG.md). Explicit per-assembly
+    -- expansion specs that supersede the legacy parent_id cascade for any
+    -- assembly catalog row that has a template registered. Components carry
+    -- tier overrides + a quantity formula evaluated by the F1.2 sandbox
+    -- (see server/services/AssemblyExpansionService.ts in slice 2).
+    CREATE TABLE IF NOT EXISTS assembly_templates (
+      id SERIAL PRIMARY KEY,
+      scope_item_id INTEGER REFERENCES scope_catalog(id) NOT NULL UNIQUE,
+      name TEXT NOT NULL,
+      description TEXT,
+      service_line TEXT,
+      version INTEGER NOT NULL DEFAULT 1,
+      is_active BOOLEAN NOT NULL DEFAULT TRUE,
+      created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+      updated_at TIMESTAMP DEFAULT NOW() NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS assembly_components (
+      id SERIAL PRIMARY KEY,
+      template_id INTEGER REFERENCES assembly_templates(id) NOT NULL,
+      scope_item_id INTEGER REFERENCES scope_catalog(id) NOT NULL,
+      ultimate_tier_override DECIMAL(8,2),
+      enhanced_tier_override DECIMAL(8,2),
+      essential_tier_override DECIMAL(8,2),
+      quantity_formula TEXT,
+      prompt_id INTEGER REFERENCES prompt_set_items(id),
+      sort_order INTEGER DEFAULT 0,
+      notes TEXT
+    );
+
+    CREATE INDEX IF NOT EXISTS assembly_components_template_idx
+      ON assembly_components (template_id);
+
     -- Margin Targets: single source of truth (Task #33). Firm default is the
     -- single row with scope='firm' and scope_key NULL; per-BU and
     -- per-service-line overrides have scope_key set.
