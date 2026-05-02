@@ -1,6 +1,6 @@
 import { Express, Request, Response } from "express";
 import { db } from "./db";
-import { clients, deals, dealEntities, scopeCatalog, dealScopeItems, scopeTemplates, scopeTemplateItems, roles, rateCards, rateCardEntries, pricingLines, scenarios, approvals, promptResponses, activityLog, changeOrders, dynamicsOpportunities, promptSets, promptSetItems, marginTargets } from "../shared/schema";
+import { clients, deals, dealEntities, scopeCatalog, dealScopeItems, scopeTemplates, scopeTemplateItems, assemblyTemplates, assemblyComponents, roles, rateCards, rateCardEntries, pricingLines, scenarios, approvals, promptResponses, activityLog, changeOrders, dynamicsOpportunities, promptSets, promptSetItems, marginTargets } from "../shared/schema";
 import { evaluatePracticeLeadTrigger, resolveMarginTarget, type MarginTargetRow, type DealLike } from "../shared/policy";
 import { eq, desc, sql, and, count, isNull, isNotNull, asc, inArray } from "drizzle-orm";
 import { requirePerm, requireAnyPerm } from "./rbac";
@@ -317,6 +317,7 @@ import {
   recalcPricingFromScope,
   computeEntityTotalsForDeal,
 } from "./services/pricing";
+import { expandAssembly } from "./services/AssemblyExpansionService";
 
 // (former inline definitions of DealTotals / computeDealTotalsFromLines /
 // reconcileLine / backfillDealTotals / persistDealTotals / recalcPricingFromScope
@@ -1812,6 +1813,213 @@ export function registerRoutes(app: Express) {
     if (!deal) return res.status(404).json({ error: "Deal not found" });
     const rollup = await computeEntityTotalsForDeal(dealId);
     res.json(rollup);
+  });
+
+  // ========== ASSEMBLY EXPANSION (F1.2) ==========
+  // Explicit per-assembly expansion specs that supersede the legacy
+  // parent_id cascade. See server/services/AssemblyExpansionService.ts
+  // for the math.js sandbox + expansion semantics.
+
+  // List active assembly templates with their parent scope_catalog row
+  // (so the picker can show "Tax PHB — 1040 Calculator (assembly TAX-001)").
+  app.get("/api/assemblies", requirePerm("viewDeals"), async (req: Request, res: Response) => {
+    const rows = await db.select({
+      id: assemblyTemplates.id,
+      scopeItemId: assemblyTemplates.scopeItemId,
+      name: assemblyTemplates.name,
+      description: assemblyTemplates.description,
+      serviceLine: assemblyTemplates.serviceLine,
+      version: assemblyTemplates.version,
+      isActive: assemblyTemplates.isActive,
+      createdAt: assemblyTemplates.createdAt,
+      assemblyCode: scopeCatalog.code,
+      assemblyName: scopeCatalog.name,
+      assemblyCategory: scopeCatalog.category,
+    }).from(assemblyTemplates)
+      .innerJoin(scopeCatalog, eq(scopeCatalog.id, assemblyTemplates.scopeItemId))
+      .where(eq(assemblyTemplates.isActive, true))
+      .orderBy(assemblyTemplates.name);
+    res.json(rows);
+  });
+
+  // Components for one template. Joins the leaf scope_catalog row so the
+  // UI can show "Federal 1040 (TAX-101) · default 8h · ultimate=12h".
+  app.get("/api/assemblies/:id/components", requirePerm("viewDeals"), async (req: Request, res: Response) => {
+    const id = paramInt(req, "id");
+    const [tpl] = await db.select().from(assemblyTemplates).where(eq(assemblyTemplates.id, id));
+    if (!tpl) return res.status(404).json({ error: "Assembly template not found" });
+    const rows = await db.select({
+      id: assemblyComponents.id,
+      templateId: assemblyComponents.templateId,
+      scopeItemId: assemblyComponents.scopeItemId,
+      ultimateTierOverride: assemblyComponents.ultimateTierOverride,
+      enhancedTierOverride: assemblyComponents.enhancedTierOverride,
+      essentialTierOverride: assemblyComponents.essentialTierOverride,
+      quantityFormula: assemblyComponents.quantityFormula,
+      promptId: assemblyComponents.promptId,
+      sortOrder: assemblyComponents.sortOrder,
+      notes: assemblyComponents.notes,
+      leafCode: scopeCatalog.code,
+      leafName: scopeCatalog.name,
+      leafCategory: scopeCatalog.category,
+      leafDefaultHours: scopeCatalog.defaultHours,
+    }).from(assemblyComponents)
+      .innerJoin(scopeCatalog, eq(scopeCatalog.id, assemblyComponents.scopeItemId))
+      .where(eq(assemblyComponents.templateId, id))
+      .orderBy(asc(assemblyComponents.sortOrder), assemblyComponents.id);
+    res.json({ template: tpl, components: rows });
+  });
+
+  function parseTier(raw: any): "ultimate" | "enhanced" | "essential" | null {
+    if (raw == null) return null;
+    const v = String(raw).toLowerCase();
+    return v === "ultimate" || v === "enhanced" || v === "essential" ? v : null;
+  }
+
+  // Build expansion context from a deal: pulls engagement_inputs +
+  // resolved prompt answers. Used by both the dry-run /expand route and
+  // the /from-assembly apply route.
+  async function buildExpansionContextForDeal(dealId: number, tier: "ultimate" | "enhanced" | "essential" | null) {
+    const deal = await db.query.deals.findFirst({
+      where: eq(deals.id, dealId),
+      with: { promptResponses: true },
+    });
+    if (!deal) return null;
+    const ei = (deal.engagementInputs as Record<string, any>) || {};
+    const promptAnswers: Record<string, number> = {};
+    for (const p of (deal.promptResponses || [])) {
+      // Convention: each prompt is exposed as `prompt_<id>` resolved to
+      // its impactMultiplier (a number). Formulas referencing a prompt
+      // by id therefore see the impact, not the answer string.
+      const m = parseFloat((p as any).impactMultiplier ?? "1");
+      promptAnswers[`prompt_${(p as any).id}`] = Number.isFinite(m) ? m : 1;
+    }
+    return { tier, engagementInputs: ei, promptAnswers };
+  }
+
+  // Dry-run expansion. Returns the expansion plan (no DB writes).
+  app.post("/api/assemblies/:id/expand", requirePerm("viewDeals"), async (req: Request, res: Response) => {
+    const id = paramInt(req, "id");
+    const dealId = parseInt(String(req.body?.dealId ?? ""), 10);
+    if (!Number.isFinite(dealId) || dealId <= 0) {
+      return res.status(400).json({ error: "dealId is required", field: "dealId" });
+    }
+    const tier = parseTier(req.body?.tier);
+
+    const [tpl] = await db.select().from(assemblyTemplates).where(eq(assemblyTemplates.id, id));
+    if (!tpl) return res.status(404).json({ error: "Assembly template not found" });
+    const [d] = await db.select({ id: deals.id }).from(deals).where(eq(deals.id, dealId));
+    if (!d) return res.status(404).json({ error: "Deal not found" });
+
+    const components = await db.select().from(assemblyComponents)
+      .where(eq(assemblyComponents.templateId, id))
+      .orderBy(asc(assemblyComponents.sortOrder), assemblyComponents.id);
+    if (components.length === 0) {
+      return res.json({ template: tpl, lines: [], totalHours: 0, warning: "Template has no components" });
+    }
+    const leafIds = Array.from(new Set(components.map((c) => c.scopeItemId)));
+    const leaves = await db.select().from(scopeCatalog).where(inArray(scopeCatalog.id, leafIds));
+    const catalogById = new Map(leaves.map((l) => [l.id, l]));
+
+    const ctx = await buildExpansionContextForDeal(dealId, tier);
+    if (!ctx) return res.status(404).json({ error: "Deal not found" });
+
+    try {
+      const lines = expandAssembly(components as any, catalogById as any, ctx);
+      const totalHours = lines.reduce((s, l) => s + l.quantity * l.adjustedHours, 0);
+      res.json({ template: tpl, lines, totalHours });
+    } catch (e: any) {
+      return res.status(400).json({ error: e?.message || "Expansion failed", code: "expansion_error" });
+    }
+  });
+
+  // Apply expansion to a deal. Inserts deal_scope_items for every line
+  // (skipping any (dealId, scopeItemId) pair already present — same
+  // unique-index guard as POST /scope-items). Triggers a single
+  // recalcPricingFromScope at the end.
+  app.post("/api/deals/:dealId/scope-items/from-assembly", requirePerm("editDeals"), async (req: Request, res: Response) => {
+    const dealId = paramInt(req, "dealId");
+    const tplId = parseInt(String(req.body?.assemblyTemplateId ?? ""), 10);
+    if (!Number.isFinite(tplId) || tplId <= 0) {
+      return res.status(400).json({ error: "assemblyTemplateId is required", field: "assemblyTemplateId" });
+    }
+    const tier = parseTier(req.body?.tier);
+
+    const [d] = await db.select({ id: deals.id }).from(deals).where(eq(deals.id, dealId));
+    if (!d) return res.status(404).json({ error: "Deal not found" });
+    const [tpl] = await db.select().from(assemblyTemplates).where(eq(assemblyTemplates.id, tplId));
+    if (!tpl) return res.status(404).json({ error: "Assembly template not found" });
+
+    // Validate / default entityId — same shape as POST /scope-items in F1.1.1.
+    let entityId: number | null = null;
+    if (req.body?.entityId != null) {
+      const requested = parseInt(String(req.body.entityId), 10);
+      if (!Number.isFinite(requested) || requested <= 0) {
+        return res.status(400).json({ error: "entityId must be a positive integer", field: "entityId" });
+      }
+      const [ent] = await db.select({ id: dealEntities.id, dealId: dealEntities.dealId })
+        .from(dealEntities).where(eq(dealEntities.id, requested));
+      if (!ent) return res.status(404).json({ error: "Entity not found", field: "entityId" });
+      if (ent.dealId !== dealId) {
+        return res.status(400).json({ error: "Entity belongs to a different deal", field: "entityId", code: "entity_deal_mismatch" });
+      }
+      entityId = ent.id;
+    } else {
+      const [primary] = await db.select({ id: dealEntities.id })
+        .from(dealEntities).where(and(eq(dealEntities.dealId, dealId), eq(dealEntities.isPrimary, true)));
+      entityId = primary?.id ?? null;
+    }
+
+    const components = await db.select().from(assemblyComponents)
+      .where(eq(assemblyComponents.templateId, tplId))
+      .orderBy(asc(assemblyComponents.sortOrder), assemblyComponents.id);
+    if (components.length === 0) {
+      return res.status(400).json({ error: "Assembly has no components", code: "empty_assembly" });
+    }
+    const leafIds = Array.from(new Set(components.map((c) => c.scopeItemId)));
+    const leaves = await db.select().from(scopeCatalog).where(inArray(scopeCatalog.id, leafIds));
+    const catalogById = new Map(leaves.map((l) => [l.id, l]));
+
+    const ctx = await buildExpansionContextForDeal(dealId, tier);
+    if (!ctx) return res.status(404).json({ error: "Deal not found" });
+
+    let lines;
+    try {
+      lines = expandAssembly(components as any, catalogById as any, ctx);
+    } catch (e: any) {
+      return res.status(400).json({ error: e?.message || "Expansion failed", code: "expansion_error" });
+    }
+
+    const inserted: any[] = [];
+    const skipped: any[] = [];
+    for (const line of lines) {
+      const [row] = await db.insert(dealScopeItems).values({
+        dealId,
+        scopeItemId: line.scopeItemId,
+        quantity: line.quantity,
+        adjustedHours: String(line.adjustedHours),
+        complexityMultiplier: "1.0",
+        entityId,
+        notes: `From assembly ${tpl.name} (component ${line.sourceComponentId})`,
+      }).onConflictDoNothing({ target: [dealScopeItems.dealId, dealScopeItems.scopeItemId] }).returning();
+      if (row) inserted.push(row);
+      else skipped.push({ scopeItemId: line.scopeItemId, reason: "duplicate" });
+    }
+
+    if (inserted.length > 0) {
+      await recalcPricingFromScope(dealId);
+    }
+
+    const actor = (headerStr(req, "x-user-name") || "Unknown").trim();
+    await db.insert(activityLog).values({
+      dealId,
+      action: "assembly_expanded",
+      userName: actor,
+      description: `Expanded assembly "${tpl.name}" → ${inserted.length} new line(s), ${skipped.length} skipped (duplicates)`,
+      metadata: { assemblyTemplateId: tpl.id, tier, entityId, insertedCount: inserted.length, skippedCount: skipped.length },
+    });
+
+    res.status(201).json({ template: tpl, inserted, skipped, expanded: lines });
   });
 
   // ========== SCOPE TEMPLATES ==========
