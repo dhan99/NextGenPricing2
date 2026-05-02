@@ -1,0 +1,34 @@
+[
+  {
+    "dealId": 4,
+    "dealNumber": "DL-2026-004",
+    "serviceLine": "Digital Transformation",
+    "totalFee": 46610,
+    "totalCost": 22985,
+    "totalHours": 138,
+    "marginPercent": 50.68654795108346,
+    "blendedRate": 337.7536231884058,
+    "lineCount": 7,
+    "lineSubtotalFee": 46610,
+    "computedSubtotalFee": 46610,
+    "techAdminFeePct": 0,
+    "rateAdjustmentPct": 0,
+    "lineItemRounding": 0
+  },
+  {
+    "dealId": 27,
+    "dealNumber": "DL-2026-027",
+    "serviceLine": "Financial Audit",
+    "totalFee": 100912.5,
+    "totalCost": 39810,
+    "totalHours": 239,
+    "marginPercent": 60.54998141954664,
+    "blendedRate": 422.22803347280336,
+    "lineCount": 7,
+    "lineSubtotalFee": 80730,
+    "computedSubtotalFee": 80730,
+    "techAdminFeePct": 25,
+    "rateAdjustmentPct": 0,
+    "lineItemRounding": 0
+  }
+]

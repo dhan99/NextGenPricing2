@@ -5,82 +5,164 @@
  * --------------------
  * The audit (docs/audit/CURRENT_STATE_AUDIT.md, §10.1 and §14) flagged calc
  * parity as the highest-risk regression vector during the refactor. The
- * pricing engine (`recalcPricingFromScope` in server/routes.ts) is enforced
- * at runtime — `Σ line fees − deal.totalFee` must be < $1 — but there is no
- * automated test that pins this behavior down today.
+ * pricing engine (`recalcPricingFromScope`, `persistDealTotals`,
+ * `computeDealTotalsFromLines`) enforces `Σ line fees → deal.totalFee` at
+ * runtime; this test pins the behavior so the strangler-fig refactor can't
+ * silently drift it.
  *
- * What this scaffold does
- * -----------------------
- * 1. Loads a deterministic snapshot of input deals (from server/seed-snapshot.json)
- * 2. Calls the pricing engine for each deal
- * 3. Compares the totals against a `pricing-golden.json` snapshot
- * 4. Fails the test if any deal drifts by more than $0.01 OR if calc parity
- *    breaks (Σ lines vs deal totals)
+ * What this test does
+ * -------------------
+ * 1. SELECTs pricing_lines + engagement_inputs for each test deal (read-only).
+ * 2. Runs `computeDealTotalsFromLines(lines, ei)` — the pure function that
+ *    every persistence path (`persistDealTotals`, the Pricing Grid, the AI
+ *    handler) ultimately calls.
+ * 3. Compares the result against `pricing-golden.json`.
+ * 4. Fails if any total drifts by more than $0.01.
  *
- * To use:
- *   1. Run `npm run test:golden:write` once on the **current main** to generate
- *      `pricing-golden.json` (the "before refactor" baseline).
- *   2. Commit the golden file.
- *   3. Run `npm run test:golden` in CI on every PR. If the refactor changes
- *      pricing behavior, this test fails loudly.
- *   4. When pricing behavior intentionally changes, regenerate the golden
- *      and call out the diff in the PR description.
+ * Why this targets `computeDealTotalsFromLines` and NOT `recalcPricingFromScope`:
+ * `recalcPricingFromScope` mutates pricing_lines and is not idempotent on
+ * deals with empty `standard_rate` (it falls back to `line.rate`, which
+ * already carries the previous run's T&M uplift, so each call compounds the
+ * factor). That's a pre-existing bug worth its own ticket — for THIS test
+ * we pin the pure invariant function instead. The audit's actual concern
+ * (§10.1: "Σ line fees → deal.totalFee within $1") is `computeDealTotalsFromLines`'s
+ * contract, not `recalcPricingFromScope`'s.
  *
- * Status
- * ------
- * SCAFFOLD ONLY. The actual import paths below depend on Phase 1 introducing
- * Vitest and exporting `recalcPricingFromScope` from a stable path. Today
- * that function is defined inside `server/routes.ts` and not exported. The
- * first refactor task (Phase 0 Step 0.5) is to (a) install Vitest and (b)
- * extract `recalcPricingFromScope` into `server/services/pricing.ts` so it
- * is callable from a test.
+ * Generating / regenerating the golden
+ * ------------------------------------
+ *     WRITE_GOLDEN=1 npx vitest run tests/calc-parity
+ *     # or via the npm alias once F0.5 lands:
+ *     npm run test:golden:write
+ *
+ * The first run on `develop` after F0.5 captures the baseline. Commit the
+ * golden file. Any pricing-touching PR that changes the numbers must
+ * regenerate the golden in the same PR and call out the diff.
+ *
+ * Test selection (server/seed-snapshot.json — IDs are stable across reseeds)
+ * -------------------------------------------------------------------------
+ *   - Deal 4  (DL-2026-004, "Digital Transformation"):
+ *       The "vanilla" path — empty engagement_inputs, so subtotal == totalFee
+ *       (no T&M / Tech & Admin / rounding involvement). Pins the base
+ *       Σ-fees-Σ-cost-Σ-hours math.
+ *   - Deal 27 (DL-2026-027, "Financial Audit"):
+ *       Rich engagement inputs (rateYear, tmRateAdjustmentPct,
+ *       techAdminFeePct, lineItemRounding, grossMarginBenchmarkPct). Pins
+ *       the Tech & Admin uplift + line-item-rounding paths in
+ *       computeDealTotalsFromLines.
+ *
+ * NOT covered yet (intentional gaps):
+ *   - Per-line rate override (`rate_overridden = TRUE`): the seed ships
+ *     no overridden rows; covered when we add a backfill test.
+ *   - `recalcPricingFromScope` itself: it has a known idempotency bug on
+ *     deals with empty `standard_rate` (compounds the T&M factor each call).
+ *     Tracked separately; needs `standard_rate` backfill before recalc can
+ *     be safely golden-pinned.
  */
 
-// import { describe, it, expect, beforeAll } from "vitest";
-// import { db } from "../../server/db";
-// import { recalcPricingFromScope, persistDealTotals } from "../../server/services/pricing";
-// import goldenSnapshot from "./pricing-golden.json";
-// import seedSnapshot from "../../server/seed-snapshot.json";
-//
-// const TOLERANCE_DOLLARS = 0.01; // tighter than the runtime $1 parity check
-//
-// describe("calc parity — golden snapshot", () => {
-//   beforeAll(async () => {
-//     // Restore DB to the snapshot state. This relies on a `loadSnapshot`
-//     // helper that the existing snapshot-loader already implements; we just
-//     // wrap it for tests.
-//     // await loadSnapshotForTest(seedSnapshot);
-//   });
-//
-//   for (const expected of (goldenSnapshot as Array<any>)) {
-//     it(`deal ${expected.dealNumber} — totals within tolerance`, async () => {
-//       await recalcPricingFromScope(expected.dealId);
-//       await persistDealTotals(expected.dealId);
-//
-//       const [actual] = await db
-//         .select()
-//         .from(/* deals */ undefined as any)
-//         .where(/* eq(deals.id, expected.dealId) */ undefined as any);
-//
-//       expect(parseFloat(actual.totalFee)).toBeCloseTo(expected.totalFee, 2);
-//       expect(parseFloat(actual.totalCost)).toBeCloseTo(expected.totalCost, 2);
-//       expect(parseFloat(actual.totalHours)).toBeCloseTo(expected.totalHours, 2);
-//       expect(parseFloat(actual.marginPercent)).toBeCloseTo(expected.marginPercent, 2);
-//
-//       // Σ line fees vs deal total (the "calc parity" invariant)
-//       const lines = await db
-//         .select()
-//         .from(/* pricingLines */ undefined as any)
-//         .where(/* eq(pricingLines.dealId, expected.dealId) */ undefined as any);
-//       const sumLineFees = lines.reduce(
-//         (s: number, l: any) => s + parseFloat(l.fee || "0"),
-//         0,
-//       );
-//       expect(Math.abs(sumLineFees - parseFloat(actual.totalFee))).toBeLessThan(
-//         TOLERANCE_DOLLARS,
-//       );
-//     });
-//   }
-// });
+import { describe, it, expect, beforeAll } from "vitest";
+import { writeFileSync, readFileSync, existsSync } from "node:fs";
+import { join } from "node:path";
+import { eq } from "drizzle-orm";
+import { db } from "../../server/db";
+import { deals, pricingLines } from "../../shared/schema";
+import { computeDealTotalsFromLines } from "../../server/services/pricing";
 
-export {};
+const TOLERANCE_DOLLARS = 0.01;
+const GOLDEN_PATH = join(import.meta.dirname, "pricing-golden.json");
+const TEST_DEAL_IDS = [4, 27] as const;
+
+type GoldenEntry = {
+  dealId: number;
+  dealNumber: string;
+  serviceLine: string | null;
+  totalFee: number;
+  totalCost: number;
+  totalHours: number;
+  marginPercent: number;
+  blendedRate: number;
+  lineCount: number;
+  lineSubtotalFee: number;       // Σ pricing_lines.fee — calc-parity invariant LHS
+  computedSubtotalFee: number;   // computeDealTotalsFromLines(lines, ei).lineSubtotalFee — invariant RHS
+  techAdminFeePct: number;       // pinned engagement-input slice (deal 28 only)
+  rateAdjustmentPct: number;
+  lineItemRounding: number;
+};
+
+async function captureDeal(dealId: number): Promise<GoldenEntry> {
+  // SELECT-only — no DB mutation. computeDealTotalsFromLines is pure, so
+  // re-running this against the same DB state always yields the same result.
+  const [deal] = await db.select().from(deals).where(eq(deals.id, dealId));
+  if (!deal) throw new Error(`Deal ${dealId} not found in DB — is the seed loaded?`);
+  const lines = await db.select().from(pricingLines).where(eq(pricingLines.dealId, dealId));
+  const ei = (deal as any).engagementInputs || {};
+  const computed = computeDealTotalsFromLines(lines, ei);
+
+  return {
+    dealId: deal.id,
+    dealNumber: deal.dealNumber,
+    serviceLine: deal.serviceLine,
+    totalFee: computed.totalFee,
+    totalCost: computed.totalCost,
+    totalHours: computed.totalHours,
+    marginPercent: computed.marginPercent,
+    blendedRate: computed.blendedRate,
+    lineCount: lines.length,
+    lineSubtotalFee: lines.reduce((s, l) => s + parseFloat(l.fee || "0"), 0),
+    computedSubtotalFee: computed.lineSubtotalFee,
+    techAdminFeePct: parseFloat(ei.techAdminFeePct ?? "0") || 0,
+    rateAdjustmentPct: parseFloat(ei.tmRateAdjustmentPct ?? "0") || 0,
+    lineItemRounding: parseFloat(ei.lineItemRounding ?? "0") || 0,
+  };
+}
+
+describe("calc parity — golden snapshot", () => {
+  let actuals: Record<number, GoldenEntry> = {};
+
+  beforeAll(async () => {
+    if (!process.env.DATABASE_URL) {
+      throw new Error("DATABASE_URL not set; this test requires the dev/CI DB.");
+    }
+    for (const id of TEST_DEAL_IDS) actuals[id] = await captureDeal(id);
+
+    if (process.env.WRITE_GOLDEN === "1") {
+      const golden = TEST_DEAL_IDS.map((id) => actuals[id]);
+      writeFileSync(GOLDEN_PATH, JSON.stringify(golden, null, 2) + "\n");
+      // eslint-disable-next-line no-console
+      console.log(`[calc-parity] wrote ${golden.length} entries to ${GOLDEN_PATH}`);
+    }
+  });
+
+  it("golden file exists (run with WRITE_GOLDEN=1 once to generate)", () => {
+    expect(
+      existsSync(GOLDEN_PATH),
+      `Missing ${GOLDEN_PATH}. Generate with:\n  WRITE_GOLDEN=1 npx vitest run tests/calc-parity`,
+    ).toBe(true);
+  });
+
+  for (const id of TEST_DEAL_IDS) {
+    it(`deal ${id} matches golden within $${TOLERANCE_DOLLARS}`, () => {
+      if (!existsSync(GOLDEN_PATH)) return; // first sub-test already failed loudly
+      const golden: GoldenEntry[] = JSON.parse(readFileSync(GOLDEN_PATH, "utf8"));
+      const expected = golden.find((g) => g.dealId === id);
+      if (!expected) {
+        throw new Error(`No golden entry for deal ${id}; regenerate with WRITE_GOLDEN=1`);
+      }
+      const actual = actuals[id];
+
+      expect(actual.totalFee).toBeCloseTo(expected.totalFee, 2);
+      expect(actual.totalCost).toBeCloseTo(expected.totalCost, 2);
+      expect(actual.totalHours).toBeCloseTo(expected.totalHours, 2);
+      expect(actual.marginPercent).toBeCloseTo(expected.marginPercent, 1);
+      expect(actual.blendedRate).toBeCloseTo(expected.blendedRate, 2);
+      expect(actual.lineCount).toBe(expected.lineCount);
+
+      // Σ pricing_lines.fee should equal what computeDealTotalsFromLines
+      // reports as the subtotal — both are independent reductions over the
+      // same line set, so any drift means the engine and the persistence
+      // layer disagree.
+      expect(
+        Math.abs(actual.lineSubtotalFee - actual.computedSubtotalFee),
+      ).toBeLessThan(TOLERANCE_DOLLARS);
+    });
+  }
+});

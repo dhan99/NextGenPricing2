@@ -9,7 +9,11 @@
     "dev:client": "vite",
     "build": "vite build --outDir dist/public",
     "preview": "vite preview",
-    "db:push": "drizzle-kit push"
+    "db:push": "drizzle-kit push",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "test:golden:write": "WRITE_GOLDEN=1 vitest run tests/calc-parity"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.0.2",
@@ -60,6 +64,10 @@
   },
   "devDependencies": {
     "@types/react": "^19.2.14",
-    "@types/react-dom": "^19.2.3"
+    "@types/react-dom": "^19.2.3",
+    "@types/supertest": "^7.2.0",
+    "@vitest/coverage-v8": "^4.1.5",
+    "supertest": "^7.2.2",
+    "vitest": "^4.1.5"
   }
 }
