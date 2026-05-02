@@ -252,6 +252,57 @@ export function useApplyScopeTemplate() {
   });
 }
 
+// F1.2 — assembly hooks. Backed by /api/assemblies (slice 3).
+
+export function useAssemblies() {
+  return useQuery({
+    queryKey: ["assemblies"],
+    queryFn: () => fetchApi("/api/assemblies"),
+  });
+}
+
+export function useAssemblyComponents(id: number | null | undefined) {
+  return useQuery({
+    queryKey: ["assembly-components", id],
+    queryFn: () => fetchApi(`/api/assemblies/${id}/components`),
+    enabled: !!id,
+  });
+}
+
+// Dry-run preview. Does NOT mutate cache; returns the expansion plan
+// for the picker UI to display before the user commits.
+export function useExpandAssembly() {
+  return useMutation({
+    mutationFn: ({ id, dealId, tier }: { id: number; dealId: number; tier?: string | null }) =>
+      fetchApi(`/api/assemblies/${id}/expand`, { method: "POST", body: JSON.stringify({ dealId, tier }) }),
+  });
+}
+
+// Apply expansion to a deal. Invalidates the same cache keys as
+// useAddScopeItem since this also writes deal_scope_items + recalcs.
+export function useApplyAssembly() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ dealId, assemblyTemplateId, entityId, tier }: {
+      dealId: number;
+      assemblyTemplateId: number;
+      entityId?: number | null;
+      tier?: string | null;
+    }) =>
+      fetchApi(`/api/deals/${dealId}/scope-items/from-assembly`, {
+        method: "POST",
+        body: JSON.stringify({ assemblyTemplateId, entityId, tier }),
+      }),
+    onSuccess: (_, { dealId }) => {
+      qc.invalidateQueries({ queryKey: ["deal-scope", dealId] });
+      qc.invalidateQueries({ queryKey: ["deal-pricing", dealId] });
+      qc.invalidateQueries({ queryKey: ["deal-entity-totals", dealId] });
+      qc.invalidateQueries({ queryKey: ["deal", dealId] });
+      qc.invalidateQueries({ queryKey: ["activity"] });
+    },
+  });
+}
+
 export function useErpRescale() {
   const qc = useQueryClient();
   return useMutation({
