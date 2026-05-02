@@ -496,6 +496,31 @@ export const batchAdjustmentRules = pgTable("batch_adjustment_rules", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
+// ============ RATE OPTIMIZATION (F3.6) ============
+// Rate-card-level recommendations driven by capacity utilization +
+// LTV proxy + seasonality. Heuristic mode today; ML model plugs
+// in via the optimizer's evaluate() seam.
+export const rateOptimizationRuns = pgTable("rate_optimization_runs", {
+  id: serial("id").primaryKey(),
+  scope: text("scope").notNull(),                          // firm | bu | serviceLine | role
+  scopeKey: text("scope_key"),                             // null when scope='firm'
+  // Window the recommendation is tied to. End-of-quarter checks
+  // run with the next quarter as the target window.
+  targetWindowStart: text("target_window_start").notNull(),
+  targetWindowEnd: text("target_window_end").notNull(),
+  // What the optimizer thinks the rate should be (per role, in $).
+  // recommendation = { roleId: { current: 250, recommended: 270, deltaPct: 8.0, drivers: [...] } }
+  recommendation: jsonb("recommendation").notNull(),
+  confidence: decimal("confidence", { precision: 4, scale: 3 }).notNull().default("0.500"),
+  rationale: text("rationale").notNull(),
+  status: text("status").notNull().default("draft"),       // draft | published | applied | discarded
+  createdBy: text("created_by"),
+  appliedAt: timestamp("applied_at"),
+  appliedBy: text("applied_by"),
+  metadata: jsonb("metadata"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 // ============ VOICE-TO-SCOPE (F3.4) ============
 // Audio + transcription + extracted scope drafts. The audio file
 // itself is stored in object storage (S3/Azure Blob) keyed by

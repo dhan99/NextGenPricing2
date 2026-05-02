@@ -602,6 +602,27 @@ async function pushSchema() {
       updated_at TIMESTAMP DEFAULT NOW() NOT NULL
     );
 
+    -- Rate optimization runs (F3.6). One row per recommendation
+    -- run; status flips on apply/discard.
+    CREATE TABLE IF NOT EXISTS rate_optimization_runs (
+      id SERIAL PRIMARY KEY,
+      scope TEXT NOT NULL,
+      scope_key TEXT,
+      target_window_start TEXT NOT NULL,
+      target_window_end TEXT NOT NULL,
+      recommendation JSONB NOT NULL,
+      confidence DECIMAL(4,3) NOT NULL DEFAULT 0.500,
+      rationale TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'draft',
+      created_by TEXT,
+      applied_at TIMESTAMP,
+      applied_by TEXT,
+      metadata JSONB,
+      created_at TIMESTAMP DEFAULT NOW() NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS rate_optimization_runs_scope_idx
+      ON rate_optimization_runs (scope, scope_key, created_at DESC);
+
     -- Voice transcripts (F3.4). Audio metadata + transcription +
     -- extracted scope candidates. Audio bytes live in object storage;
     -- only the storage key persists here.
