@@ -1,0 +1,7 @@
+fastapi==0.115.0
+uvicorn[standard]==0.32.0
+pydantic==2.9.2
+# Future-mode deps (kept commented until F4.2/F4.3 wire them):
+# scikit-learn==1.5.2
+# joblib==1.4.2
+# azure-ai-ml==1.21.1
