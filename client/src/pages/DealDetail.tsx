@@ -487,11 +487,16 @@ function ScopeStep({ deal }: { deal: any }) {
     return matchesSearch && matchesServiceLine(item);
   });
 
-  // F1.1.1 — Scope items already on the deal (used for the duplicate-add
-  // guard). We DON'T filter this set by activeEntityId so the catalog
-  // picker can still show "added" feedback for items already on any
-  // entity of the deal.
-  const addedIds = new Set((scopeItems || []).map((si: any) => si.scopeItemId));
+  // F1.1.1 — Scope items already on the *active entity* (used for the
+  // duplicate-add guard). The unique constraint is now (deal, entity,
+  // scope_item), so the same scope_item can appear on multiple
+  // entities. The catalog picker should only mark an item as "added"
+  // if it's on the entity currently being edited.
+  const addedIds = new Set(
+    (scopeItems || [])
+      .filter((si: any) => activeEntityId == null || si.entityId === activeEntityId)
+      .map((si: any) => si.scopeItemId),
+  );
 
   // Group deal scope items: parents (assemblies) followed by their children.
   // Filter to the active entity when one is selected — the EntityTabs above

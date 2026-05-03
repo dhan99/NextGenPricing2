@@ -239,7 +239,12 @@ export const dealScopeItems = pgTable("deal_scope_items", {
   // populate this once the entity-aware UI ships.
   entityId: integer("entity_id").references(() => dealEntities.id),
 }, (t) => ({
-  uniqDealScopeItem: uniqueIndex("deal_scope_items_deal_item_uniq").on(t.dealId, t.scopeItemId),
+  // F1.1.1 widen-to-entity: a single scope_item can appear once *per
+  // entity* on a deal (e.g. a tax engagement with 4 entities each
+  // filing a 1040 needs 4 copies of the Federal 1040 row, one per
+  // entity). The legacy (deal_id, scope_item_id) index conflated
+  // those and made multi-entity scoping impossible.
+  uniqDealEntityScopeItem: uniqueIndex("deal_scope_items_deal_entity_item_uniq").on(t.dealId, t.entityId, t.scopeItemId),
 }));
 
 export const roles = pgTable("roles", {
