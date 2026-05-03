@@ -139,7 +139,16 @@ export async function seedDynamics() {
     const acctByClient = new Map(acctRows.map((a) => [a.dealpadClientId, a]));
     const owners = await db.select().from(dynamicsOwners);
 
-    const missingDeals = dealRows.filter((d) => !linkedDealIds.has(d.id));
+    // Skip rows that integration tests created (titles + deal numbers
+    // prefixed with __test_ / DL-TEST-). Without this filter, every
+    // server boot fans out hundreds of synthetic opportunities that
+    // pollute the dashboard's "Latest opportunities" tab.
+    const isTestFixture = (d: { title?: string | null; dealNumber?: string | null }) => {
+      const t = (d.title || "").toLowerCase();
+      const n = (d.dealNumber || "").toLowerCase();
+      return t.startsWith("__test_") || n.startsWith("dl-test-");
+    };
+    const missingDeals = dealRows.filter((d) => !linkedDealIds.has(d.id) && !isTestFixture(d));
     for (let i = 0; i < missingDeals.length; i++) {
       const d = missingDeals[i];
       const acct = acctByClient.get(d.clientId);
