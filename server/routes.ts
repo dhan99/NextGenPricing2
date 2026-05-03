@@ -365,6 +365,7 @@ import {
 // removed — see server/services/pricing.ts for the canonical implementation.)
 
 import { paramInt, paramStr, headerStr } from "./lib/req";
+import { ensurePrimaryEntity } from "./lib/dealEntityHelpers";
 import { registerDynamicsRoutes, autoPushDeal, pickTemplateForName, tmplKey, linkDealToOpportunity, unlinkOpportunity } from "./dynamics";
 import { ERP_TEMPLATE_NAME, ERP_SERVICE_LINE, scaleErpItems, summarizeErpInputs, parseErpInputs, validateErpInputs } from "./erp-scaling";
 import {
@@ -722,6 +723,7 @@ export function registerRoutes(app: Express) {
       dealNumber,
     }).returning();
 
+    await ensurePrimaryEntity(newDeal.id);
     await createDefaultPrompts(newDeal.id);
 
     await db.insert(activityLog).values({
@@ -993,6 +995,8 @@ export function registerRoutes(app: Express) {
       currentStep: 1,
       parentDealId: source.id,
     }).returning();
+
+    await ensurePrimaryEntity(newDeal.id);
 
     if (source.scopeItems?.length) {
       await db.insert(dealScopeItems).values(
@@ -3986,6 +3990,7 @@ export function registerRoutes(app: Express) {
     }).returning();
 
     const dealId = newDeal.id;
+    await ensurePrimaryEntity(dealId);
     const agentRunSteps: any[] = [];
     const logStep = async (stepKey: string, label: string, summary: string, output: any, confidence: number, needsReview = false) => {
       const entry = { step: stepKey, label, summary, output, confidence, needsReview, ts: new Date().toISOString() };
