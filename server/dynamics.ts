@@ -2,6 +2,7 @@ import type { Request, Response, Express } from "express";
 import { db } from "./db";
 import { requirePerm, requireAnyPerm } from "./rbac";
 import { paramInt } from "./lib/req";
+import { ensurePrimaryEntity } from "./lib/dealEntityHelpers";
 import {
   clients, deals, dynamicsAccounts, dynamicsOpportunities, dynamicsSyncLog,
   dynamicsSettings, dynamicsOwners, approvals, activityLog,
@@ -743,6 +744,8 @@ export function registerDynamicsRoutes(app: Express) {
       pdlName: opp.ownerName || null,
       currentStep: 1,
     }).returning();
+
+    await ensurePrimaryEntity(newDeal.id);
 
     await db.update(dynamicsOpportunities).set({
       dealpadDealId: newDeal.id,
