@@ -842,11 +842,27 @@ async function pushSchema() {
     ALTER TABLE prompt_responses ADD COLUMN IF NOT EXISTS prompt_set_id INTEGER;
     ALTER TABLE prompt_responses ADD COLUMN IF NOT EXISTS prompt_set_version INTEGER;
 
+    -- Legacy de-dupe by (deal_id, scope_item_id) only ran once per
+    -- deploy and is preserved here for any cluster that hasn't yet
+    -- migrated to the entity-scoped index below. Safe on already-
+    -- migrated DBs because deal_scope_items_deal_item_uniq is gone.
     DELETE FROM deal_scope_items a
       USING deal_scope_items b
-      WHERE a.id > b.id AND a.deal_id = b.deal_id AND a.scope_item_id = b.scope_item_id;
-    CREATE UNIQUE INDEX IF NOT EXISTS deal_scope_items_deal_item_uniq
-      ON deal_scope_items (deal_id, scope_item_id);
+      WHERE a.id > b.id AND a.deal_id = b.deal_id AND a.scope_item_id = b.scope_item_id
+        AND COALESCE(a.entity_id, 0) = COALESCE(b.entity_id, 0);
+    -- F1.1.1 widen-to-entity. Drop the legacy (deal, scope_item) index
+    -- and replace with (deal, entity, scope_item) so multiple entities
+    -- on the same deal can each carry the same scope_item.
+    -- Defensive backfill of any NULL entity_id rows to the deal's
+    -- primary entity, then drop legacy index, then create the new one.
+    UPDATE deal_scope_items d SET entity_id = (
+      SELECT e.id FROM deal_entities e
+      WHERE e.deal_id = d.deal_id AND e.is_primary = true
+      LIMIT 1
+    ) WHERE d.entity_id IS NULL;
+    DROP INDEX IF EXISTS deal_scope_items_deal_item_uniq;
+    CREATE UNIQUE INDEX IF NOT EXISTS deal_scope_items_deal_entity_item_uniq
+      ON deal_scope_items (deal_id, entity_id, scope_item_id);
 
     CREATE TABLE IF NOT EXISTS workday_settings (
       id SERIAL PRIMARY KEY,

@@ -1619,10 +1619,12 @@ export function registerRoutes(app: Express) {
       complexityMultiplier: req.body.complexityMultiplier ?? "1.0",
       notes: req.body.notes,
       entityId,
-    }).onConflictDoNothing({ target: [dealScopeItems.dealId, dealScopeItems.scopeItemId] }).returning();
+    }).onConflictDoNothing({ target: [dealScopeItems.dealId, dealScopeItems.entityId, dealScopeItems.scopeItemId] }).returning();
     if (!item) {
-      const [existingRow] = await db.select().from(dealScopeItems)
-        .where(and(eq(dealScopeItems.dealId, dealId), eq(dealScopeItems.scopeItemId, req.body.scopeItemId)));
+      // Duplicate is now scoped to (deal, entity, scope_item).
+      const dupConds = [eq(dealScopeItems.dealId, dealId), eq(dealScopeItems.scopeItemId, req.body.scopeItemId)];
+      if (entityId != null) dupConds.push(eq(dealScopeItems.entityId, entityId));
+      const [existingRow] = await db.select().from(dealScopeItems).where(and(...dupConds));
       return res.status(200).json({ ...existingRow, cascadedChildren: [], duplicate: true });
     }
 
@@ -1642,7 +1644,7 @@ export function registerRoutes(app: Express) {
             // F1.1.1 — cascaded children inherit the parent assembly's
             // entityId so per-entity rollups stay consistent.
             entityId,
-          }).onConflictDoNothing({ target: [dealScopeItems.dealId, dealScopeItems.scopeItemId] }).returning();
+          }).onConflictDoNothing({ target: [dealScopeItems.dealId, dealScopeItems.entityId, dealScopeItems.scopeItemId] }).returning();
           if (ci) cascaded.push(ci);
         }
       }
@@ -2054,7 +2056,7 @@ export function registerRoutes(app: Express) {
         complexityMultiplier: "1.0",
         entityId,
         notes: `From assembly ${tpl.name} (component ${line.sourceComponentId})`,
-      }).onConflictDoNothing({ target: [dealScopeItems.dealId, dealScopeItems.scopeItemId] }).returning();
+      }).onConflictDoNothing({ target: [dealScopeItems.dealId, dealScopeItems.entityId, dealScopeItems.scopeItemId] }).returning();
       if (row) inserted.push(row);
       else skipped.push({ scopeItemId: line.scopeItemId, reason: "duplicate" });
     }
@@ -2322,7 +2324,7 @@ export function registerRoutes(app: Express) {
         adjustedHours,
         complexityMultiplier: ti.complexityMultiplier || "1.0",
         notes: notes ?? null,
-      }).onConflictDoNothing({ target: [dealScopeItems.dealId, dealScopeItems.scopeItemId] }).returning();
+      }).onConflictDoNothing({ target: [dealScopeItems.dealId, dealScopeItems.entityId, dealScopeItems.scopeItemId] }).returning();
       if (row) {
         inserted.push(row);
         existingIds.add(ti.scopeItemId);
@@ -2336,7 +2338,7 @@ export function registerRoutes(app: Express) {
           const [ci] = await db.insert(dealScopeItems).values({
             dealId, scopeItemId: child.id, quantity: 1,
             adjustedHours: child.defaultHours, complexityMultiplier: "1.0",
-          }).onConflictDoNothing({ target: [dealScopeItems.dealId, dealScopeItems.scopeItemId] }).returning();
+          }).onConflictDoNothing({ target: [dealScopeItems.dealId, dealScopeItems.entityId, dealScopeItems.scopeItemId] }).returning();
           if (ci) {
             inserted.push(ci);
             existingIds.add(child.id);
@@ -2422,7 +2424,7 @@ export function registerRoutes(app: Express) {
           adjustedHours: String(s.adjustedHours),
           complexityMultiplier: "1.0",
           notes: s.notes,
-        }).onConflictDoNothing({ target: [dealScopeItems.dealId, dealScopeItems.scopeItemId] });
+        }).onConflictDoNothing({ target: [dealScopeItems.dealId, dealScopeItems.entityId, dealScopeItems.scopeItemId] });
         added++;
       }
     }
@@ -4246,7 +4248,7 @@ export function registerRoutes(app: Express) {
         adjustedHours: hoursStr,
         complexityMultiplier: "1.0",
         notes,
-      }).onConflictDoNothing({ target: [dealScopeItems.dealId, dealScopeItems.scopeItemId] }).returning();
+      }).onConflictDoNothing({ target: [dealScopeItems.dealId, dealScopeItems.entityId, dealScopeItems.scopeItemId] }).returning();
       if (row) insertedScope.push({
         id: row.id, code: item.code, name: item.name,
         defaultHours: hoursStr, quantity, scalingNote: notes,
