@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "description": "DealPad - NextGenApp Pricing & Scoping 2.0",
   "type": "module",
+  "engines": {
+    "node": ">=22.0.0"
+  },
   "scripts": {
     "dev": "concurrently \"tsx server/index.ts\" \"vite\"",
     "dev:server": "tsx server/index.ts",
