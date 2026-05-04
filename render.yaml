@@ -18,13 +18,18 @@ services:
     region: oregon
     plan: starter                # Always-warm; no cold starts. ~$7/mo.
     branch: main                 # Promote develop → main to ship.
-    buildCommand: npm ci && npm run build
+    # `npm install --include=optional` (not `npm ci`) so Render's Linux
+    # box pulls @rolldown/binding-linux-x64-gnu — `npm ci` strictly
+    # follows the macOS-generated lockfile and skips the Linux native
+    # binding (npm/cli#4828). Slightly slower but deterministic across
+    # platforms.
+    buildCommand: npm install --no-audit --no-fund --include=optional && npm run build
     startCommand: npx tsx server/index.ts
     healthCheckPath: /api/dashboard/summary
     autoDeploy: true             # Auto-redeploy on every push to `main`.
     envVars:
       - key: NODE_VERSION
-        value: 22.11.0
+        value: 22.13.0
       - key: NODE_ENV
         value: production
       - key: PORT
