@@ -23,6 +23,8 @@ services:
     healthCheckPath: /api/dashboard/summary
     autoDeploy: true             # Auto-redeploy on every push to `main`.
     envVars:
+      - key: NODE_VERSION
+        value: 22.11.0
       - key: NODE_ENV
         value: production
       - key: PORT
