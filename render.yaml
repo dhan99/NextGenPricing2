@@ -13,7 +13,7 @@
 
 services:
   - type: web
-    name: dealpad-app
+    name: dealpad-demo
     env: node
     region: oregon
     plan: starter                # Always-warm; no cold starts. ~$7/mo.
