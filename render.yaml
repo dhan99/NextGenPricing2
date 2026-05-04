@@ -25,7 +25,7 @@ services:
     # platforms.
     buildCommand: npm install --no-audit --no-fund --include=optional && npm run build
     startCommand: npx tsx server/index.ts
-    healthCheckPath: /api/dashboard/summary
+    healthCheckPath: /healthz
     autoDeploy: true             # Auto-redeploy on every push to `main`.
     envVars:
       - key: NODE_VERSION
