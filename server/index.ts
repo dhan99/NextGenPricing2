@@ -23,6 +23,14 @@ app.use(cors());
 app.use(express.json());
 app.use(attachRole);
 
+// Public healthcheck — must be reachable without persona headers so
+// Render / k8s / load-balancer healthchecks don't get stuck on 401.
+// Intentionally minimal: no DB hit, no auth, no RBAC — just confirms
+// the Node process is up and the event loop is responsive.
+app.get("/healthz", (_req, res) => {
+  res.status(200).json({ ok: true, ts: new Date().toISOString() });
+});
+
 async function initializeDatabase() {
   try {
     const tableNames = Object.keys(schema).filter(key => {
