@@ -23,6 +23,30 @@ app.use(cors());
 app.use(express.json());
 app.use(attachRole);
 
+// Block search engines from indexing/caching this deployment.
+// Belt-and-suspenders: HTTP header covers every path (HTML, JSON,
+// PDFs, images); robots.txt is the polite directive crawlers look
+// for first; the meta tag in client/index.html catches any
+// renderer that ignores headers (e.g. social previews / archive
+// bots that scrape rendered HTML). Override per-route by setting
+// the header to something else if a public-facing surface is
+// ever wanted.
+app.use((_req, res, next) => {
+  res.setHeader(
+    "X-Robots-Tag",
+    "noindex, nofollow, noarchive, nosnippet, noimageindex",
+  );
+  next();
+});
+
+app.get("/robots.txt", (_req, res) => {
+  res.type("text/plain").send(
+    "# DealPad demo — not for public indexing.\n" +
+    "User-agent: *\n" +
+    "Disallow: /\n",
+  );
+});
+
 // Public healthcheck — must be reachable without persona headers so
 // Render / k8s / load-balancer healthchecks don't get stuck on 401.
 // Intentionally minimal: no DB hit, no auth, no RBAC — just confirms
