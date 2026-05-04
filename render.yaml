@@ -1,0 +1,54 @@
+# Render Blueprint — one-click deploy from this repo.
+# Usage:
+#   1. Sign in at https://render.com (GitHub OAuth)
+#   2. Click "New" → "Blueprint" → connect this repo
+#   3. Render reads this file, creates the web service + DB
+#   4. Set DATABASE_URL on the web service to a Neon/Supabase connection
+#      string with pgvector enabled (see docs/deployment.md)
+#   5. First boot runs pushSchema() + seedAll() automatically
+#
+# We intentionally use Render's Node runtime (not docker) for fastest
+# iteration; switch to Dockerfile-based deploy by replacing `env: node`
+# with `env: docker` if you want full control over the base image.
+
+services:
+  - type: web
+    name: dealpad-app
+    env: node
+    region: oregon
+    plan: starter                # Always-warm; no cold starts. ~$7/mo.
+    branch: main                 # Promote develop → main to ship.
+    buildCommand: npm ci && npm run build
+    startCommand: npx tsx server/index.ts
+    healthCheckPath: /api/dashboard/summary
+    autoDeploy: true             # Auto-redeploy on every push to `main`.
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000             # Render's standard internal port.
+      - key: DATABASE_URL
+        sync: false              # Set in the Render UI; never in git.
+      - key: ADMIN_RESEED_TOKEN
+        generateValue: true      # Render generates a strong random value.
+      - key: LLM_PROVIDER
+        value: simulated         # Flip to anthropic/openai once keys are set.
+      - key: INTELLIGENCE_MODE
+        value: simulated
+      - key: TIME_SUGGEST_MODE
+        value: simulated
+      - key: VOICE_MODE
+        value: simulated
+      # Optional — uncomment when keys are provisioned:
+      # - key: ANTHROPIC_API_KEY
+      #   sync: false
+      # - key: OPENAI_API_KEY
+      #   sync: false
+
+# Note: this blueprint does NOT provision the database. Use Neon
+# (https://neon.tech) — has pgvector built-in, free tier covers a demo,
+# Launch tier ($19/mo) recommended for "no perf hit". After Neon
+# provisions, paste the connection string into Render's
+# DATABASE_URL secret. Render's own Postgres can be substituted but
+# requires a manual `CREATE EXTENSION vector` and the extension is
+# only available on the Pro plan.
