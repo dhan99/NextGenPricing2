@@ -3,6 +3,7 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pi
 import { TrendingUp, DollarSign, Clock, Target, Award, BarChart3, Activity, Layers } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { useMarginTargets, fetchApi } from "@/hooks/use-api";
+import { BRAND } from "@/brand";
 
 function firmTargetFromResponse(resp: any): number {
   if (resp && typeof resp.firmDefault === "number") return resp.firmDefault;
@@ -10,7 +11,7 @@ function firmTargetFromResponse(resp: any): number {
   return 35;
 }
 
-const COLORS = ["#DA720F", "#78716c", "#d97706", "#a8a29e", "#92400e"];
+const COLORS = BRAND.colors.chart;
 const STATUS_COLORS: Record<string, string> = { draft: "#a8a29e", submitted: "#d97706", approved: "#16a34a", rejected: "#dc2626" };
 
 export function Analytics() {
@@ -64,7 +65,7 @@ export function Analytics() {
           <h1 className="text-2xl font-bold text-foreground tracking-tight">Analytics</h1>
           <p className="text-muted-foreground text-sm mt-1">Historical trends, win rates, and pipeline insights</p>
         </div>
-        <div className="flex items-center gap-2 px-3 py-1.5 bg-orange-50 rounded-lg">
+        <div className="flex items-center gap-2 px-3 py-1.5 bg-primary/5 rounded-lg">
           <Activity className="w-4 h-4 text-primary" />
           <span className="text-xs font-medium text-primary">{summary.totalDeals} Total Deals</span>
         </div>
@@ -106,7 +107,7 @@ export function Analytics() {
                 ]}
               />
               <Legend iconType="circle" wrapperStyle={{ fontSize: "12px" }} />
-              <Line yAxisId="left" type="monotone" dataKey="deals" stroke="#DA720F" strokeWidth={2} dot={{ fill: "#DA720F", r: 4 }} name="Deals" />
+              <Line yAxisId="left" type="monotone" dataKey="deals" stroke={BRAND.colors.primary} strokeWidth={2} dot={{ fill: BRAND.colors.primary, r: 4 }} name="Deals" />
               <Line yAxisId="right" type="monotone" dataKey="avgMargin" stroke="#78716c" strokeWidth={2} strokeDasharray="5 5" dot={{ fill: "#78716c", r: 3 }} name="Avg Margin %" />
             </LineChart>
           </ResponsiveContainer>
@@ -144,7 +145,7 @@ export function Analytics() {
               <XAxis type="number" tick={{ fontSize: 12, fill: "#78716c" }} />
               <YAxis type="category" dataKey="range" tick={{ fontSize: 12, fill: "#78716c" }} width={60} />
               <Tooltip contentStyle={{ borderRadius: "12px", border: "1px solid #e7e5e4", fontSize: "12px" }} />
-              <Bar dataKey="count" fill="#DA720F" radius={[0, 6, 6, 0]} name="Deals" />
+              <Bar dataKey="count" fill={BRAND.colors.primary} radius={[0, 6, 6, 0]} name="Deals" />
             </BarChart>
           </ResponsiveContainer>
         </div>

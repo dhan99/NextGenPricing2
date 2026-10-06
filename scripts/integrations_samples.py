@@ -60,7 +60,7 @@ D365_SAMPLES = [
     ("GET", "/api/dynamics/owners",
      "Sales owners + quotas",
      "GET /api/dynamics/owners",
-     "[ { \"id\":1, \"name\":\"Jennifer Walsh\", \"email\":\"jwalsh@armanino.com\",\n"
+     "[ { \"id\":1, \"name\":\"Jennifer Walsh\", \"email\":\"jwalsh@eisneramper.com\",\n"
      "    \"quota\":\"2500000\" }, ... ]"),
     # ---- WRITE ----
     ("POST", "/api/dynamics/opportunities",
@@ -278,7 +278,7 @@ WD_PROD_SAMPLES = [
      "GET /ccx/api/staffing/v6/{tenant}/workers?limit=100\n"
      "Authorization: Bearer eyJraWQ...",
      "{ \"data\":[ { \"id\":\"abc\", \"workerId\":\"EMP-010011\",\n"
-     "  \"primaryWorkEmail\":\"erin.walsh@armanino.com\",\n"
+     "  \"primaryWorkEmail\":\"erin.walsh@eisneramper.com\",\n"
      "  \"position\":{\"jobProfile\":\"Senior Consultant\"} } ] }"),
     ("PATCH /api/workday/rate-card/:id",
      "SOAP Put_Compensation_Plan_Request\n"

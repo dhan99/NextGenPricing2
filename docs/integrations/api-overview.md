@@ -8,7 +8,7 @@
 
 ## 1. Executive summary
 
-DealPad is the deal lifecycle platform for Armanino's NextGen sales motion. Two upstream
+DealPad is the deal lifecycle platform for EisnerAmper's NextGen sales motion. Two upstream
 systems own the data DealPad depends on:
 
 - **Microsoft Dynamics 365** — system of record for client accounts and the opportunity pipeline.
@@ -149,7 +149,7 @@ Content-Type: application/json
 **Production equivalent — Dataverse Web API**
 
 ```http
-POST https://armanino.api.crm.dynamics.com/api/data/v9.2/opportunities
+POST https://eisneramper.api.crm.dynamics.com/api/data/v9.2/opportunities
 Authorization: Bearer eyJ0eXAiOi...
 OData-Version: 4.0
 Content-Type: application/json
@@ -233,7 +233,7 @@ Content-Type: application/json
 **Production composite call — REST**
 
 ```http
-GET https://wd5.workday.com/ccx/api/financialManagement/v1/armanino/costCenters/CC-CONS-300
+GET https://wd5.workday.com/ccx/api/financialManagement/v1/eisneramper/costCenters/CC-CONS-300
 Authorization: Bearer eyJraWQiOi...
 Accept: application/json
 ```
@@ -489,7 +489,7 @@ GET /api/dynamics/owners
 **Response**
 
 ```json
-[ { "id":1, "name":"Jennifer Walsh", "email":"jwalsh@armanino.com",
+[ { "id":1, "name":"Jennifer Walsh", "email":"jwalsh@eisneramper.com",
     "quota":"2500000" }, ... ]
 ```
 
@@ -1055,7 +1055,7 @@ Authorization: Bearer eyJraWQ...
 
 ```http
 { "data":[ { "id":"abc", "workerId":"EMP-010011",
-  "primaryWorkEmail":"erin.walsh@armanino.com",
+  "primaryWorkEmail":"erin.walsh@eisneramper.com",
   "position":{"jobProfile":"Senior Consultant"} } ] }
 ```
 

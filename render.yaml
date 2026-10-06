@@ -7,6 +7,10 @@
 #      string with pgvector enabled (see docs/deployment.md)
 #   5. First boot runs pushSchema() + seedAll() automatically
 #
+# Two services are declared — one per brand (BRAND_ID=armanino|eisneramper).
+# They build from the same commit; each needs its OWN DATABASE_URL (separate
+# Neon project or branch) because seeds/defaults are brand-specific.
+#
 # We intentionally use Render's Node runtime (not docker) for fastest
 # iteration; switch to Dockerfile-based deploy by replacing `env: node`
 # with `env: docker` if you want full control over the base image.
@@ -32,6 +36,46 @@ services:
         value: 22.13.0
       - key: NODE_ENV
         value: production
+      - key: BRAND_ID
+        value: armanino          # Brand for this service; see shared/brand.ts.
+      - key: PORT
+        value: 10000             # Render's standard internal port.
+      - key: DATABASE_URL
+        sync: false              # Set in the Render UI; never in git.
+      - key: ADMIN_RESEED_TOKEN
+        generateValue: true      # Render generates a strong random value.
+      - key: LLM_PROVIDER
+        value: simulated         # Flip to anthropic/openai once keys are set.
+      - key: INTELLIGENCE_MODE
+        value: simulated
+      - key: TIME_SUGGEST_MODE
+        value: simulated
+      - key: VOICE_MODE
+        value: simulated
+      # Optional — uncomment when keys are provisioned:
+      # - key: ANTHROPIC_API_KEY
+      #   sync: false
+      # - key: OPENAI_API_KEY
+      #   sync: false
+
+  # ---- EisnerAmper-branded twin: identical except BRAND_ID + its own DATABASE_URL ----
+  - type: web
+    name: dealpad-eisneramper
+    env: node
+    region: oregon
+    plan: starter                # Always-warm; no cold starts. ~$7/mo.
+    branch: main                 # Promote develop → main to ship.
+    buildCommand: npm install --no-audit --no-fund --include=optional && npm run build
+    startCommand: npx tsx server/index.ts
+    healthCheckPath: /healthz
+    autoDeploy: true             # Auto-redeploy on every push to `main`.
+    envVars:
+      - key: NODE_VERSION
+        value: 22.13.0
+      - key: NODE_ENV
+        value: production
+      - key: BRAND_ID
+        value: eisneramper
       - key: PORT
         value: 10000             # Render's standard internal port.
       - key: DATABASE_URL

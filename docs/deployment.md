@@ -47,15 +47,38 @@ Total monthly: ~$26/mo for production-grade always-on. Free tiers work but intro
 6. Once green, hit the public URL printed at the top of the service page.
 
 The Blueprint covers:
-- Build command: `npm ci && npm run build`
+- Build command: `npm install --include=optional && npm run build`
 - Start command: `npx tsx server/index.ts`
-- Health check: `/api/dashboard/summary`
+- Health check: `/healthz`
 - Auto-deploy on every push to `main`
 - Production env vars (`NODE_ENV`, `LLM_PROVIDER=simulated`, etc.)
 
 ### Option B — Docker (if you want to control the runtime)
 
 The repo ships a `Dockerfile`. On Render → New → Web Service → connect repo → choose `env: docker` instead of `env: node`. Render builds and runs the container.
+
+### Two brands, two services (Armanino + EisnerAmper)
+
+`render.yaml` declares **two web services from the same commit**:
+
+| Service | `BRAND_ID` | What differs |
+|---|---|---|
+| `dealpad-demo` | `armanino` | Original look: amber `#DA720F`, Inter, Armanino logo/emails |
+| `dealpad-eisneramper` | `eisneramper` | Teal `#115E67` / navy `#0C2E45` / gold `#BF9B5F`, Raleway + Fraunces, EisnerAmper logo/emails |
+
+`BRAND_ID` is read by the server (`server/brand.ts` → PDFs, proposal HTML, seed emails, `sales_process` default) **and** baked into the SPA at build time (`client/src/brand.ts`, `data-brand` on `<html>`, favicon). The registry is `shared/brand.ts`; CSS tokens per brand are in `client/src/index.css`.
+
+Steps when the blueprint already exists:
+
+1. Merge to `main`. Render's Blueprint sync picks up the new `dealpad-eisneramper` service (Dashboard → Blueprints → **Sync** if auto-sync is off).
+2. Provision a **second Neon database** (new project, or a branch of the existing one) and run `CREATE EXTENSION IF NOT EXISTS vector;` on it. Seeds are brand-specific, so the two services must not share a DB.
+3. On `dealpad-eisneramper` → Environment, set `DATABASE_URL` to that connection string. `BRAND_ID` is already set by the blueprint.
+4. Manual Deploy → Deploy latest commit. First boot runs `pushSchema()` + `seedAll()` with EisnerAmper data.
+5. The existing `dealpad-demo` service redeploys on the same push and keeps its Armanino look (`BRAND_ID=armanino`). If you ever need to re-seed either DB after a brand change: `POST /api/admin/reseed` with `x-admin-token`.
+
+An unset `BRAND_ID` resolves to `armanino`; a set-but-unknown value fails the boot (and the Vite build) with a clear error rather than falling back silently.
+
+Local dev: add `BRAND_ID=eisneramper` to `.env` (Vite reads it; for the server use `set -a; . ./.env; set +a; npm run dev`).
 
 ---
 

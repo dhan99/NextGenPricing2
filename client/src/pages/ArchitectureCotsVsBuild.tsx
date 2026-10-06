@@ -1,17 +1,18 @@
 import { Scale, Download, FileText, ExternalLink, CheckCircle2, XCircle, ShieldCheck } from "lucide-react";
+import { BRAND } from "@/brand";
 
 const COTS_ALTERNATIVES = [
   { name: "Salesforce Revenue Cloud (CPQ + CLM)", offers: "Configure-Price-Quote rules engine, approval workflows, quote document generation; Einstein for forecasting and next-best-action.", reject: "Built around products and SKUs, not a 7-tier role hierarchy with complexity multipliers; service-hour assemblies and scenarios must be hand-built in CPQ rules / Apex; introduces a second CRM stack alongside Dynamics; per-user licensing scales with every contributor." },
   { name: "Conga CPQ", offers: "Standalone CPQ with quote configuration, pricing rules, approval routing; pairs with Conga CLM (already integrated for letter assembly).", reject: "Same product/SKU model bias as Salesforce CPQ; cannot natively express role-loaded service-hour pricing or Standard/Premium/Value scenario generation; vendor AI is generic." },
   { name: "Deltek Vantagepoint / Maconomy", offers: "ERP + PSA built for project-based professional-services firms: opportunity, project setup, role-based pricing, resourcing, billing, revenue recognition.", reject: "Closest single-vendor alternative, but the scoping module is template-based, not a calibrated AI engine; ERP-class implementation; firm-specific catalog and multipliers still require heavy customisation; no per-tenant ISO 42001 AIMS evidence; high lock-in." },
   { name: "Kantata (Kimble + Mavenlink)", offers: "PSA covering deal/opportunity, resource planning, project margin forecasting, time/expense, billing.", reject: "Generic across services verticals; no firm-specific role hierarchy or complexity multiplier IP; AI is vendor-owned and shared across tenants; overlaps with Workday Financials, creating a second source of truth." },
-  { name: "Certinia PSA (FinancialForce)", offers: "Salesforce-native PSA: services CRM, project pricing, resource management, project accounting.", reject: "Inherits Salesforce CPQ's product-centric pricing; firm-specific role-loaded pricing built on top; AI is Einstein/Salesforce-owned; assumes Salesforce as the CRM (Armanino's CRM is Dynamics)." },
+  { name: "Certinia PSA (FinancialForce)", offers: "Salesforce-native PSA: services CRM, project pricing, resource management, project accounting.", reject: `Inherits Salesforce CPQ's product-centric pricing; firm-specific role-loaded pricing built on top; AI is Einstein/Salesforce-owned; assumes Salesforce as the CRM (${BRAND.name}'s CRM is Dynamics).` },
   { name: "PROS Smart CPQ", offers: "AI-driven pricing optimisation, dynamic discounting, win-probability modelling on top of CPQ.", reject: "Calibrated for high-volume transactional B2B (manufacturing, distribution, travel), not low-volume professional-services engagements; opaque vendor AI; no native scenario/RBAC/approval workflow for service-hour scoping." },
 ];
 
 const BUILD_PILLARS = [
   { title: "Scoped pricing assemblies", body: "7-tier role hierarchy, complexity multipliers (0.8×–1.5×), scope catalog, automatic margin/fee/cost recalculation when scope changes. Not modelled by any product/SKU CPQ." },
-  { title: "AI intelligence layer", body: "Five calibrated use cases — deal similarity, effort estimation, margin advisor, scenario recommendation, risk summary — grounded in Armanino's own historical data, not a generic vendor model." },
+  { title: "AI intelligence layer", body: `Five calibrated use cases — deal similarity, effort estimation, margin advisor, scenario recommendation, risk summary — grounded in ${BRAND.name}'s own historical data, not a generic vendor model.` },
   { title: "Scenario engine", body: "Auto-generated Standard / Premium / Value scenarios with AI reasoning attached, side-by-side comparable. Absent from the COTS set for service-hour pricing." },
   { title: "Multi-persona RBAC + approval workflow", body: "Six personas (PDL, SLL, PO, FIN, QRM, IT) with per-feature permissions, status state-machine, AI-narrative-attached approvals, per-deal audit trail." },
   { title: "Integration backbone", body: "Provider-pattern abstraction (simulated → live by configuration) for Dynamics, Workday, Intapp (Intake + Screening), Conga, Power BI. Outbound is event-driven, with each integration on its own trigger: Dynamics + Intapp outcome push fire on deal approval/rejection; Workday project push fires on approval only (with atomic committed-budget reserve); Intapp mitigation push fires on each mitigation resolve/waive/reject; Conga is an explicit letter-generation + delivery flow (not an approval-outcome push). Per-integration audit log throughout." },
@@ -87,7 +88,7 @@ export function ArchitectureCotsVsBuild() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         {[
           { num: "1", title: "Buy to accelerate", body: "Adopt COTS where the market has already solved a generic problem (CRM, HCM, contract assembly, financials, BI). All five are already integrated." },
-          { num: "2", title: "Build to differentiate", body: "Own the scoping & pricing engine and intelligence layer that codifies Armanino's IP — role hierarchy, complexity multipliers, scope catalog, scenarios, AI calibration." },
+          { num: "2", title: "Build to differentiate", body: `Own the scoping & pricing engine and intelligence layer that codifies ${BRAND.name}'s IP — role hierarchy, complexity multipliers, scope catalog, scenarios, AI calibration.` },
           { num: "3", title: "ISO 42001 as a moat", body: "An owned AI Management System (AIMS) embedded in the build is materially harder for any horizontal SaaS vendor to replicate per tenant." },
         ].map((p) => (
           <div key={p.num} className="bg-white border border-stone-200 rounded-xl p-4">
@@ -148,7 +149,7 @@ export function ArchitectureCotsVsBuild() {
         <h3 className="text-base font-bold text-foreground mb-3">Why DealPad build wins for scope &amp; pricing</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
           {BUILD_PILLARS.map((p, i) => (
-            <div key={i} className="bg-gradient-to-br from-orange-50/40 via-white to-white border border-orange-100 rounded-xl p-4">
+            <div key={i} className="bg-gradient-to-br from-accent/40 via-white to-white border border-accent rounded-xl p-4">
               <div className="flex items-start gap-2 mb-2">
                 <ShieldCheck className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
                 <h4 className="font-semibold text-foreground text-sm">{p.title}</h4>
@@ -177,7 +178,7 @@ export function ArchitectureCotsVsBuild() {
                   <td className="px-4 py-2.5 text-foreground">{d.area}</td>
                   <td className="px-4 py-2.5">
                     <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold ${
-                      d.kind === "build" ? "bg-orange-50 text-orange-700 border border-orange-200" :
+                      d.kind === "build" ? "bg-primary/5 text-primary border border-primary/20" :
                       d.kind === "buy"   ? "bg-emerald-50 text-emerald-700 border border-emerald-200" :
                                            "bg-rose-50 text-rose-700 border border-rose-200"
                     }`}>

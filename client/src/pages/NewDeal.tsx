@@ -4,6 +4,7 @@ import { useClients, useCreateDeal, useDeals, useCloneDeal, useEligibleOpportuni
 import { useAuth } from "@/context/AuthContext";
 import { ArrowLeft, FileText, Loader2, Sparkles, Repeat, Briefcase, Database } from "lucide-react";
 import { Link } from "wouter";
+import { BRAND } from "@/brand";
 
 export function NewDeal() {
   const { data: clients } = useClients();
@@ -310,7 +311,7 @@ export function NewDeal() {
               </div>
               <div className="col-span-2">
                 <label className="label">PDL Email</label>
-                <input type="email" value={form.pdlEmail} onChange={e => setForm({...form, pdlEmail: e.target.value})} className="input-field mt-1" placeholder="email@armanino.com" />
+                <input type="email" value={form.pdlEmail} onChange={e => setForm({...form, pdlEmail: e.target.value})} className="input-field mt-1" placeholder={`email@${BRAND.domain}`} />
               </div>
             </div>
           </div>

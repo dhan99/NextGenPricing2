@@ -6,7 +6,7 @@
 <title>DealPad: Architecture &amp; Technical Decision Record</title>
 <style>
   :root {
-    --primary: #DA720F;
+    --primary: #115E67;
     --bg: #fafaf9;
     --text: #1c1917;
     --muted: #78716c;
@@ -228,7 +228,7 @@
   <h1>DealPad: Architecture &amp; Technical Decision Record</h1>
   <div class="meta">
     <strong>Project:</strong> NextGenApp Pricing &amp; Scoping 2.0<br>
-    <strong>Client:</strong> Armanino LLP<br>
+    <strong>Client:</strong> EisnerAmper LLP<br>
     <strong>Version:</strong> 1.0 (Proof of Concept)<br>
     <strong>Date:</strong> April 16, 2026<br>
     <strong>Classification:</strong> Internal / Confidential
@@ -262,7 +262,7 @@
 
 <!-- SECTION 1 -->
 <h2 id="s1">1. Executive Summary</h2>
-<p>DealPad is a full-stack Proof of Concept (PoC) application built for <strong>Armanino LLP</strong> to replace legacy Excel-based pricing and scoping workbooks used across the firm's consulting practice. The application introduces five AI-powered use cases, role-based access control across six organizational personas, and a modern user experience inspired by leading fintech platforms (Ramp.com, Gusto.com).</p>
+<p>DealPad is a full-stack Proof of Concept (PoC) application built for <strong>EisnerAmper LLP</strong> to replace legacy Excel-based pricing and scoping workbooks used across the firm's consulting practice. The application introduces five AI-powered use cases, role-based access control across six organizational personas, and a modern user experience inspired by leading fintech platforms (Ramp.com, Gusto.com).</p>
 <p>The PoC validates the core deal lifecycle workflow -- from scoping and pricing through scenario comparison and approval -- while establishing the architectural patterns and design language that will carry forward into the production Azure-hosted platform.</p>
 
 <h3>Key Metrics</h3>
@@ -283,7 +283,7 @@
 <!-- SECTION 2 -->
 <h2 id="s2">2. Project Vision &amp; Problem Statement</h2>
 <h3>Problem</h3>
-<p>Armanino's consulting practice relies on Excel workbooks for deal pricing and scoping, leading to:</p>
+<p>EisnerAmper's consulting practice relies on Excel workbooks for deal pricing and scoping, leading to:</p>
 <ul>
   <li><strong>Inconsistent pricing</strong> across partners and service lines</li>
   <li><strong>No auditability</strong> of pricing decisions or approval history</li>
@@ -707,7 +707,7 @@ graph TD
 <h4>UC-2: Effort Estimation (<code>POST /api/ai/effort-estimation</code>)</h4>
 <p><strong>Purpose:</strong> Predicts total hours and role distribution based on scope complexity and contextual prompts.</p>
 <p><strong>PoC Logic:</strong> Applies complexity multipliers (low=0.8x, medium=1.0x, high=1.2x, very_high=1.5x). Compounds with prompt response impact multipliers. Distributes total hours across 7 roles using a fixed distribution model.</p>
-<p><strong>Target:</strong> Fine-tuned model trained on Armanino's historical engagement data.</p>
+<p><strong>Target:</strong> Fine-tuned model trained on EisnerAmper's historical engagement data.</p>
 
 <h4>UC-3: Margin Advisor (<code>POST /api/ai/margin-advisor</code>)</h4>
 <p><strong>Purpose:</strong> Analyzes current pricing structure and suggests optimizations to meet margin targets (default 25%).</p>
@@ -772,7 +772,7 @@ graph LR
 <h3>Persona Matrix</h3>
 <table>
   <tr><th>Role ID</th><th>Name</th><th>Title</th><th>Accent Color</th><th>Primary Domain</th></tr>
-  <tr><td><code>pdl</code></td><td>Michael Torres</td><td>Project Delivery Lead</td><td style="color:#DA720F;">Orange (#DA720F)</td><td>Deal creation, scoping, pricing, AI tools</td></tr>
+  <tr><td><code>pdl</code></td><td>Michael Torres</td><td>Project Delivery Lead</td><td style="color:#115E67;">Orange (#115E67)</td><td>Deal creation, scoping, pricing, AI tools</td></tr>
   <tr><td><code>sll</code></td><td>Sarah Chen</td><td>Service Line Leader</td><td style="color:#3b82f6;">Blue (#3b82f6)</td><td>Deal approval, pipeline oversight</td></tr>
   <tr><td><code>po</code></td><td>James Wright</td><td>Pricing Operations</td><td style="color:#059669;">Emerald (#059669)</td><td>Rate card and scope catalog governance</td></tr>
   <tr><td><code>fin</code></td><td>Lisa Park</td><td>Finance / FP&amp;A</td><td style="color:#7c3aed;">Violet (#7c3aed)</td><td>Margin validation, financial metrics</td></tr>
@@ -1605,7 +1605,7 @@ graph TD
 <h3>Phase 4: Advanced AI</h3>
 <table>
   <tr><th>Capability</th><th>Description</th></tr>
-  <tr><td>Fine-Tuned Models</td><td>Armanino-specific effort prediction models trained on historical data</td></tr>
+  <tr><td>Fine-Tuned Models</td><td>EisnerAmper-specific effort prediction models trained on historical data</td></tr>
   <tr><td>RAG-Based Similarity</td><td>Vector store of historical deals for semantic search</td></tr>
   <tr><td>Multi-Agent Workflows</td><td>LangGraph orchestration of chained AI tasks</td></tr>
   <tr><td>Predictive Analytics</td><td>Win probability scoring based on deal attributes</td></tr>
@@ -1672,7 +1672,7 @@ graph TD
 └── tsconfig.json</code></pre>
 
 <div class="footer">
-  <p>Document generated for Armanino LLP - DealPad PoC v1.0</p>
+  <p>Document generated for EisnerAmper LLP - DealPad PoC v1.0</p>
   <p>This document reflects the architecture as implemented in the Proof of Concept. Production architecture decisions are subject to refinement during Phase 2 planning.</p>
 </div>
 

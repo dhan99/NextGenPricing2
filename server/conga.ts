@@ -8,6 +8,7 @@ import {
   congaSettings, congaTemplates, engagementLetters,
   deals, clients, pricingLines, roles as rolesTable,
 } from "../shared/schema";
+import { BRAND } from "./brand";
 
 // ====================================================================
 // PROVIDER INTERFACE — mirrors the Intapp simulated→live pattern.
@@ -120,7 +121,7 @@ async function renderLetterPdf(args: {
     margins: { top: 64, bottom: 64, left: 64, right: 64 },
     info: {
       Title: `Engagement Letter — ${deal.title}`,
-      Author: "Armanino LLP",
+      Author: BRAND.legalName,
       Subject: template.name,
       Keywords: `engagement-letter,${template.key},${externalRef}`,
     },
@@ -129,7 +130,7 @@ async function renderLetterPdf(args: {
   doc.on("data", (c) => chunks.push(c));
   const done = new Promise<Buffer>((resolve) => doc.on("end", () => resolve(Buffer.concat(chunks))));
 
-  const ORANGE = "#DA720F";
+  const ORANGE = BRAND.colors.primary;
   const STONE_900 = "#1c1917";
   const STONE_600 = "#57534e";
   const STONE_500 = "#78716c";
@@ -139,7 +140,7 @@ async function renderLetterPdf(args: {
   // ---- Header bar
   doc.rect(0, 0, doc.page.width, 6).fill(ORANGE);
   doc.fillColor(STONE_500).font("Helvetica-Bold").fontSize(8)
-     .text("ARMANINO LLP", 64, 36, { characterSpacing: 2 });
+     .text(BRAND.legalName.toUpperCase(), 64, 36, { characterSpacing: 2 });
   doc.fillColor(STONE_900).font("Helvetica-Bold").fontSize(22)
      .text("Engagement Letter", 64, 50);
   doc.fillColor(STONE_600).font("Helvetica").fontSize(11)
@@ -181,7 +182,7 @@ async function renderLetterPdf(args: {
      .text(`Dear ${client.contactName || "Client"},`, BODY_X, doc.y, { width: BODY_W });
   doc.moveDown(0.4);
   doc.text(
-    `Armanino LLP ("Armanino", "we") is pleased to confirm the terms of our engagement to perform `,
+    `${BRAND.legalName} ("${BRAND.name}", "we") is pleased to confirm the terms of our engagement to perform `,
     BODY_X, doc.y, { width: BODY_W, continued: true }
   );
   doc.font("Helvetica-Bold").text(cleanTitle, { continued: true });
@@ -287,7 +288,7 @@ async function renderLetterPdf(args: {
   const sigY = doc.y + 24;
   const sigCols = [
     { x: 64, label: `ACCEPTED BY ${(client.name || "CLIENT").toUpperCase()}`, name: "Name, Title" },
-    { x: 320, label: "ARMANINO LLP", name: deal.pdlName || "Engagement Partner" },
+    { x: 320, label: BRAND.legalName.toUpperCase(), name: deal.pdlName || "Engagement Partner" },
   ];
   sigCols.forEach((s) => {
     doc.fillColor(STONE_500).font("Helvetica-Bold").fontSize(8).text(s.label, s.x, sigY, { characterSpacing: 1, width: 220 });
@@ -301,7 +302,7 @@ async function renderLetterPdf(args: {
   doc.fillColor(STONE_500).font("Helvetica").fontSize(8)
      .text(`Generated via DealPad → Conga Composer (${externalRef})`, 64, 740, { width: 484, align: "center" });
   doc.fillColor("#a8a29e").fontSize(8)
-     .text("Armanino LLP · Confidential", 64, 752, { width: 484, align: "center" });
+     .text(`${BRAND.legalName} · Confidential`, 64, 752, { width: 484, align: "center" });
 
   doc.end();
   return done;
@@ -441,7 +442,7 @@ const STANDARD_FIELD_MAP = [
   { field: "{{Client.Name}}", source: "clients.name", description: "Legal client name on the letter header" },
   { field: "{{Client.PrimaryContact}}", source: "clients.contact_name", description: "Primary contact addressed in the salutation" },
   { field: "{{Engagement.Title}}", source: "deals.title", description: "Engagement title printed in summary block" },
-  { field: "{{Engagement.DealNumber}}", source: "deals.deal_number", description: "Internal Armanino deal reference" },
+  { field: "{{Engagement.DealNumber}}", source: "deals.deal_number", description: `Internal ${BRAND.name} deal reference` },
   { field: "{{Engagement.ServiceLine}}", source: "deals.service_line", description: "Service line driving template selection" },
   { field: "{{Engagement.Period}}", source: "deals.start_date + deals.end_date", description: "Engagement period rendered as a single range" },
   { field: "{{Engagement.TotalFee}}", source: "deals.total_fee", description: "Top-line fee shown in summary and signature blocks" },

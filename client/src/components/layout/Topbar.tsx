@@ -23,7 +23,7 @@ const ROUTE_LABELS: { match: RegExp; label: string; href?: string }[] = [
 ];
 
 const roleColor: Record<string, string> = {
-  pdl: "bg-orange-500",
+  pdl: "bg-primary",
   sll: "bg-blue-500",
   po: "bg-emerald-500",
   fin: "bg-violet-500",

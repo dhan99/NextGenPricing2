@@ -5,6 +5,7 @@
 // "<your-os-user>" does not exist` FATAL on boot). This was the
 // "concurrently doesn't auto-load .env" gotcha from CLAUDE.md.
 import "dotenv/config";
+import { BRAND } from "./brand";
 
 import express from "express";
 import cors from "cors";
@@ -360,7 +361,7 @@ async function pushSchema() {
       probability INTEGER DEFAULT 20,
       estimated_close_date TEXT, actual_close_date TEXT,
       owner_name TEXT,
-      sales_process TEXT DEFAULT 'Armanino NextGenApp Sales Process',
+      sales_process TEXT DEFAULT '${BRAND.salesProcess}',
       forecast_category TEXT DEFAULT 'Pipeline',
       rating TEXT DEFAULT 'Warm',
       sync_status TEXT DEFAULT 'synced',
@@ -1122,6 +1123,9 @@ async function pushSchema() {
 
   // Backfill: ensure unique constraint on dealpad_deal_id even if table pre-existed
   await pool.query(`
+    -- Brand-dependent default: CREATE TABLE IF NOT EXISTS leaves the old value in place on existing
+    -- DBs, so re-assert it each boot (additive-safe; does not touch existing rows). See server/brand.ts.
+    ALTER TABLE dynamics_opportunities ALTER COLUMN sales_process SET DEFAULT '${BRAND.salesProcess}';
     DO $$ BEGIN
       IF NOT EXISTS (
         SELECT 1 FROM pg_constraint WHERE conname = 'dynamics_opportunities_dealpad_deal_id_unique'

@@ -1,6 +1,7 @@
 import { pool } from "./db";
 import * as fs from "fs";
 import * as path from "path";
+import { BRAND } from "./brand";
 
 const SNAPSHOT_PATH = path.join(process.cwd(), "server", "seed-snapshot.json");
 
@@ -47,7 +48,11 @@ export async function loadSeedSnapshot() {
     console.log("[snapshot] no snapshot file, skipping");
     return;
   }
-  const raw = fs.readFileSync(SNAPSHOT_PATH, "utf-8");
+  // Brand placeholders ({{brand.domain}} / {{brand.name}}) are substituted at load so one
+  // snapshot serves every brand; see shared/brand.ts.
+  const raw = fs.readFileSync(SNAPSHOT_PATH, "utf-8")
+    .replaceAll("{{brand.domain}}", BRAND.domain)
+    .replaceAll("{{brand.name}}", BRAND.name);
   const snapshot: Record<string, any[]> = JSON.parse(raw);
   let totalInserted = 0;
 
