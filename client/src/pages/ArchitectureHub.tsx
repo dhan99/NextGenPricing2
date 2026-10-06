@@ -83,7 +83,7 @@ function ConversationalAI() {
         return <strong key={i} className="font-semibold text-foreground">{part.slice(2, -2)}</strong>;
       }
       if (part.startsWith("`") && part.endsWith("`")) {
-        return <code key={i} className="bg-stone-100 px-1.5 py-0.5 rounded text-xs font-mono text-orange-700">{part.slice(1, -1)}</code>;
+        return <code key={i} className="bg-stone-100 px-1.5 py-0.5 rounded text-xs font-mono text-primary">{part.slice(1, -1)}</code>;
       }
       if (part === "\n") return <br key={i} />;
       return <span key={i}>{part}</span>;
@@ -94,7 +94,7 @@ function ConversationalAI() {
     <div className="flex flex-col h-[calc(100vh-180px)]">
       {messages.length === 0 ? (
         <div className="flex-1 flex flex-col items-center justify-center px-8">
-          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-orange-100 to-amber-50 flex items-center justify-center mb-6">
+          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-accent to-white flex items-center justify-center mb-6">
             <Bot className="w-8 h-8 text-primary" />
           </div>
           <h3 className="text-xl font-bold text-foreground mb-2">Architecture Assistant</h3>
@@ -120,7 +120,7 @@ function ConversationalAI() {
           {messages.map((msg, i) => (
             <div key={i} className={`flex gap-3 ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
               {msg.role === "assistant" && (
-                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-orange-100 to-amber-50 flex items-center justify-center flex-shrink-0 mt-1">
+                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-accent to-white flex items-center justify-center flex-shrink-0 mt-1">
                   <Bot className="w-4 h-4 text-primary" />
                 </div>
               )}
@@ -147,7 +147,7 @@ function ConversationalAI() {
                       <button
                         key={j}
                         onClick={() => sendMessage(`Tell me about ${t}`)}
-                        className="text-[11px] px-2 py-0.5 bg-orange-50 text-orange-700 rounded-full hover:bg-orange-100 transition-colors cursor-pointer"
+                        className="text-[11px] px-2 py-0.5 bg-primary/5 text-primary rounded-full hover:bg-primary/10 transition-colors cursor-pointer"
                       >
                         {t}
                       </button>
@@ -164,7 +164,7 @@ function ConversationalAI() {
           ))}
           {isLoading && (
             <div className="flex gap-3">
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-orange-100 to-amber-50 flex items-center justify-center flex-shrink-0">
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-accent to-white flex items-center justify-center flex-shrink-0">
                 <Bot className="w-4 h-4 text-primary" />
               </div>
               <div className="bg-white border border-stone-200 rounded-2xl rounded-bl-md px-4 py-3">
@@ -208,7 +208,7 @@ function DocumentView() {
   return (
     <div className="space-y-6 p-6">
       <div className="bg-white border border-stone-200 rounded-2xl p-8 text-center">
-        <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-orange-100 to-amber-50 flex items-center justify-center mx-auto mb-6">
+        <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-accent to-white flex items-center justify-center mx-auto mb-6">
           <FileText className="w-8 h-8 text-primary" />
         </div>
         <h3 className="text-xl font-bold text-foreground mb-2">Architecture Document</h3>

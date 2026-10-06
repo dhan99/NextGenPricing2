@@ -38,6 +38,25 @@
   --font-heading: 'Inter', system-ui, -apple-system, sans-serif;
 }
 
+/* Brand overrides. `data-brand` is stamped on <html> at build time from BRAND_ID
+   (index.html). Tailwind utilities read these vars, so every `bg-primary`,
+   `ring-primary`, `bg-sidebar-bg` etc. follows the active brand. Values mirror
+   shared/brand.ts; the default (:root above) is the Armanino palette. */
+:root[data-brand="eisneramper"] {
+  --color-primary: #115E67;
+  --color-secondary: #EAE5E1;
+  --color-secondary-foreground: #0C2E45;
+  --color-accent: #F3EDE3;
+  --color-accent-foreground: #885C11;
+  --color-ring: #115E67;
+  --color-sidebar-bg: #0C2E45;
+  --color-sidebar-fg: #E6EEF4;
+  --color-sidebar-accent: #164060;
+  --color-sidebar-muted: #8FAABF;
+  --font-sans: 'Raleway', system-ui, -apple-system, sans-serif;
+  --font-heading: 'Fraunces', Georgia, serif;
+}
+
 @layer base {
   * {
     @apply border-border;

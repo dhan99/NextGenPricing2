@@ -1,3 +1,4 @@
+import { BRAND } from "@/brand";
 import { useMemo, useState } from "react";
 import { Link } from "wouter";
 import {
@@ -757,7 +758,7 @@ function SettingsTab() {
             <label className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">Client ID</label>
             <input type="text" defaultValue={settings.liveClientId || ""}
               onBlur={(e) => set("liveClientId", e.target.value)}
-              placeholder="armanino-prod"
+              placeholder={`${BRAND.id}-prod`}
               className="w-full mt-1 px-3 py-2 border border-stone-300 rounded-md text-sm focus:outline-none focus:border-primary" />
           </div>
           <div>
@@ -817,7 +818,7 @@ function SettingsTab() {
             <label className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">Recipients (comma-separated emails)</label>
             <input type="text" defaultValue={settings.qrmNotifyRecipients || ""}
               onBlur={(e) => set("qrmNotifyRecipients", e.target.value)}
-              placeholder="qrm-leads@armanino.com, partner-on-call@armanino.com"
+              placeholder={`qrm-leads@${BRAND.domain}, partner-on-call@${BRAND.domain}`}
               className="w-full mt-1 px-3 py-2 border border-stone-300 rounded-md text-sm focus:outline-none focus:border-primary" />
             <div className="text-[11px] text-muted-foreground mt-1">
               Pilot mode: emails are simulated-send (recorded in the audit log; no SMTP wired). Live cutover swaps in your firm's mail relay.
@@ -844,7 +845,7 @@ function SettingsTab() {
             <label className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">App base URL (used in deal links)</label>
             <input type="text" defaultValue={settings.appBaseUrl || ""}
               onBlur={(e) => set("appBaseUrl", e.target.value)}
-              placeholder="https://dealpad.armanino.com"
+              placeholder={`https://dealpad.${BRAND.domain}`}
               className="w-full mt-1 px-3 py-2 border border-stone-300 rounded-md text-sm focus:outline-none focus:border-primary" />
           </div>
         </div>

@@ -1,4 +1,5 @@
 import { pgTable, text, serial, integer, decimal, boolean, timestamp, jsonb, varchar, uniqueIndex, customType } from "drizzle-orm/pg-core";
+import { BRANDS } from "./brand";
 
 /**
  * pgvector `vector(N)` column type for Drizzle (F2.1.2). The
@@ -847,7 +848,7 @@ export const dynamicsOpportunities = pgTable("dynamics_opportunities", {
   estimatedCloseDate: text("estimated_close_date"),
   actualCloseDate: text("actual_close_date"),
   ownerName: text("owner_name"),
-  salesProcess: text("sales_process").default("Armanino NextGenApp Sales Process"),
+  salesProcess: text("sales_process").default(BRANDS.armanino.salesProcess) /* drizzle-kit only; pushSchema() sets the per-brand default */,
   forecastCategory: text("forecast_category").default("Pipeline"),
   rating: text("rating").default("Warm"),
   syncStatus: text("sync_status").default("synced"),

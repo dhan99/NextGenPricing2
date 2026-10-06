@@ -1,3 +1,4 @@
+import { brandEmail } from "./brand";
 import type { Request, Response, Express } from "express";
 import { db } from "./db";
 import { requirePerm, requireAnyPerm } from "./rbac";
@@ -22,11 +23,11 @@ const INDUSTRY_CODES: Record<string, string> = {
 };
 
 const SEED_OWNERS = [
-  { name: "Jennifer Walsh", email: "jwalsh@armanino.com", quota: "2500000" },
-  { name: "Marcus Chen", email: "mchen@armanino.com", quota: "2500000" },
-  { name: "Priya Anand", email: "panand@armanino.com", quota: "2500000" },
-  { name: "Tom Becker", email: "tbecker@armanino.com", quota: "2500000" },
-  { name: "Lisa Hartmann", email: "lhartmann@armanino.com", quota: "2500000" },
+  { name: "Jennifer Walsh", email: brandEmail("jwalsh"), quota: "2500000" },
+  { name: "Marcus Chen", email: brandEmail("mchen"), quota: "2500000" },
+  { name: "Priya Anand", email: brandEmail("panand"), quota: "2500000" },
+  { name: "Tom Becker", email: brandEmail("tbecker"), quota: "2500000" },
+  { name: "Lisa Hartmann", email: brandEmail("lhartmann"), quota: "2500000" },
 ];
 
 function uuid(seed: string): string {

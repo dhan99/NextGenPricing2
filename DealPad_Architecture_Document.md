@@ -1,7 +1,7 @@
 # DealPad: Architecture & Technical Decision Record
 
 **Project:** NextGenApp Pricing & Scoping 2.0  
-**Client:** Armanino LLP  
+**Client:** EisnerAmper LLP  
 **Version:** 1.0 (Proof of Concept)  
 **Date:** April 16, 2026  
 **Classification:** Internal / Confidential
@@ -34,7 +34,7 @@
 
 ## 1. Executive Summary
 
-DealPad is a full-stack Proof of Concept (PoC) application built for **Armanino LLP** to replace legacy Excel-based pricing and scoping workbooks used across the firm's consulting practice. The application introduces five AI-powered use cases, role-based access control across six organizational personas, and a modern user experience inspired by leading fintech platforms (Ramp.com, Gusto.com).
+DealPad is a full-stack Proof of Concept (PoC) application built for **EisnerAmper LLP** to replace legacy Excel-based pricing and scoping workbooks used across the firm's consulting practice. The application introduces five AI-powered use cases, role-based access control across six organizational personas, and a modern user experience inspired by leading fintech platforms (Ramp.com, Gusto.com).
 
 The PoC validates the core deal lifecycle workflow -- from scoping and pricing through scenario comparison and approval -- while establishing the architectural patterns and design language that will carry forward into the production Azure-hosted platform.
 
@@ -57,7 +57,7 @@ The PoC validates the core deal lifecycle workflow -- from scoping and pricing t
 
 ### Problem
 
-Armanino's consulting practice relies on Excel workbooks for deal pricing and scoping, leading to:
+EisnerAmper's consulting practice relies on Excel workbooks for deal pricing and scoping, leading to:
 
 - **Inconsistent pricing** across partners and service lines
 - **No auditability** of pricing decisions or approval history
@@ -613,7 +613,7 @@ graph TD
 **Input:** `{ scopeItems[], complexity, prompts[] }`  
 **Output:** `{ estimatedItems[], totalHours, roleDistribution[], narrative }`
 
-**Target Implementation:** Fine-tuned model trained on Armanino's historical engagement data for role distribution prediction.
+**Target Implementation:** Fine-tuned model trained on EisnerAmper's historical engagement data for role distribution prediction.
 
 #### UC-3: Margin Advisor (`POST /api/ai/margin-advisor`)
 
@@ -726,7 +726,7 @@ graph LR
 
 | Role ID | Name | Title | Accent Color | Primary Domain |
 |---|---|---|---|---|
-| `pdl` | Michael Torres | Project Delivery Lead | Orange (#DA720F) | Deal creation, scoping, pricing, AI tools |
+| `pdl` | Michael Torres | Project Delivery Lead | Orange (#115E67) | Deal creation, scoping, pricing, AI tools |
 | `sll` | Sarah Chen | Service Line Leader | Blue (#3b82f6) | Deal approval, pipeline oversight |
 | `po` | James Wright | Pricing Operations | Emerald (#059669) | Rate card & scope catalog governance |
 | `fin` | Lisa Park | Finance / FP&A | Violet (#7c3aed) | Margin validation, financial metrics |
@@ -834,7 +834,7 @@ graph TD
 ### Design System
 
 **Brand Identity:**
-- Primary color: Armanino amber `#DA720F`
+- Primary color: EisnerAmper teal `#115E67`
 - Background: Warm stone `#fafaf9`
 - Sidebar: Dark stone `#1c1917`
 - Typography: Inter (system font stack)
@@ -1748,13 +1748,13 @@ graph TD
 
 ### ADR-007: Tailwind CSS v4 with Custom Design System
 
-**Context:** Need a design system that reflects Armanino's brand identity while enabling rapid UI development.
+**Context:** Need a design system that reflects EisnerAmper's brand identity while enabling rapid UI development.
 
 **Decision:** Use Tailwind CSS v4 with CSS custom properties for theming and `@layer components` for reusable patterns.
 
 **Rationale:**
 - Utility-first approach enables rapid prototyping
-- CSS variables (`--color-primary: #DA720F`) enable theming without build-time configuration
+- CSS variables (`--color-primary: #115E67`) enable theming without build-time configuration
 - Component layer (`.btn`, `.card`, `.badge`) provides consistency without a component library dependency
 - Persona-specific accent colors implemented via dynamic class application
 - No runtime CSS-in-JS overhead
@@ -1834,7 +1834,7 @@ graph TD
 
 | Capability | Description |
 |---|---|
-| Fine-Tuned Models | Armanino-specific effort prediction models trained on historical data |
+| Fine-Tuned Models | EisnerAmper-specific effort prediction models trained on historical data |
 | RAG-Based Similarity | Vector store of historical deals for semantic search |
 | Multi-Agent Workflows | LangGraph orchestration of chained AI tasks (scope -> price -> risk in one flow) |
 | Predictive Analytics | Win probability scoring based on deal attributes |
@@ -1904,5 +1904,5 @@ dealpad/
 
 ---
 
-*Document generated for Armanino LLP - DealPad PoC v1.0*  
+*Document generated for EisnerAmper LLP - DealPad PoC v1.0*  
 *This document reflects the architecture as implemented in the Proof of Concept. Production architecture decisions are subject to refinement during Phase 2 planning.*

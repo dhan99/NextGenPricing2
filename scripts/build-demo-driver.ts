@@ -4,7 +4,7 @@ import path from "path";
 
 const OUT = path.join(process.cwd(), "DealPad_Demo_Driver.pdf");
 
-const AMBER = "#DA720F";
+const AMBER = "#115E67";
 const AMBER_LIGHT = "#FCEBDA";
 const INK = "#1C1917";
 const MUTE = "#57534E";
@@ -25,7 +25,7 @@ const doc = new PDFDocument({
   autoFirstPage: false,
   info: {
     Title: "DealPad Demo Driver",
-    Author: "Armanino LLP — NextGenApp Pricing & Scoping 2.0",
+    Author: "EisnerAmper LLP — NextGenApp Pricing & Scoping 2.0",
     Subject: "Stakeholder demo walkthrough",
   },
 });
@@ -235,7 +235,7 @@ doc.fillColor("white").font("Helvetica-Bold").fontSize(44)
 doc.font("Helvetica").fontSize(16)
   .text("Pricing & Scoping 2.0", MARGIN, 124, { width: W, lineBreak: false });
 doc.font("Helvetica-Bold").fontSize(11)
-  .text("ARMANINO LLP   ·   NEXTGENAPP", MARGIN, 158, { width: W, characterSpacing: 1.2, lineBreak: false });
+  .text("EISNERAMPER LLP   ·   NEXTGENAPP", MARGIN, 158, { width: W, characterSpacing: 1.2, lineBreak: false });
 
 doc.fillColor(INK).font("Helvetica-Bold").fontSize(32)
   .text("Demo Driver", MARGIN, 280, { width: W, lineBreak: false });
@@ -268,7 +268,7 @@ doc.fillColor(INK).font("Helvetica-Bold").fontSize(11).text("~30 minutes", MARGI
   const savedBottom = doc.page.margins.bottom;
   doc.page.margins.bottom = 0;
   doc.fillColor(MUTE).font("Helvetica").fontSize(8)
-    .text("CONFIDENTIAL — Armanino LLP internal pilot material", MARGIN, 740, { width: W, lineBreak: false });
+    .text("CONFIDENTIAL — EisnerAmper LLP internal pilot material", MARGIN, 740, { width: W, lineBreak: false });
   doc.page.margins.bottom = savedBottom;
 }
 
@@ -873,11 +873,11 @@ table(
 callout("Talking point", AMBER, [
   "DealPad was not designed against ISO 42001 — but the bounded-context architecture, per-action audit",
   "trail, and human-in-the-loop reviewer model align with most of the standard's controls by default.",
-  "A 6-week governance workstream alongside the production pilot would put Armanino in a strong",
+  "A 6-week governance workstream alongside the production pilot would put EisnerAmper in a strong",
   "position to be one of the first professional-services firms with an ISO 42001-certified AI platform.",
 ]);
 
-callout("What changes in the product if Armanino pursues certification", BLUE, [
+callout("What changes in the product if EisnerAmper pursues certification", BLUE, [
   "Add an 'AI Governance' tab to the Architecture Hub: policy, risk register, impact assessments.",
   "Add AI-specific KPIs to Analytics: agent acceptance rate, override rate by step, confidence drift.",
   "Add an 'AI incident' record type linked to deals, with a triage workflow.",
@@ -894,7 +894,7 @@ for (let i = 0; i < range.count; i++) {
   const savedBottom = doc.page.margins.bottom;
   doc.page.margins.bottom = 0;
   doc.fillColor(MUTE).font("Helvetica").fontSize(8);
-  doc.text(`DealPad Demo Driver  ·  Armanino LLP`, MARGIN, PAGE_H - 30, { width: W / 2, align: "left", lineBreak: false });
+  doc.text(`DealPad Demo Driver  ·  EisnerAmper LLP`, MARGIN, PAGE_H - 30, { width: W / 2, align: "left", lineBreak: false });
   doc.text(`${i} / ${range.count - 1}`, MARGIN + W / 2, PAGE_H - 30, { width: W / 2, align: "right", lineBreak: false });
   doc.page.margins.bottom = savedBottom;
 }

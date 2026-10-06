@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Monitor, Server, Brain, Database, Cloud, BarChart3, Users, Shield, Zap, ArrowRight, X, Cpu, GitBranch, Layers } from "lucide-react";
+import { BRAND } from "@/brand";
 
 interface NodeData {
   id: string;
@@ -18,7 +19,7 @@ const nodes: NodeData[] = [
     title: "Browser / Client",
     subtitle: "Presentation Layer",
     category: "frontend",
-    description: "The user-facing layer built with React 19 and Vite. Handles all UI rendering, client-side state management, and API communication. Styled with Tailwind CSS using the Armanino brand design system.",
+    description: `The user-facing layer built with React 19 and Vite. Handles all UI rendering, client-side state management, and API communication. Styled with Tailwind CSS using the ${BRAND.name} brand design system.`,
     details: [
       "8-step Deal Wizard with progress tracking",
       "Dashboard with KPI cards and pipeline view",
@@ -535,7 +536,7 @@ export function ArchitectureInteractive() {
             : connected
             ? `${config.border} hover:shadow-md`
             : "border-transparent opacity-30"
-        } ${config.bg} ${compact ? "p-3" : "p-4"} focus-visible:ring-2 focus-visible:ring-orange-400 focus-visible:ring-offset-2`}
+        } ${config.bg} ${compact ? "p-3" : "p-4"} focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2`}
       >
         <div className="flex items-center gap-3">
           <div className={`${compact ? "w-8 h-8" : "w-9 h-9"} rounded-lg flex items-center justify-center shrink-0 ${isBackend ? "bg-white/10" : "bg-white border border-stone-200/60"}`}>

@@ -31,7 +31,7 @@ STATUS_COLOR = {
     "Operational":   "DCE6F1",  # blue — ops/infra/deploy
 }
 
-HEADER_FILL = PatternFill(fill_type="solid", fgColor="DA720F")  # Armanino amber
+HEADER_FILL = PatternFill(fill_type="solid", fgColor="115E67")  # EisnerAmper amber
 HEADER_FONT = Font(bold=True, color="FFFFFF", size=11)
 SECTION_FILL = PatternFill(fill_type="solid", fgColor="FFF1DA")  # light amber
 SECTION_FONT = Font(bold=True, size=11, color="6B3D02")
@@ -197,7 +197,7 @@ EXCEL_PARITY = [
      "Deal → Summary step", "—"),
     ("Branded proposal export (HTML/PDF)", "US-47",
      "PDL", "Implemented",
-     "GET /api/deals/:id/proposal generates Armanino-branded HTML proposal (or ?format=json).",
+     "GET /api/deals/:id/proposal generates EisnerAmper-branded HTML proposal (or ?format=json).",
      "/api/deals/:id/proposal", "—"),
     ("Renewal output (Year-over-Year summary)", "US-51",
      "PDL", "Implemented",
@@ -563,7 +563,7 @@ def build_overview(wb, totals):
         ("DealPad — Pricing & Scoping 2.0", "", ""),
         ("", "", ""),
         ("What this is",
-         "A web-based replacement for Armanino's Excel-based pricing & scoping workbooks, "
+         "A web-based replacement for EisnerAmper's Excel-based pricing & scoping workbooks, "
          "with bi-directional integration into the Quote-to-Cash stack and AI-driven differentiation. "
          "Pricing methodologies are preserved; calculation parity is contractual.", ""),
         ("", "", ""),
@@ -597,7 +597,7 @@ def build_overview(wb, totals):
         for cell in (a, b, c):
             cell.alignment = Alignment(vertical="top", wrap_text=True)
         if r_idx == 1:
-            a.font = Font(bold=True, size=18, color="DA720F")
+            a.font = Font(bold=True, size=18, color="115E67")
         if col_a in ("Capability buckets", "Status legend", "How to read the sheets"):
             a.fill = SECTION_FILL; a.font = SECTION_FONT
             b.fill = SECTION_FILL

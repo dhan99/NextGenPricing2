@@ -1,3 +1,4 @@
+import { BRAND } from "@/brand";
 import { useState } from "react";
 import {
   Building2, Briefcase, KeyRound, ArrowLeftRight, Code2, Map as MapIcon,
@@ -211,7 +212,7 @@ const WD_SAMPLES: Sample[] = [
     request: `GET /api/workday/cost-centers
 
 # Production equivalent:
-GET /ccx/api/financialManagement/v1/armanino/costCenters
+GET /ccx/api/financialManagement/v1/${BRAND.id}/costCenters
 Authorization: Bearer eyJraWQiOi...`,
     response: `[
   {
@@ -341,7 +342,7 @@ const INTAPP_SAMPLES: Sample[] = [
 # Production equivalent:
 POST /intake/requests
 Authorization: Bearer $INTAPP_API_TOKEN
-X-Tenant-Id: armanino
+X-Tenant-Id: ${BRAND.id}
 {
   "client_name": "Crestwood Holdings",
   "service_line": "Audit",
@@ -429,8 +430,8 @@ POST /screenings
 # Production equivalent (Live mode):
 POST /matters/SCR-2026-000312/decision
 Authorization: Bearer $INTAPP_API_TOKEN
-X-Tenant-Id: armanino
-{ "decision": "approved", "decided_by": "lisa.park@armanino.com" }`,
+X-Tenant-Id: ${BRAND.id}
+{ "decision": "approved", "decided_by": "lisa.park@${BRAND.domain}" }`,
     response: `# Simulated mode (default today):
 { "ok": true,
   "externalRef": "OUT-SCR-2026-000312-APP",
@@ -502,7 +503,7 @@ Content-Type: application/x-www-form-urlencoded
 grant_type=client_credentials
 &client_id=$D365_CLIENT_ID
 &client_secret=$D365_CLIENT_SECRET
-&scope=https://armanino.api.crm.dynamics.com/.default`,
+&scope=https://${BRAND.id}.api.crm.dynamics.com/.default`,
     },
     read: D365_READ,
     write: D365_WRITE,
@@ -535,7 +536,7 @@ grant_type=client_credentials
       scope: "staffing financialManagement compensation",
       header: "Authorization: Bearer <token>  (REST)  ·  Basic base64(ISU@tenant:password)  (SOAP)",
       secrets: ["workday_settings.tenantUrl", "workday_settings.isuUsername", "workday_settings.apiClientId", "workday_settings.apiClientSecret"],
-      tokenSample: `POST /ccx/oauth2/armanino/token  HTTP/1.1
+      tokenSample: `POST /ccx/oauth2/${BRAND.id}/token  HTTP/1.1
 Host: wd5.workday.com
 Content-Type: application/x-www-form-urlencoded
 Authorization: Basic <base64(client_id:client_secret)>

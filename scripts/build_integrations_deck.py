@@ -478,7 +478,7 @@ def build():
                "grant_type=client_credentials\n"
                "&client_id=$D365_CLIENT_ID\n"
                "&client_secret=$D365_CLIENT_SECRET\n"
-               "&scope=https://armanino.api.crm.dynamics.com/.default",
+               "&scope=https://eisneramper.api.crm.dynamics.com/.default",
                label="Token request")
 
     # 6 D365 read endpoints
@@ -571,7 +571,7 @@ def build():
         "Audit: workday_events (every call), workday_validations + workday_validation_findings (every check + override)",
     ], size=14)
     code_block(s, Inches(0.55), Inches(5.0), Inches(12.3), Inches(2.0),
-               "POST /ccx/oauth2/armanino/token  HTTP/1.1\n"
+               "POST /ccx/oauth2/eisneramper/token  HTTP/1.1\n"
                "Host: wd5.workday.com\n"
                "Content-Type: application/x-www-form-urlencoded\n"
                "Authorization: Basic <base64(client_id:client_secret)>\n\n"
@@ -611,7 +611,7 @@ def build():
                                 footer_idx=16, footer_total=total)
     code_block(s, Inches(0.55), Inches(2.0), Inches(6.0), Inches(2.4),
                "GET /ccx/api/financialManagement/v1/\n"
-               "    armanino/costCenters/CC-CONS-300\n"
+               "    eisneramper/costCenters/CC-CONS-300\n"
                "Authorization: Bearer eyJraWQiOi...\n"
                "Accept: application/json\n\n"
                "200 OK\n"

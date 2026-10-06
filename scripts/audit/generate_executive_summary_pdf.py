@@ -25,8 +25,8 @@ from reportlab.pdfbase.pdfmetrics import stringWidth
 OUT_PATH = "docs/DealPad_Executive_Summary.pdf"
 
 # ---- Brand palette ----
-ARM_AMBER = HexColor("#DA720F")
-ARM_OLIVE = HexColor("#949300")
+ARM_AMBER = HexColor("#115E67")
+ARM_OLIVE = HexColor("#BF9B5F")
 ARM_DARK = HexColor("#1F2A37")
 ARM_MUTED = HexColor("#6B7A90")
 ARM_LIGHT_AMBER = HexColor("#FFF1DA")
@@ -93,7 +93,7 @@ def main() -> None:
     c = canvas.Canvas(OUT_PATH, pagesize=letter)
     c.setTitle("DealPad — Pricing & Scoping 2.0 — Executive Summary")
     c.setAuthor("DealPad")
-    c.setSubject("5-phase delivery plan for Armanino DealPad team")
+    c.setSubject("5-phase delivery plan for EisnerAmper DealPad team")
 
     # Background
     draw_filled_rect(c, 0, 0, PAGE_W, PAGE_H, ARM_BG)
@@ -115,7 +115,7 @@ def main() -> None:
     c.setFillColor(white)
     c.setFont("Helvetica-Bold", 10)
     c.drawString(PAGE_W - MARGIN - tw, PAGE_H - 0.32 * inch, tag)
-    sub = "Stakeholder briefing — Armanino"
+    sub = "Stakeholder briefing — EisnerAmper"
     sw = stringWidth(sub, "Helvetica", 9)
     c.setFont("Helvetica", 9)
     c.drawString(PAGE_W - MARGIN - sw, PAGE_H - 0.55 * inch, sub)
@@ -240,7 +240,7 @@ def main() -> None:
     draw_filled_rect(c, MARGIN, box_top - box_h, box_w, box_h,
                      ARM_LIGHT_AMBER, stroke_color=ARM_AMBER)
     draw_text(c, MARGIN + 0.12 * inch, box_top - 0.20 * inch,
-              "What we need from Armanino",
+              "What we need from EisnerAmper",
               font="Helvetica-Bold", size=11, color=ARM_AMBER)
     asks = [
         "10 representative Excel workbooks for calc parity",

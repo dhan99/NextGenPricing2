@@ -8,6 +8,11 @@
 FROM node:22-slim AS builder
 WORKDIR /app
 
+# Brand baked into the SPA bundle (shared/brand.ts). Override per image:
+#   docker build --build-arg BRAND_ID=eisneramper .
+ARG BRAND_ID=armanino
+ENV BRAND_ID=$BRAND_ID
+
 # Install deps first so the layer caches when only source changes
 COPY package.json package-lock.json* ./
 RUN npm ci
@@ -27,6 +32,9 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 ENV PORT=10000
+# Must match the builder's BRAND_ID so server-side PDFs/seeds agree with the bundle.
+ARG BRAND_ID=armanino
+ENV BRAND_ID=$BRAND_ID
 
 # Postgres client is useful for one-shot CREATE EXTENSION + reseed
 # from inside the container. Tiny binary; worth the ~2MB.

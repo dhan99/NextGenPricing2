@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Generate docs/DealPad_Stakeholder_Pitch.pptx — phased delivery
-narrative for the Armanino DealPad team.
+narrative for the EisnerAmper DealPad team.
 
 Layout philosophy:
   - Tax-first throughout (Tax PDL is the primary persona; Tax PHB
@@ -12,7 +12,7 @@ Layout philosophy:
   - Intapp lands in Phase 4 — Screening + Intake ONLY (DealPad
     remains the pricing engine; Intapp is the conflicts/intake
     source-of-truth). Bumped from earlier draft of Phase 5 so
-    Armanino's team can lock workflow inside the project's runway.
+    EisnerAmper's team can lock workflow inside the project's runway.
 
 Re-run from repo root:
     python3 scripts/audit/generate_pitch_deck.py
@@ -30,7 +30,7 @@ from copy import deepcopy
 
 OUT_PATH = "docs/DealPad_Stakeholder_Pitch.pptx"
 
-# ---- Brand palette (Armanino) ----
+# ---- Brand palette (EisnerAmper) ----
 ARM_AMBER = RGBColor(0xDA, 0x72, 0x0F)        # primary
 ARM_OLIVE = RGBColor(0x94, 0x93, 0x00)        # secondary
 ARM_DARK = RGBColor(0x1F, 0x2A, 0x37)         # body text
@@ -220,7 +220,7 @@ def slide_cover(prs, total):
                 font_size=18, color=ARM_DARK)
 
     add_textbox(slide, Inches(0.6), Inches(6.0), Inches(12), Inches(0.5),
-                "Stakeholder briefing  |  Armanino DealPad team", font_size=14, color=ARM_MUTED)
+                "Stakeholder briefing  |  EisnerAmper DealPad team", font_size=14, color=ARM_MUTED)
     add_textbox(slide, Inches(0.6), Inches(6.4), Inches(12), Inches(0.5),
                 "Live demo: https://dealpad-demo.onrender.com",
                 font_size=12, color=ARM_OLIVE, bold=True)
@@ -265,7 +265,7 @@ def slide_problem(prs, idx, total):
                       bullets, font_size=13)
 
     add_textbox(slide, Inches(0.5), Inches(6.5), Inches(12.3), Inches(0.6),
-                "The cost: margin leakage, audit exposure, and a ceiling on how much business Armanino can scoop up.",
+                "The cost: margin leakage, audit exposure, and a ceiling on how much business EisnerAmper can scoop up.",
                 font_size=14, bold=True, color=ARM_DARK, align=PP_ALIGN.CENTER)
     add_footer(slide, idx, total)
 
@@ -406,7 +406,7 @@ def slide_ai_layering(prs, idx, total):
          "Intake AI confidence-routed extraction:\nhigh-conf auto-progress,\nlow-conf reviewer matrix.",
          "AI sits ON the integration —\nIntake feeds DealPad scope.", PHASE_PURPLE),
         ("Phase 5", "Trained ML",
-         "Effort estimator + margin LP solver\ntrained on Armanino's historical\nTax / Audit engagement history.",
+         "Effort estimator + margin LP solver\ntrained on EisnerAmper's historical\nTax / Audit engagement history.",
          "Per-tenant tuning;\nmodel-version tracking.", PHASE_TEAL),
     ]
     box_w = Inches(2.41)
@@ -474,7 +474,7 @@ def slide_tax_thread(prs, idx, total):
             "Client portal: Tax client reviews proposal via magic-link",
         ]),
         ("Phase 5", "Tax ML at production", PHASE_TEAL, [
-            "Effort estimator trained on Armanino Tax history (<10% MAPE goal)",
+            "Effort estimator trained on EisnerAmper Tax history (<10% MAPE goal)",
             "Margin LP optimizer tuned on Tax practice constraints",
             "Per-tenant Tax catalog (multi-firm scaling)",
             "Slack/Teams alerts on Tax-deal approvals",
@@ -514,7 +514,7 @@ def slide_alternatives(prs, idx, total):
             ("✘", "Lost institutional knowledge"),
         ]),
         ("Intapp Pricing engine", PHASE_BLUE, [
-            ("◐", "Vendor pricing logic — not Armanino's Excel parity"),
+            ("◐", "Vendor pricing logic — not EisnerAmper's Excel parity"),
             ("◐", "Generic; no Tax-first multi-entity"),
             ("◐", "AI = vendor roadmap, not yours"),
             ("✘", "Doesn't replace Excel logic 1:1"),
@@ -601,7 +601,7 @@ def slide_investment(prs, idx, total):
         ("Senior Engineers (2)", "Full-time, all phases"),
         ("AI/ML Engineer", "Phase 2 onward (full-time from P3)"),
         ("UX Designer", "Phase 1, 4 (UI-heavy work)"),
-        ("Armanino SME (PDL+PO)", "Part-time embed, all phases — calc parity acceptance"),
+        ("EisnerAmper SME (PDL+PO)", "Part-time embed, all phases — calc parity acceptance"),
     ]
     ty = Inches(4.2)
     for label, when in team:
@@ -613,7 +613,7 @@ def slide_investment(prs, idx, total):
 
     # ROI levers
     add_textbox(slide, Inches(0.5), Inches(6.0), Inches(12.3), Inches(0.4),
-                "ROI levers (Armanino to validate magnitudes)",
+                "ROI levers (EisnerAmper to validate magnitudes)",
                 font_size=14, bold=True, color=ARM_OLIVE)
     roi = [
         "PDL time saved: 4–6 hrs / Tax engagement × 1,000+ engagements / yr",
@@ -640,7 +640,7 @@ def slide_ask(prs, idx, total):
     y = Inches(1.85)
     add_rounded_rect(slide, left_x, y, box_w, box_h, ARM_LIGHT_AMBER, line_color=ARM_AMBER)
     add_textbox(slide, left_x + Inches(0.2), y + Inches(0.15), box_w - Inches(0.3), Inches(0.5),
-                "What we need from Armanino", font_size=18, bold=True, color=ARM_AMBER)
+                "What we need from EisnerAmper", font_size=18, bold=True, color=ARM_AMBER)
     asks = [
         "10 representative Excel pricing workbooks for calc-parity",
         "Tax scope-catalog source data (1040 / 1120 / 1065 / 1120S\n   + multi-state list + Tax PHB Standard Bundle definition)",
@@ -870,7 +870,7 @@ def main() -> None:
         headline="Models trained on YOUR Tax history. Multi-region production. Slack/Teams. Ready for the long tail.",
         rows=[
             ("Trained ML", [
-                "Effort estimator: sklearn / Azure ML on Armanino Tax history",
+                "Effort estimator: sklearn / Azure ML on EisnerAmper Tax history",
                 "Margin LP optimizer replaces heuristic",
                 "Per-tenant tuning; model-version tracking in AI telemetry",
                 "Goal: <10% MAPE on effort estimation across Tax engagements",

@@ -6,6 +6,7 @@ import { seedIntapp } from "./intapp";
 import { seedIntake } from "./intake";
 import { seedWorkday } from "./workday";
 import { loadSeedSnapshot } from "./snapshot-loader";
+import { brandEmail } from "./brand";
 
 // Idempotent: ensures the firm-wide margin target row exists. Seeds 35% so
 // every surface that previously hardcoded the BU target keeps showing the
@@ -156,7 +157,7 @@ export async function seedDatabase() {
       blendedRate: "354.17",
       currentStep: 4,
       pdlName: "Michael Torres",
-      pdlEmail: "mtorres@armanino.com",
+      pdlEmail: brandEmail("mtorres"),
       notes: "Strategic client. Multi-phase engagement with expansion potential.",
     },
     {
@@ -178,7 +179,7 @@ export async function seedDatabase() {
       blendedRate: "355.77",
       currentStep: 2,
       pdlName: "Rachel Kim",
-      pdlEmail: "rkim@armanino.com",
+      pdlEmail: brandEmail("rkim"),
     },
     {
       dealNumber: "DL-2026-003",
@@ -199,7 +200,7 @@ export async function seedDatabase() {
       blendedRate: "363.64",
       currentStep: 8,
       pdlName: "David Martinez",
-      pdlEmail: "dmartinez@armanino.com",
+      pdlEmail: brandEmail("dmartinez"),
     },
   ]).returning();
 
@@ -248,7 +249,7 @@ export async function seedDatabase() {
   await db.insert(approvals).values([
     {
       dealId: deal1.id, status: "pending", approverName: "Jennifer Walsh", approverRole: "Practice Director",
-      approverEmail: "jwalsh@armanino.com",
+      approverEmail: brandEmail("jwalsh"),
       riskSummary: "Medium risk. Margin within acceptable range. Client relationship strong but scope complexity is high.",
       aiNarrative: "This $425K Technology Consulting engagement for Acme Corporation represents a 27% margin with a senior-balanced team. The engagement covers ERP modernization across architecture design, implementation, testing, and project management. Key risk factors include high complexity offset by a strong 5-year client relationship. Similar deals in the Technology Consulting practice have an 89% approval rate at this margin band.",
     },

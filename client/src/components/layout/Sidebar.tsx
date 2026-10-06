@@ -1,4 +1,5 @@
 import { useLocation, Link } from "wouter";
+import { BRAND } from "@/brand";
 import { LayoutDashboard, FileText, Settings, ChevronDown, BookOpen, DollarSign, Layers, BarChart3, Database, ShieldAlert, Briefcase, MessageSquare, Target, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { flushPendingEdits } from "@/lib/flush-pending-edits";
@@ -51,13 +52,13 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
 
   const sidebarBody = (
     <>
-      <div className="relative border-b border-sidebar-accent" style={{ backgroundColor: "#fef3e7" }}>
+      <div className="relative border-b border-sidebar-accent" style={{ backgroundColor: "#FFFFFF" }}>
         <Link href="/">
           <div
             className="px-6 py-6 cursor-pointer flex items-center justify-center"
             onMouseDown={flushPendingEdits}
           >
-            <img src="/armanino-logo.svg" alt="Armanino" className="h-8 w-auto" />
+            <img src={BRAND.assets.logo} alt={BRAND.name} className="h-7 w-auto" />
           </div>
         </Link>
         {onMobileClose && (
@@ -147,7 +148,7 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
       </nav>
 
       <div className="px-4 py-3 border-t border-sidebar-accent text-[10px] text-sidebar-muted">
-        2026 Armanino LLP · DealPad PoC
+        {BRAND.year} {BRAND.legalName} · DealPad PoC
       </div>
     </>
   );

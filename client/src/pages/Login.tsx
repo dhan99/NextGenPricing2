@@ -2,9 +2,10 @@ import { useAuth, PERSONAS, type PersonaRole } from "@/context/AuthContext";
 import { ArrowRight, Brain, ShieldCheck, Zap, TrendingUp, ChevronDown } from "lucide-react";
 import { useState } from "react";
 import { useLocation } from "wouter";
+import { BRAND } from "@/brand";
 
 const personaList: { role: PersonaRole; avatarBg: string; ringColor: string }[] = [
-  { role: "pdl", avatarBg: "bg-orange-100 text-orange-700", ringColor: "ring-orange-400" },
+  { role: "pdl", avatarBg: "bg-primary/10 text-primary", ringColor: "ring-primary" },
   { role: "sll", avatarBg: "bg-blue-100 text-blue-700", ringColor: "ring-blue-400" },
   { role: "po", avatarBg: "bg-emerald-100 text-emerald-700", ringColor: "ring-emerald-400" },
   { role: "fin", avatarBg: "bg-violet-100 text-violet-700", ringColor: "ring-violet-400" },
@@ -50,12 +51,12 @@ export function Login() {
 
   return (
     <div className="min-h-screen flex">
-      <div className="hidden lg:flex lg:w-[50%] relative overflow-hidden" style={{ background: "linear-gradient(135deg, #fdf8f3 0%, #fef3e7 40%, #fde8d0 100%)" }}>
-        <div className="absolute inset-0 opacity-[0.03]" style={{ backgroundImage: "radial-gradient(circle at 1px 1px, #DA720F 1px, transparent 0)", backgroundSize: "32px 32px" }} />
+      <div className="hidden lg:flex lg:w-[50%] relative overflow-hidden" style={{ background: BRAND.colors.loginGradient }}>
+        <div className="absolute inset-0 opacity-[0.03]" style={{ backgroundImage: `radial-gradient(circle at 1px 1px, ${BRAND.colors.primary} 1px, transparent 0)`, backgroundSize: "32px 32px" }} />
 
         <div className="relative z-10 flex flex-col justify-between p-12 lg:p-16 w-full">
           <div className="flex items-center gap-4">
-            <img src="/armanino-logo.svg" alt="Armanino" className="h-10 w-auto" />
+            <img src={BRAND.assets.logo} alt={BRAND.name} className="h-8 w-auto" />
             <div className="h-10 w-px bg-stone-300" />
             <div>
               <h1 className="text-xl font-bold text-stone-900 tracking-tight">DealPad</h1>
@@ -66,7 +67,7 @@ export function Login() {
           <div className="flex-1 flex flex-col justify-center max-w-lg">
             <h2 className="text-4xl lg:text-5xl font-bold text-stone-900 leading-tight tracking-tight">
               Deal pricing,{" "}
-              <span style={{ color: "#DA720F" }}>simplified.</span>
+              <span style={{ color: BRAND.colors.primary }}>simplified.</span>
             </h2>
             <p className="mt-5 text-stone-500 text-base leading-relaxed">
               AI-powered pricing, scoping, and margin analytics for professional services —
@@ -85,8 +86,8 @@ export function Login() {
             <div className="mt-10 space-y-3.5">
               {features.map((f) => (
                 <div key={f.label} className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: "rgba(218, 114, 15, 0.1)" }}>
-                    <f.icon className="w-4 h-4" style={{ color: "#DA720F" }} />
+                  <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: `${BRAND.colors.primary}1A` }}>
+                    <f.icon className="w-4 h-4" style={{ color: BRAND.colors.primary }} />
                   </div>
                   <span className="text-sm text-stone-600">{f.label}</span>
                 </div>
@@ -95,7 +96,7 @@ export function Login() {
           </div>
 
           <p className="text-xs text-stone-400">
-            2026 Armanino LLP. NextGenApp Pricing & Scoping 2.0
+            {BRAND.year} {BRAND.legalName}. {BRAND.program} Pricing & Scoping 2.0
           </p>
         </div>
       </div>
@@ -103,9 +104,7 @@ export function Login() {
       <div className="flex-1 bg-stone-50 flex flex-col">
         <div className="lg:hidden border-b border-stone-200 bg-white px-6 py-4">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ backgroundColor: "#DA720F" }}>
-              <span className="text-white font-bold">D</span>
-            </div>
+            <img src={BRAND.assets.mark} alt={BRAND.name} className="w-9 h-9" />
             <div>
               <h1 className="text-lg font-bold text-stone-900">DealPad</h1>
               <p className="text-xs text-stone-500">Pricing & Scoping 2.0</p>
@@ -136,7 +135,7 @@ export function Login() {
                         onClick={() => setExpandedRole(isExpanded ? null : role)}
                         onFocus={() => setExpandedRole(role)}
                         aria-expanded={isExpanded}
-                        className="w-full flex items-center gap-3.5 px-4 py-3.5 text-left focus-visible:ring-2 focus-visible:ring-orange-400 focus-visible:ring-offset-2 rounded-xl"
+                        className="w-full flex items-center gap-3.5 px-4 py-3.5 text-left focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 rounded-xl"
                       >
                         <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-semibold shrink-0 ${avatarBg} ${isExpanded ? `ring-2 ${ringColor} ring-offset-1` : ""}`}>
                           {persona.initials}
@@ -177,8 +176,8 @@ export function Login() {
 
                             <button
                               onClick={(e) => { e.stopPropagation(); handleLogin(role); }}
-                              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-white text-sm font-medium transition-all hover:opacity-90 focus-visible:ring-2 focus-visible:ring-orange-400 focus-visible:ring-offset-2"
-                              style={{ backgroundColor: "#DA720F" }}
+                              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-white text-sm font-medium transition-all hover:opacity-90 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                              style={{ backgroundColor: BRAND.colors.primary }}
                             >
                               Sign in as {persona.name.split(" ")[0]}
                               <ArrowRight className="w-4 h-4" />

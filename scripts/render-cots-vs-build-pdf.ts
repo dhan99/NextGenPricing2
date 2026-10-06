@@ -5,7 +5,7 @@ import { dirname } from "path";
 const OUT = "docs/strategy/cots-vs-build-one-pager.pdf";
 mkdirSync(dirname(OUT), { recursive: true });
 
-const ORANGE = "#DA720F";
+const ORANGE = "#115E67";
 const STONE_900 = "#1c1917";
 const STONE_700 = "#3f3f46";
 const STONE_600 = "#57534e";
@@ -21,7 +21,7 @@ const doc = new PDFDocument({
   bufferPages: true,
   info: {
     Title: "DealPad — COTS vs Build One-Pager (Scoping & Pricing)",
-    Author: "Armanino LLP · DealPad",
+    Author: "EisnerAmper LLP · DealPad",
     Subject: "Why we build DealPad's scoping & pricing engine instead of buying COTS",
     Keywords: "Salesforce CPQ, Conga CPQ, Deltek, Kantata, Certinia, PROS, ISO 42001, DealPad",
   },
@@ -36,7 +36,7 @@ const W = PAGE_W - M * 2;       // 744
 // Header bar
 doc.rect(0, 0, PAGE_W, 3).fill(ORANGE);
 doc.fillColor(STONE_500).font("Helvetica-Bold").fontSize(6.5)
-  .text("ARMANINO LLP · DEALPAD · INTERNAL / CONFIDENTIAL", M, 8, { characterSpacing: 1.4 });
+  .text("EISNERAMPER LLP · DEALPAD · INTERNAL / CONFIDENTIAL", M, 8, { characterSpacing: 1.4 });
 doc.fillColor(STONE_900).font("Helvetica-Bold").fontSize(14)
   .text("COTS vs Build — Scoping & Pricing Engine", M, 18);
 doc.fillColor(STONE_600).font("Helvetica").fontSize(7.5)
@@ -54,7 +54,7 @@ y = doc.y + 4;
 const pillarW = (W - 12) / 3;
 const pillars: [string, string][] = [
   ["1 · BUY TO ACCELERATE", "CRM, HCM, contracts, financials, BI are commodity — already integrated (Dynamics, Workday, Intapp, Conga, Power BI)."],
-  ["2 · BUILD TO DIFFERENTIATE", "Own the scope-to-fee engine: role hierarchy, complexity multipliers, scenario engine, AI calibrated on Armanino data."],
+  ["2 · BUILD TO DIFFERENTIATE", "Own the scope-to-fee engine: role hierarchy, complexity multipliers, scenario engine, AI calibrated on EisnerAmper data."],
   ["3 · ISO 42001 AS A MOAT", "An owned AI Management System per tenant is materially harder for any horizontal SaaS vendor to replicate."],
 ];
 const pillarH = 26;
@@ -71,13 +71,13 @@ doc.fillColor(STONE_900).font("Helvetica-Bold").fontSize(8)
   .text("COTS ALTERNATIVES THAT COULD REPLACE DEALPAD'S SCOPING & PRICING FUNCTION", M, y, { characterSpacing: 1.1 });
 y += 10;
 
-const cmpHeaders = ["Product", "What it offers for scope & pricing", "Why it does not replace DealPad for Armanino"];
+const cmpHeaders = ["Product", "What it offers for scope & pricing", "Why it does not replace DealPad for EisnerAmper"];
 const cmpWidths = [130, 260, 354];
 const cmpRows: string[][] = [
   [
     "Salesforce Revenue Cloud (CPQ + CLM)",
     "CPQ rules engine, approval workflows, quote document generation, contract lifecycle; Einstein for forecasting / next-best-action.",
-    "CPQ is built around products and SKUs, not a 7-tier role hierarchy with complexity multipliers; service-hour assemblies and Standard/Premium/Value scenarios must be hand-built in CPQ rules / Apex; Einstein is generic forecasting, not Armanino effort/margin learning; introduces a second CRM stack alongside Dynamics; per-user licensing scales with every contributor.",
+    "CPQ is built around products and SKUs, not a 7-tier role hierarchy with complexity multipliers; service-hour assemblies and Standard/Premium/Value scenarios must be hand-built in CPQ rules / Apex; Einstein is generic forecasting, not EisnerAmper effort/margin learning; introduces a second CRM stack alongside Dynamics; per-user licensing scales with every contributor.",
   ],
   [
     "Conga CPQ (separate from Composer doc engine)",
@@ -97,12 +97,12 @@ const cmpRows: string[][] = [
   [
     "Certinia PSA (formerly FinancialForce)",
     "Salesforce-native PSA: services CRM, project pricing, resource management, project accounting; tight Salesforce integration.",
-    "Inherits Salesforce CPQ's product-centric pricing model; firm-specific role-loaded pricing must be built on top; AI is Einstein/Salesforce-owned; assumes Salesforce as CRM (Armanino's CRM is Dynamics); platform lock-in to Salesforce ecosystem.",
+    "Inherits Salesforce CPQ's product-centric pricing model; firm-specific role-loaded pricing must be built on top; AI is Einstein/Salesforce-owned; assumes Salesforce as CRM (EisnerAmper's CRM is Dynamics); platform lock-in to Salesforce ecosystem.",
   ],
   [
     "PROS Smart CPQ",
     "AI-driven pricing optimisation, dynamic discounting, win-probability modelling on top of CPQ.",
-    "Calibrated for high-volume transactional B2B (manufacturing, distribution, travel), not low-volume professional-services engagements; opaque vendor AI; no native scenario / RBAC / approval workflow for service-hour scoping; would need wrapping in another product to be useful for Armanino.",
+    "Calibrated for high-volume transactional B2B (manufacturing, distribution, travel), not low-volume professional-services engagements; opaque vendor AI; no native scenario / RBAC / approval workflow for service-hour scoping; would need wrapping in another product to be useful for EisnerAmper.",
   ],
 ];
 
@@ -193,7 +193,7 @@ const colTop = y + 9;
 
 const buildItems: [string, string][] = [
   ["Scoped pricing assemblies", "7-tier role hierarchy, complexity multipliers (0.8×–1.5×), scope catalog, automatic margin/fee recalc — not modelled by any product/SKU CPQ."],
-  ["AI calibrated on Armanino data", "Five use cases (similarity, effort, margin, scenario, risk) grounded in DealPad's own historical data, not a generic vendor model."],
+  ["AI calibrated on EisnerAmper data", "Five use cases (similarity, effort, margin, scenario, risk) grounded in DealPad's own historical data, not a generic vendor model."],
   ["Scenario engine + persona approval", "Std / Prem / Value with AI reasoning; six-persona RBAC, state machine, AI narrative on approvals, full audit trail."],
 ];
 let ly = colTop;
@@ -207,7 +207,7 @@ for (const [k, v] of buildItems) {
 }
 
 const isoBullets = [
-  "DealPad's AI sits inside Armanino's tenant, on Armanino's data, with Armanino's controls. COTS vendors' AIMS is the vendor's — scoped to their product and shared across tenants.",
+  "DealPad's AI sits inside EisnerAmper's tenant, on EisnerAmper's data, with EisnerAmper's controls. COTS vendors' AIMS is the vendor's — scoped to their product and shared across tenants.",
   "42001 needs per-tenant evidence (model purpose, dataset lineage, monitoring, override capture, improvement loops tied to firm risk appetite) — hard for a horizontal SaaS vendor to carry per firm.",
   "DealPad already has the primitives 42001 expects: persona RBAC, override-with-justification, AI narrative on approvals, activity log, source-tagged audit history. Formalising these turns engineering into a governance asset for regulated client work.",
 ];
@@ -230,9 +230,9 @@ const recHeaders = ["Capability area", "Decision", "Rationale"];
 const recWidths = [210, 100, W - 210 - 100];
 const recRows: [string, string, "buy" | "build" | "reject", string][] = [
   ["Surrounding stack — CRM, HCM/Fin, Risk, Letters, BI", "BUY + INTEGRATE", "buy", "Dynamics 365, Workday, Intapp, Conga Composer, Power BI — already firm-standard and integrated; DealPad consumes/pushes via provider pattern."],
-  ["Scope-to-fee engine, role pricing, complexity multipliers", "BUILD (DealPad)", "build", "Encodes Armanino IP; no COTS in this set models service-hour assemblies this way."],
+  ["Scope-to-fee engine, role pricing, complexity multipliers", "BUILD (DealPad)", "build", "Encodes EisnerAmper IP; no COTS in this set models service-hour assemblies this way."],
   ["Scenario generation & comparison (Std / Prem / Value)", "BUILD (DealPad)", "build", "Differentiating UX and reasoning surface; absent from the COTS set."],
-  ["AI use cases (similarity, effort, margin, scenario, risk)", "BUILD (DealPad)", "build", "Trained on Armanino's own deal corpus; vendor AI is not effort/margin-tuned."],
+  ["AI use cases (similarity, effort, margin, scenario, risk)", "BUILD (DealPad)", "build", "Trained on EisnerAmper's own deal corpus; vendor AI is not effort/margin-tuned."],
   ["Multi-persona RBAC & approval workflow", "BUILD (DealPad)", "build", "Firm-specific governance and audit shape; not a generic CRM workflow."],
   ["AI Management System (ISO/IEC 42001)", "BUILD (DealPad)", "build", "Owned AIMS is the durable moat; tenant-specific evidence not provided by surveyed COTS."],
   ["End-to-end CPQ replacement (Salesforce / Conga CPQ)", "REJECT", "reject", "Product-centric pricing; service-hour assemblies still custom; introduces a second CRM stack alongside Dynamics."],

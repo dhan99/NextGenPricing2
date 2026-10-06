@@ -6,7 +6,7 @@
 > (this file) is the project's living index.
 
 ## Overview
-DealPad is a full-stack web application replacing Excel-based pricing and scoping workbooks for professional services firm Armanino LLP's Quote-to-Cash workflow. It demonstrates 5 AI-powered use cases across the entire vertical stack with a modern UX inspired by Ramp.com and Gusto.com.
+DealPad is a full-stack web application replacing Excel-based pricing and scoping workbooks for a professional-services firm's Quote-to-Cash workflow (dual-branded: Armanino / EisnerAmper via `BRAND_ID`). It demonstrates 5 AI-powered use cases across the entire vertical stack with a modern UX inspired by Ramp.com and Gusto.com.
 
 ## Current State
 - **Phase**: Phase 1 of the 32-week refactor complete (F1.1 Multi-entity worksheets, F1.2 Assembly expansion, F1.3 Batch renewals, F1.4 DDD Strangler-Fig start). Backlog: `docs/refactoring/BACKLOG.md`.
@@ -19,7 +19,7 @@ DealPad is a full-stack web application replacing Excel-based pricing and scopin
 - **Backend**: Express.js 5 on Node.js 22 (server/, tsx in dev)
 - **Database**: PostgreSQL + Drizzle ORM (shared/schema.ts)
 - **Domain layer (F1.4)**: `packages/domain` (pure TS, no I/O), `packages/application` (use-case orchestrators), `packages/infrastructure` (Drizzle repos, in-process EventBus, outbox dispatcher). Wired via TS path aliases (`@dealpad/domain`, `@dealpad/application`, `@dealpad/infrastructure`).
-- **Styling**: Custom design tokens with Armanino brand colors (amber/orange #DA720F)
+- **Styling**: Custom design tokens, per-brand via `data-brand` (Armanino amber #DA720F / EisnerAmper teal #115E67 + navy #0C2E45 + gold #BF9B5F)
 
 ## Project Structure
 ```
@@ -122,7 +122,7 @@ All four platforms now push outcomes back from DealPad in addition to inbound sy
 
 ## Design References
 - UX: Ramp.com (minimal, high-contrast) + Gusto.com (warm, sidebar nav, card hierarchy)
-- Brand: Armanino LLP (amber #DA720F, olive #949300, Roboto + Playfair Display)
+- Brand: selected by `BRAND_ID` (`armanino` default | `eisneramper`); registry in `shared/brand.ts`, assets in `public/brand/<id>/`, CSS tokens in `client/src/index.css`. Two Render services, one per brand (`render.yaml`).
 - No emojis in UI
 
 ## Key Documents

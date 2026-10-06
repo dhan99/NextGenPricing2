@@ -2,6 +2,7 @@ import { Express, Request, Response } from "express";
 import { db, pool } from "./db";
 import { clients, deals, dealEntities, scopeCatalog, dealScopeItems, scopeTemplates, scopeTemplateItems, assemblyTemplates, assemblyComponents, roles, rateCards, rateCardEntries, pricingLines, scenarios, approvals, promptResponses, activityLog, changeOrders, dynamicsOpportunities, promptSets, promptSetItems, marginTargets, batchRenewalJobs, batchRenewalItems, batchAdjustmentRules, budgetActuals, budgetAlerts, timeEntries, portalInvites, scopeCreepSignals, voiceTranscripts, rateOptimizationRuns, aiTelemetry } from "../shared/schema";
 import { evaluatePracticeLeadTrigger, resolveMarginTarget, type MarginTargetRow, type DealLike } from "../shared/policy";
+import { BRAND } from "./brand";
 import { eq, desc, sql, and, count, isNull, isNotNull, asc, inArray } from "drizzle-orm";
 import { requirePerm, requireAnyPerm } from "./rbac";
 
@@ -4755,7 +4756,7 @@ export function registerRoutes(app: Express) {
 
     const knowledgeBase: Record<string, { answer: string; sources: string[]; relatedTopics: string[] }> = {
       stack: {
-        answer: `DealPad uses a modern TypeScript-first stack:\n\n**Frontend:** React 19, Vite 8.x, Tailwind CSS 4.x, TanStack React Query 5.x, Wouter 3.9, Radix UI, Framer Motion 12.x, Recharts 3.8, Lucide React\n\n**Backend:** Express.js 5.x, Node.js with tsx runtime, Drizzle ORM 0.45, pg (node-postgres)\n\n**Database:** PostgreSQL with 12 normalized tables\n\n**Design:** Armanino amber (#DA720F) brand identity, inspired by Ramp.com and Gusto.com`,
+        answer: `DealPad uses a modern TypeScript-first stack:\n\n**Frontend:** React 19, Vite 8.x, Tailwind CSS 4.x, TanStack React Query 5.x, Wouter 3.9, Radix UI, Framer Motion 12.x, Recharts 3.8, Lucide React\n\n**Backend:** Express.js 5.x, Node.js with tsx runtime, Drizzle ORM 0.45, pg (node-postgres)\n\n**Database:** PostgreSQL with 12 normalized tables\n\n**Design:** ${BRAND.name} (${BRAND.colors.primary}) brand identity, inspired by Ramp.com and Gusto.com`,
         sources: ["package.json", "shared/schema.ts", "client/src/index.css"],
         relatedTopics: ["database schema", "frontend components", "API design"]
       },
@@ -4800,7 +4801,7 @@ export function registerRoutes(app: Express) {
         relatedTopics: ["backend architecture", "database", "deal lifecycle"]
       },
       frontend: {
-        answer: `**Frontend architecture:**\n\n**Pages:** Login (6-persona grid), Dashboard (role-aware KPIs), Deals List (filterable), New Deal (creation form), Deal Detail (8-step wizard), Rate Cards (admin CRUD), Scope Catalog (admin), Architecture (system diagrams)\n\n**State management:** AuthContext (persona/permissions via React Context), TanStack React Query (server state + cache), custom hooks in use-api.ts\n\n**Design system:** Armanino amber #DA720F primary, warm stone #fafaf9 background, dark sidebar #1c1917. Inter font. No emojis. Inspired by Ramp.com/Gusto.com.\n\n**UI library:** Radix UI primitives (Button, Card, Dialog, Select, Tabs, Accordion, Popover, Tooltip) styled with Tailwind CSS v4.\n\n**Animations:** Framer Motion for page transitions and micro-interactions.`,
+        answer: `**Frontend architecture:**\n\n**Pages:** Login (6-persona grid), Dashboard (role-aware KPIs), Deals List (filterable), New Deal (creation form), Deal Detail (8-step wizard), Rate Cards (admin CRUD), Scope Catalog (admin), Architecture (system diagrams)\n\n**State management:** AuthContext (persona/permissions via React Context), TanStack React Query (server state + cache), custom hooks in use-api.ts\n\n**Design system:** ${BRAND.name} primary ${BRAND.colors.primary} with ${BRAND.colors.dark} dark surfaces and ${BRAND.colors.accent} accent, warm stone #fafaf9 background. Brand selected by BRAND_ID (shared/brand.ts). No emojis. Inspired by Ramp.com/Gusto.com.\n\n**UI library:** Radix UI primitives (Button, Card, Dialog, Select, Tabs, Accordion, Popover, Tooltip) styled with Tailwind CSS v4.\n\n**Animations:** Framer Motion for page transitions and micro-interactions.`,
         sources: ["client/src/App.tsx", "client/src/pages/*", "client/src/index.css"],
         relatedTopics: ["design system", "RBAC", "deal wizard"]
       },
@@ -6502,7 +6503,7 @@ export function registerRoutes(app: Express) {
     `).join("");
 
     const scenarioRows = (deal.scenarios || []).map((sc: any) => `
-      <tr style="${sc.isRecommended ? "background:#fef7ed;" : ""}">
+      <tr style="${sc.isRecommended ? "background:${BRAND.colors.accentSoft};" : ""}">
         <td style="padding:10px 16px;border-bottom:1px solid #e7e5e4;font-size:14px;font-weight:${sc.isRecommended ? "700" : "400"};">
           ${sc.name}${sc.isRecommended ? " (Recommended)" : ""}
         </td>
@@ -6532,16 +6533,16 @@ export function registerRoutes(app: Express) {
 <body>
   <div style="max-width:800px;margin:0 auto;padding:40px;">
     <!-- Header -->
-    <div style="border-bottom:4px solid #DA720F;padding-bottom:32px;margin-bottom:32px;">
+    <div style="border-bottom:4px solid ${BRAND.colors.primary};padding-bottom:32px;margin-bottom:32px;">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;">
         <div>
           <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
-            <div style="width:48px;height:48px;background:#DA720F;border-radius:12px;display:flex;align-items:center;justify-content:center;">
+            <div style="width:48px;height:48px;background:${BRAND.colors.primary};border-radius:12px;display:flex;align-items:center;justify-content:center;">
               <span style="color:#fff;font-weight:700;font-size:20px;">D</span>
             </div>
             <div>
               <h3 style="font-size:18px;font-weight:700;color:#1c1917;">DealPad</h3>
-              <p style="font-size:12px;color:#78716c;">by Armanino LLP</p>
+              <p style="font-size:12px;color:#78716c;">by ${BRAND.legalName}</p>
             </div>
           </div>
           <h1 style="font-size:28px;font-weight:700;color:#1c1917;margin-bottom:4px;">Engagement Proposal</h1>
@@ -6549,7 +6550,7 @@ export function registerRoutes(app: Express) {
         </div>
         <div style="text-align:right;">
           <p style="font-size:12px;color:#78716c;margin-bottom:4px;">Deal Number</p>
-          <p style="font-size:16px;font-weight:700;color:#DA720F;">${escapeHtml(deal.dealNumber)}</p>
+          <p style="font-size:16px;font-weight:700;color:${BRAND.colors.primary};">${escapeHtml(deal.dealNumber)}</p>
           <p style="font-size:12px;color:#78716c;margin-top:12px;">Status</p>
           <p style="font-size:14px;font-weight:600;text-transform:uppercase;">${escapeHtml(deal.status)}</p>
         </div>
@@ -6558,7 +6559,7 @@ export function registerRoutes(app: Express) {
 
     <!-- Deal Overview -->
     <div style="margin-bottom:32px;">
-      <h2 style="font-size:18px;font-weight:700;color:#DA720F;margin-bottom:16px;text-transform:uppercase;letter-spacing:0.05em;">Engagement Overview</h2>
+      <h2 style="font-size:18px;font-weight:700;color:${BRAND.colors.primary};margin-bottom:16px;text-transform:uppercase;letter-spacing:0.05em;">Engagement Overview</h2>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
         <div style="background:#fafaf9;padding:16px;border-radius:12px;">
           <p style="font-size:12px;color:#78716c;margin-bottom:4px;">Engagement Title</p>
@@ -6581,7 +6582,7 @@ export function registerRoutes(app: Express) {
 
     <!-- Financial Summary -->
     <div style="margin-bottom:32px;background:linear-gradient(135deg,#1c1917,#292524);border-radius:16px;padding:24px;color:#fff;">
-      <h2 style="font-size:14px;font-weight:600;text-transform:uppercase;letter-spacing:0.1em;color:#DA720F;margin-bottom:16px;">Financial Summary</h2>
+      <h2 style="font-size:14px;font-weight:600;text-transform:uppercase;letter-spacing:0.1em;color:${BRAND.colors.primary};margin-bottom:16px;">Financial Summary</h2>
       <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;">
         <div>
           <p style="font-size:11px;color:#a8a29e;margin-bottom:4px;">Total Fee</p>
@@ -6597,7 +6598,7 @@ export function registerRoutes(app: Express) {
         </div>
         <div>
           <p style="font-size:11px;color:#a8a29e;margin-bottom:4px;">Margin</p>
-          <p style="font-size:22px;font-weight:700;color:${parseFloat(deal.marginPercent || "0") >= 25 ? "#4ade80" : parseFloat(deal.marginPercent || "0") >= 15 ? "#DA720F" : "#ef4444"};">${parseFloat(deal.marginPercent || "0").toFixed(1)}%</p>
+          <p style="font-size:22px;font-weight:700;color:${parseFloat(deal.marginPercent || "0") >= 25 ? "#4ade80" : parseFloat(deal.marginPercent || "0") >= 15 ? "${BRAND.colors.primary}" : "#ef4444"};">${parseFloat(deal.marginPercent || "0").toFixed(1)}%</p>
         </div>
       </div>
     </div>
@@ -6605,7 +6606,7 @@ export function registerRoutes(app: Express) {
     <!-- Scope of Work -->
     ${scopeRows ? `
     <div style="margin-bottom:32px;">
-      <h2 style="font-size:18px;font-weight:700;color:#DA720F;margin-bottom:16px;text-transform:uppercase;letter-spacing:0.05em;">Scope of Work</h2>
+      <h2 style="font-size:18px;font-weight:700;color:${BRAND.colors.primary};margin-bottom:16px;text-transform:uppercase;letter-spacing:0.05em;">Scope of Work</h2>
       <table style="width:100%;border-collapse:collapse;border:1px solid #e7e5e4;border-radius:12px;overflow:hidden;">
         <thead>
           <tr style="background:#f5f5f4;">
@@ -6622,7 +6623,7 @@ export function registerRoutes(app: Express) {
     <!-- Pricing Breakdown -->
     ${pricingRows ? `
     <div style="margin-bottom:32px;">
-      <h2 style="font-size:18px;font-weight:700;color:#DA720F;margin-bottom:16px;text-transform:uppercase;letter-spacing:0.05em;">Pricing Breakdown</h2>
+      <h2 style="font-size:18px;font-weight:700;color:${BRAND.colors.primary};margin-bottom:16px;text-transform:uppercase;letter-spacing:0.05em;">Pricing Breakdown</h2>
       <table style="width:100%;border-collapse:collapse;border:1px solid #e7e5e4;border-radius:12px;overflow:hidden;">
         <thead>
           <tr style="background:#f5f5f4;">
@@ -6639,7 +6640,7 @@ export function registerRoutes(app: Express) {
     <!-- Scenarios -->
     ${scenarioRows ? `
     <div style="margin-bottom:32px;">
-      <h2 style="font-size:18px;font-weight:700;color:#DA720F;margin-bottom:16px;text-transform:uppercase;letter-spacing:0.05em;">Pricing Scenarios</h2>
+      <h2 style="font-size:18px;font-weight:700;color:${BRAND.colors.primary};margin-bottom:16px;text-transform:uppercase;letter-spacing:0.05em;">Pricing Scenarios</h2>
       <table style="width:100%;border-collapse:collapse;border:1px solid #e7e5e4;border-radius:12px;overflow:hidden;">
         <thead>
           <tr style="background:#f5f5f4;">
@@ -6656,14 +6657,14 @@ export function registerRoutes(app: Express) {
     <!-- Assumptions -->
     ${assumptions ? `
     <div style="margin-bottom:32px;">
-      <h2 style="font-size:18px;font-weight:700;color:#DA720F;margin-bottom:16px;text-transform:uppercase;letter-spacing:0.05em;">Key Assumptions</h2>
+      <h2 style="font-size:18px;font-weight:700;color:${BRAND.colors.primary};margin-bottom:16px;text-transform:uppercase;letter-spacing:0.05em;">Key Assumptions</h2>
       <ul style="list-style:none;padding:0;">${assumptions}</ul>
     </div>` : ""}
 
     <!-- Footer -->
     <div style="border-top:2px solid #e7e5e4;padding-top:24px;margin-top:40px;text-align:center;">
       <p style="font-size:12px;color:#78716c;">This proposal was generated by DealPad - NextGenApp Pricing & Scoping 2.0</p>
-      <p style="font-size:12px;color:#a8a29e;margin-top:4px;">Armanino LLP | Confidential</p>
+      <p style="font-size:12px;color:#a8a29e;margin-top:4px;">${BRAND.legalName} | Confidential</p>
     </div>
   </div>
 </body>

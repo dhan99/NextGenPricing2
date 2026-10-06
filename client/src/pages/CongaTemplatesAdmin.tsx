@@ -3,6 +3,7 @@ import { useCongaTemplates, useCongaSettings, useUpdateCongaSettings } from "@/h
 import { FileText, Settings, Database, ChevronDown, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ReadOnlyAdminBanner } from "@/components/ReadOnlyAdminBanner";
+import { BRAND } from "@/brand";
 
 export function CongaTemplatesAdmin({ readOnly = false }: { readOnly?: boolean }) {
   const { data: tmplResp, isLoading } = useCongaTemplates();
@@ -68,7 +69,7 @@ export function CongaTemplatesAdmin({ readOnly = false }: { readOnly?: boolean }
               defaultValue={settings?.liveTenantId || ""}
               onBlur={(e) => update.mutate({ liveTenantId: e.target.value })}
               className="mt-1 w-full px-3 py-2 border border-border rounded-lg text-sm"
-              placeholder="armanino-prod"
+              placeholder={`${BRAND.id}-prod`}
             />
           </div>
         </div>

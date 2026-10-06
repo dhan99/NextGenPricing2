@@ -14,6 +14,7 @@ import { AssemblyPicker } from "@/components/scope/AssemblyPicker";
 import { FeeArrangementPicker } from "@/components/pricing/FeeArrangementPicker";
 import { EntityTabs } from "@/components/entities/EntityTabs";
 import { flushPendingEdits } from "@/lib/flush-pending-edits";
+import { BRAND } from "@/brand";
 
 const STEP_KEYS = ["", "wizard-setup", "wizard-scope", "wizard-assumptions", "wizard-pricing", "wizard-review", "wizard-approval", "wizard-summary"];
 
@@ -1096,7 +1097,7 @@ function EngagementInputsCard({ deal }: { deal: any }) {
           <h2 className="text-lg font-semibold text-foreground">Engagement Inputs</h2>
           <p className="text-sm text-muted-foreground mt-1">
             {isTaxPHB
-              ? "Structured pricing inputs from Armanino's Tax PHB workbook. These flow into the pricing engine and govern rounding, fees, and margin targets."
+              ? `Structured pricing inputs from ${BRAND.name}'s Tax PHB workbook. These flow into the pricing engine and govern rounding, fees, and margin targets.`
               : "Generic engagement inputs. A service-line-specific preset will appear when this deal's service line is recognized."}
           </p>
         </div>
