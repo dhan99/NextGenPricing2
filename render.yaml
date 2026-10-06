@@ -60,7 +60,7 @@ services:
 
   # ---- EisnerAmper-branded twin: identical except BRAND_ID + its own DATABASE_URL ----
   - type: web
-    name: dealpad-eisneramper
+    name: pricing-app-demo
     env: node
     region: oregon
     plan: starter                # Always-warm; no cold starts. ~$7/mo.
